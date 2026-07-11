@@ -1,0 +1,10 @@
+FROM pytorch/pytorch:2.2.0-cuda11.8-cudnn8-runtime
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /work
+
+COPY scripts/ /work/scripts/
+
+ENTRYPOINT ["python3"]
