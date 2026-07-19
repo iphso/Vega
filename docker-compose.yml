@@ -4,6 +4,7 @@ services:
     volumes:
       - ./output:/work/output
       - ./scripts:/work/scripts
+      - ./viewer:/work/viewer
       - hf-cache:/root/.cache/huggingface
     entrypoint: ["python3"]
 
@@ -19,5 +20,25 @@ services:
       - ./checkpoints:/work/checkpoints
     entrypoint: ["python3"]
 
+  oracle:
+    build:
+      context: .
+      dockerfile: Dockerfile.oracle
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+    entrypoint: ["python3"]
+
+  viewer:
+    build:
+      context: .
+      dockerfile: Dockerfile.viewer
+    volumes:
+      - ./viewer:/work/viewer
+      - viewer-node-modules:/work/viewer/node_modules
+    ports:
+      - "4321:4321"
+
 volumes:
   hf-cache:
+  viewer-node-modules:

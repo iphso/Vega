@@ -66,6 +66,7 @@ def main():
         "boundary.z_sin",
         "boundary.n_field_periods",
         "boundary.is_stellarator_symmetric",
+        "omnigenous_field_and_targets.id",
     ] + [f"metrics.{c}" for c in TARGET_COLS]
 
     ds = load_dataset("proxima-fusion/constellaration", split="train")
@@ -76,6 +77,7 @@ def main():
 
     feature_rows = []
     target_rows = []
+    family_ids = []
 
     dropped_malformed_boundary = 0
     dropped_invalid_targets = 0
@@ -104,6 +106,15 @@ def main():
         z_flat = [v for row in z_sin for v in row]
         feature_rows.append(r_flat + z_flat + [float(n_fp), float(bool(is_sym))])
         target_rows.append(targets)
+        # Generation-lineage grouping variable: the target specification
+        # T=(iota*, A*, E*, O*) an optimization run was seeded toward (see
+        # ConStellaration paper Appendix A.2). Rows sharing this id came from
+        # optimizing/continuing toward the same target -- likely
+        # near-duplicate or closely-related boundaries, not independent
+        # samples. ~60% of raw rows share their id with at least one other
+        # row (72,536 unique ids over 182,222 raw rows), so a naive random
+        # split risks putting near-duplicates across train/test.
+        family_ids.append(data["omnigenous_field_and_targets.id"][i])
 
     X = np.array(feature_rows, dtype=np.float32)
     Y = np.array(target_rows, dtype=np.float32)
@@ -111,6 +122,7 @@ def main():
     assert not np.isnan(X).any(), "NaNs found in X after filtering"
     assert not np.isnan(Y).any(), "NaNs found in Y after filtering"
     assert np.isfinite(Y).all(), "Non-finite values found in Y after filtering"
+    assert len(family_ids) == X.shape[0]
 
     n_samples, input_dim = X.shape
     output_dim = Y.shape[1]
@@ -129,6 +141,12 @@ def main():
         json.dump(feature_names, f, indent=2)
     with open(os.path.join(OUT_DIR, "target_names.json"), "w") as f:
         json.dump(TARGET_COLS, f, indent=2)
+    with open(os.path.join(OUT_DIR, "family_ids.json"), "w") as f:
+        json.dump(family_ids, f)
+    n_unique_families = len(set(family_ids))
+    print(f"Family ids (omnigenous_field_and_targets.id) among kept rows: "
+          f"{n_unique_families} unique / {n_samples} rows "
+          f"({(1 - n_unique_families / n_samples) * 100:.1f}% duplication rate)")
 
     feature_stats = {name: column_stats(X[:, j]) for j, name in enumerate(feature_names)}
     target_stats = {name: column_stats(Y[:, j]) for j, name in enumerate(TARGET_COLS)}

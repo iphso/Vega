@@ -1,0 +1,1064 @@
+---
+---
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Vega candidate viewer</title>
+  <style is:global>
+    :root {
+      --bg: #0c0c0e;
+      --panel: #16161a;
+      --card: #1c1c21;
+      --card-2: #202027;
+      --border: #2a2a30;
+      --text: #e8e8ec;
+      --text-dim: #8a8a94;
+      --text-faint: #55555e;
+      --accent: #5b9dff;
+      --accent-dim: #2a4a75;
+      --handle: #ffb454;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    #app { display: flex; height: 100%; }
+
+    .side-pane { flex: 0 0 340px; overflow: hidden; transition: flex-basis .18s ease; }
+    .side-pane.dragging { transition: none; }
+    .side-pane .pane-content { width: 100%; height: 100%; overflow-y: auto; padding: 18px; }
+    .side-pane .pane-content::-webkit-scrollbar { width: 8px; }
+    .side-pane .pane-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    #leftPane .pane-content { background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+    #rightPane .pane-content { background: var(--panel); border-left: 1px solid var(--border); }
+
+    .pane-toggle-btn {
+      flex: 0 0 18px; width: 18px; padding: 0; border: none; border-radius: 0;
+      background: var(--panel); color: var(--text-faint); cursor: ew-resize; font-size: 11px;
+      touch-action: none;
+    }
+    .pane-toggle-btn:hover, .pane-toggle-btn.dragging { background: var(--card-2); color: var(--text); }
+    #leftToggle { border-right: 1px solid var(--border); }
+    #rightToggle { border-left: 1px solid var(--border); }
+
+    #centerPane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+    #topBar { padding: 18px 18px 0; }
+    #canvas-wrap { flex: 1; position: relative; }
+    #canvas-wrap canvas { display: block; }
+
+    h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    #subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 14px; }
+    .card:first-child { margin-top: 0; }
+    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+
+    select, input[type=number] {
+      width: 100%; background: var(--card-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 7px 8px; font-size: 13px; font-family: inherit;
+    }
+    select:focus, input:focus { outline: none; border-color: var(--accent); }
+
+    .btn-row { display: flex; gap: 6px; margin-top: 8px; }
+    .btn-row button { flex: 1; }
+    button {
+      background: var(--card-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+      padding: 7px 10px; cursor: pointer; font-size: 13px; font-family: inherit; transition: background .12s, border-color .12s;
+    }
+    button:hover { background: #26262e; border-color: #3a3a42; }
+    button:active { background: #2c2c36; }
+    button.icon { flex: 0 0 auto; width: 36px; font-weight: 600; }
+    button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 11px; font-weight: 500; }
+    button.link:hover { background: none; text-decoration: underline; }
+
+    .candidate-meta { display: flex; gap: 8px; margin-top: 10px; font-size: 11px; color: var(--text-dim); }
+    .pill { background: var(--card-2); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; }
+    .pill b { color: var(--text); font-weight: 600; }
+
+    #matchBar .track { height: 8px; background: var(--card-2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+    #matchBar .fill { height: 100%; background: linear-gradient(90deg, var(--accent-dim), var(--accent)); border-radius: 4px; transition: width .15s ease; }
+    #matchLabel { font-size: 13px; }
+    #matchLabel b { color: var(--accent); }
+
+    .metric-card { padding: 0; overflow: hidden; }
+    .metric-card + .metric-card { margin-top: 8px; }
+
+    .metric-header {
+      width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: none;
+      border-radius: 0; padding: 12px 14px; text-align: left; font-family: inherit;
+    }
+    .metric-header:hover { background: #222229; }
+    .metric-header:active { background: #222229; }
+    .chevron { font-size: 10px; color: var(--text-faint); transition: transform .15s ease; flex: 0 0 auto; }
+    .metric-card.expanded .chevron { transform: rotate(90deg); }
+    .metric-name { font-size: 12.5px; color: #d4d4da; font-weight: 500; }
+    .metric-value-inline {
+      font-size: 13px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums;
+    }
+    .metric-header .spacer { flex: 1; }
+    .metric-pct { font-size: 10.5px; color: var(--accent); background: var(--accent-dim); padding: 3px 9px; border-radius: 20px; font-weight: 500; white-space: nowrap; flex: 0 0 auto; }
+
+    .metric-body { display: none; padding: 0 14px 14px; }
+    .metric-card.expanded .metric-body { display: block; }
+    .body-toolbar { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+
+    .hist-wrap { position: relative; padding-bottom: 15px; }
+    .hist-wrap canvas { width: 100%; height: 52px; display: block; border-radius: 4px; cursor: ew-resize; }
+    .handle-label {
+      position: absolute; bottom: 0; transform: translateX(-50%); font-size: 9px; color: #8a7860;
+      font-variant-numeric: tabular-nums; cursor: text; padding: 1px 3px; border-radius: 3px; white-space: nowrap;
+    }
+    .handle-label:hover { background: rgba(255, 180, 84, 0.1); color: #b39770; }
+    .handle-label input {
+      width: 64px; font-size: 9px; padding: 1px 3px; background: var(--card-2); color: #b39770;
+      border: 1px solid #6b5d47; border-radius: 3px; text-align: center;
+    }
+
+    #status { font-size: 11px; color: var(--text-faint); }
+    #hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
+
+    #umapCanvasWrap { flex: 1; position: relative; margin-top: 14px; min-height: 160px; }
+    #tsneCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; border-radius: var(--radius); background: #0c0c0e; }
+    #tsneStatus { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
+    #tsneLegend { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 10px; color: var(--text-faint); }
+    #tsneLegend .bar { flex: 1; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #3a6fd8, #d8c93a, #d8483a); }
+
+    .source-cards {
+      position: absolute; top: 10px; left: 10px; right: 10px; display: flex; flex-wrap: wrap;
+      gap: 6px; z-index: 5; pointer-events: none;
+    }
+    .source-card {
+      pointer-events: auto; display: flex; align-items: center; gap: 6px;
+      background: rgba(28, 28, 33, 0.88); border: 1px solid var(--border); border-radius: 8px;
+      padding: 5px 10px; font-size: 11px; color: var(--text-dim); cursor: pointer;
+      transition: border-color .12s, color .12s, background .12s;
+    }
+    .source-card:hover, .source-card.active {
+      border-color: var(--src-color, var(--accent)); color: var(--text); background: rgba(38, 38, 46, 0.92);
+    }
+    .source-card .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; background: var(--src-color); }
+    .source-card .name { font-weight: 500; }
+    .source-card .count { color: var(--text-faint); font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="leftPane" class="side-pane">
+      <div class="pane-content">
+        <div class="card">
+          <div class="section-title">UMAP map</div>
+          <label for="tsneColorBy">Color by</label>
+          <select id="tsneColorBy"></select>
+          <div class="btn-row">
+            <button id="tsneRecomputeBtn">recompute</button>
+          </div>
+          <div id="tsneStatus"></div>
+          <div id="tsneLegend"><span id="tsneLegendMin"></span><span class="bar"></span><span id="tsneLegendMax"></span></div>
+          <div id="hint">Points are up to 1000 randomly sampled from the current filtered set, positioned by similarity across all 11 metrics. Hover a source card to highlight it; click a point to inspect it.</div>
+        </div>
+        <div id="umapCanvasWrap">
+          <canvas id="tsneCanvas"></canvas>
+          <div id="sourceCards" class="source-cards"></div>
+        </div>
+      </div>
+    </div>
+    <button class="pane-toggle-btn" id="leftToggle">‹</button>
+
+    <div id="centerPane">
+      <div id="topBar">
+        <h1>Vega candidate viewer</h1>
+        <div id="subtitle">loading…</div>
+
+        <div class="card">
+          <div class="section-title">Candidate</div>
+          <select id="source">
+          </select>
+          <div class="btn-row">
+            <button class="icon" id="prevBtn">‹</button>
+            <input id="index" type="number" min="0" value="0" />
+            <button class="icon" id="nextBtn">›</button>
+            <button id="randomBtn">random</button>
+          </div>
+          <div class="candidate-meta">
+            <span class="pill">row <b id="globalRow">–</b></span>
+            <span class="pill">nfp <b id="nfpVal">–</b></span>
+          </div>
+        </div>
+      </div>
+      <div id="canvas-wrap"></div>
+    </div>
+
+    <button class="pane-toggle-btn" id="rightToggle">›</button>
+    <div id="rightPane" class="side-pane">
+      <div class="pane-content" id="panel">
+        <div class="card" id="matchBar">
+          <div class="section-title">
+            Filters
+            <button class="link" id="resetAllBtn">reset all</button>
+          </div>
+          <div id="matchLabel"></div>
+          <div class="track"><div class="fill" id="matchFill"></div></div>
+          <div id="hint">Drag the amber handles to set a range. Click a handle's number to type one. Drag on open space to jump the nearest handle there.</div>
+        </div>
+
+        <div id="filters"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+    import { UMAP } from 'umap-js';
+
+    const subtitleEl = document.getElementById('subtitle');
+    const sourceEl = document.getElementById('source');
+    const indexEl = document.getElementById('index');
+    const globalRowEl = document.getElementById('globalRow');
+    const nfpValEl = document.getElementById('nfpVal');
+    const matchLabelEl = document.getElementById('matchLabel');
+    const matchFillEl = document.getElementById('matchFill');
+    const filtersEl = document.getElementById('filters');
+    const tsneCanvas = document.getElementById('tsneCanvas');
+    const umapCanvasWrap = document.getElementById('umapCanvasWrap');
+    const tsneColorByEl = document.getElementById('tsneColorBy');
+    const tsneStatusEl = document.getElementById('tsneStatus');
+    const tsneLegendMinEl = document.getElementById('tsneLegendMin');
+    const tsneLegendMaxEl = document.getElementById('tsneLegendMax');
+    const tsneLegendEl = document.getElementById('tsneLegend');
+    const sourceCardsEl = document.getElementById('sourceCards');
+    const leftPane = document.getElementById('leftPane');
+    const rightPane = document.getElementById('rightPane');
+    const leftToggle = document.getElementById('leftToggle');
+    const rightToggle = document.getElementById('rightToggle');
+
+    // Fixed, stable per-source-code color -- assigned once so a source's
+    // color never shifts as filters/scope change (unlike the metric
+    // gradient, which is intentionally rescaled to whatever's plotted).
+    const SOURCE_COLORS = ['#5b9dff', '#ffb454', '#5bd88a', '#c76bff', '#ff6b6b', '#57d3d8'];
+    let sourceCardEls = {}; // code -> { root, countEl }
+
+    let meta, X, Y;
+    let offsets = {};
+    let sourceRanges = []; // [{ code, name, start, count }], sorted by start, excludes the -1 "all sources" pseudo-range
+    let targetRange = []; // fixed global {min,max} per target -- never changes, used for percentiles & full reset
+    let viewRange = []; // current zoom window per target -- what the histogram x-axis currently spans
+    let filters = [];
+    let filteredIndices = [];
+    let histCanvases = [];
+    let handleLabels = []; // { min: el, max: el } per target
+    let currentValues = [];
+    let lastCounts = [];
+
+    let tsnePoints = null; // { globalIndices: [...], positions: [[x,y],...] }
+    let hoveredSourceCode = null;
+
+    const N_BINS = 36;
+
+    async function loadData() {
+      const [metaRes, xRes, yRes] = await Promise.all([
+        fetch('/data/meta.json'),
+        fetch('/data/X.bin'),
+        fetch('/data/Y.bin'),
+      ]);
+      meta = await metaRes.json();
+      X = new Float32Array(await xRes.arrayBuffer());
+      Y = new Float32Array(await yRes.arrayBuffer());
+      currentValues = new Array(meta.y_cols).fill(null);
+
+      let start = 0;
+      for (const code of Object.keys(meta.source_legend).map(Number).sort((a, b) => a - b)) {
+        const name = meta.source_legend[code];
+        const count = meta.source_counts[name];
+        offsets[code] = { start, count, name };
+        start += count;
+      }
+      offsets[-1] = { start: 0, count: meta.n, name: 'all sources' };
+
+      sourceEl.innerHTML = '';
+      const allOpt = document.createElement('option');
+      allOpt.value = -1;
+      allOpt.textContent = `all sources (${meta.n.toLocaleString()})`;
+      sourceEl.appendChild(allOpt);
+      sourceRanges = [];
+      sourceCardsEl.innerHTML = '';
+      sourceCardEls = {};
+      for (const code of Object.keys(meta.source_legend).map(Number).sort((a, b) => a - b)) {
+        const { name, count } = offsets[code];
+        const opt = document.createElement('option');
+        opt.value = code;
+        opt.textContent = `${name} (${count.toLocaleString()})`;
+        sourceEl.appendChild(opt);
+
+        sourceRanges.push({ code, name, start: offsets[code].start, count });
+
+        const card = document.createElement('div');
+        card.className = 'source-card';
+        card.style.setProperty('--src-color', SOURCE_COLORS[code % SOURCE_COLORS.length]);
+        card.innerHTML = `<span class="dot"></span><span class="name">${name}</span><span class="count"></span>`;
+        card.addEventListener('mouseenter', () => { hoveredSourceCode = code; card.classList.add('active'); if (tsnePoints) drawTSNE(); });
+        card.addEventListener('mouseleave', () => { hoveredSourceCode = null; card.classList.remove('active'); if (tsnePoints) drawTSNE(); });
+        sourceCardsEl.appendChild(card);
+        sourceCardEls[code] = { root: card, countEl: card.querySelector('.count') };
+      }
+
+      for (let t = 0; t < meta.y_cols; t++) {
+        let mn = Infinity, mx = -Infinity;
+        for (let r = 0; r < meta.n; r++) {
+          const v = Y[r * meta.y_cols + t];
+          if (v < mn) mn = v;
+          if (v > mx) mx = v;
+        }
+        targetRange.push({ min: mn, max: mx });
+        viewRange.push({ min: mn, max: mx });
+        filters.push({ min: mn, max: mx });
+      }
+
+      tsneColorByEl.innerHTML = '';
+      const sourceOpt = document.createElement('option');
+      sourceOpt.value = 'source';
+      sourceOpt.textContent = 'source';
+      tsneColorByEl.appendChild(sourceOpt);
+      meta.target_names.forEach((name, t) => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = name;
+        tsneColorByEl.appendChild(opt);
+      });
+      tsneColorByEl.value = 'source';
+
+      buildFilterRows();
+      subtitleEl.textContent = `${meta.n.toLocaleString()} candidates loaded`;
+    }
+
+    // Ranges are contiguous per source (each export block is appended as one
+    // run), so a global row index maps to exactly one source without needing
+    // a separate per-row source array.
+    function sourceCodeOf(gi) {
+      for (const r of sourceRanges) {
+        if (gi >= r.start && gi < r.start + r.count) return r.code;
+      }
+      return null;
+    }
+
+    function roundSig(v, sig) {
+      const a = Math.abs(v);
+      if (a !== 0 && (a < 1e-3 || a >= 1e5)) return v.toExponential(Math.max(0, sig - 1));
+      return Number(v.toPrecision(sig)).toString();
+    }
+    const round5 = (v) => roundSig(v, 5);
+    const fmt = (v) => (v === null || v === undefined ? '–' : roundSig(v, 3));
+
+    function buildFilterRows() {
+      filtersEl.innerHTML = '';
+      histCanvases = [];
+      handleLabels = [];
+      meta.target_names.forEach((name, t) => {
+        const row = document.createElement('div');
+        row.className = 'card metric-card';
+
+        row.innerHTML = `
+          <button class="metric-header" data-t="${t}">
+            <span class="chevron">▸</span>
+            <span class="metric-name">${name}</span>
+            <span class="metric-value-inline" id="cur-${t}">–</span>
+            <span class="spacer"></span>
+            <span class="metric-pct" id="pct-${t}"></span>
+          </button>
+          <div class="metric-body">
+            <div class="body-toolbar">
+              <button class="link" id="zoom-reset-${t}">reset zoom</button>
+            </div>
+            <div class="hist-wrap">
+              <span class="handle-label" id="handle-min-${t}"></span>
+              <span class="handle-label" id="handle-max-${t}"></span>
+            </div>
+          </div>`;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 336; canvas.height = 52;
+        histCanvases[t] = canvas;
+        row.querySelector('.hist-wrap').insertBefore(canvas, row.querySelector('.handle-label'));
+
+        row.querySelector('.metric-header').addEventListener('click', () => row.classList.toggle('expanded'));
+        row.querySelector(`#zoom-reset-${t}`).addEventListener('click', () => resetZoom(t));
+
+        filtersEl.appendChild(row);
+
+        const minLabel = document.getElementById(`handle-min-${t}`);
+        const maxLabel = document.getElementById(`handle-max-${t}`);
+        handleLabels[t] = { min: minLabel, max: maxLabel };
+        makeLabelEditable(minLabel, t, 'min');
+        makeLabelEditable(maxLabel, t, 'max');
+
+        setupDrag(canvas, t);
+      });
+      meta.target_names.forEach((_, t) => positionHandles(t));
+    }
+
+    function positionHandles(t, liveOverride) {
+      const { min, max } = viewRange[t];
+      const span = (max - min) || 1;
+      const f = liveOverride || filters[t];
+      const minFrac = Math.min(1, Math.max(0, (f.min - min) / span));
+      const maxFrac = Math.min(1, Math.max(0, (f.max - min) / span));
+      const { min: minEl, max: maxEl } = handleLabels[t];
+      minEl.style.left = `${minFrac * 100}%`;
+      maxEl.style.left = `${maxFrac * 100}%`;
+      if (!minEl.querySelector('input')) minEl.textContent = round5(f.min);
+      if (!maxEl.querySelector('input')) maxEl.textContent = round5(f.max);
+    }
+
+    // Zooms the histogram's view window out to the full dataset range for
+    // this target (and clears its filter back to "everything", matching --
+    // a lingering narrow filter with a zoomed-out view would be confusing).
+    function resetZoom(t) {
+      viewRange[t] = { ...targetRange[t] };
+      filters[t] = { ...targetRange[t] };
+      positionHandles(t);
+      recomputeFiltered();
+    }
+
+    function makeLabelEditable(labelEl, t, which) {
+      labelEl.addEventListener('click', () => {
+        if (labelEl.querySelector('input')) return;
+        const current = filters[t][which];
+        labelEl.textContent = '';
+        const input = document.createElement('input');
+        input.type = 'number'; input.step = 'any'; input.value = current;
+        labelEl.appendChild(input);
+        input.focus(); input.select();
+        const commit = () => {
+          const v = Number(input.value);
+          if (!Number.isNaN(v)) {
+            const next = { ...filters[t], [which]: v };
+            setFilter(t, next.min, next.max);
+          } else {
+            positionHandles(t);
+          }
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') input.blur();
+          if (e.key === 'Escape') { positionHandles(t); }
+        });
+      });
+    }
+
+    function setFilter(t, min, max) {
+      filters[t] = { min: Math.min(min, max), max: Math.max(min, max) };
+      positionHandles(t);
+      recomputeFiltered();
+    }
+
+    // --- Drag directly on a histogram: grab a handle, or click open space
+    // to jump the nearest handle there (then keep dragging it). ---
+    function setupDrag(canvas, t) {
+      let dragging = null; // 'min' | 'max'
+      const HIT_PX = 10;
+
+      function fracFromEvent(e) {
+        const rect = canvas.getBoundingClientRect();
+        return Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+      }
+      function fracToValue(frac) {
+        const { min, max } = viewRange[t];
+        return min + frac * (max - min);
+      }
+      function fracOf(which) {
+        const { min, max } = viewRange[t];
+        const span = (max - min) || 1;
+        return (filters[t][which] - min) / span;
+      }
+
+      function onMove(e) {
+        const frac = fracFromEvent(e);
+        const value = fracToValue(frac);
+        const live = { ...filters[t], [dragging]: value };
+        if (live.min > live.max) { live[dragging] = filters[t][dragging === 'min' ? 'max' : 'min']; }
+        positionHandles(t, live);
+        drawHistogram(t, lastCounts[t], { liveFilter: live });
+        const label = handleLabels[t][dragging];
+        if (!label.querySelector('input')) label.textContent = round5(value);
+      }
+
+      function onUp(e) {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        const frac = fracFromEvent(e);
+        const value = fracToValue(frac);
+        const next = dragging === 'min' ? { min: value, max: filters[t].max } : { min: filters[t].min, max: value };
+        filters[t] = { min: Math.min(next.min, next.max), max: Math.max(next.min, next.max) };
+        // Zoom to the just-selected range -- it now fills the full width,
+        // so a further drag can pick out an even finer sub-range.
+        viewRange[t] = { ...filters[t] };
+        positionHandles(t);
+        recomputeFiltered();
+        dragging = null;
+      }
+
+      canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const clickPx = e.clientX - rect.left;
+        const minPx = fracOf('min') * rect.width;
+        const maxPx = fracOf('max') * rect.width;
+        if (Math.abs(clickPx - minPx) <= HIT_PX && Math.abs(clickPx - minPx) <= Math.abs(clickPx - maxPx)) {
+          dragging = 'min';
+        } else if (Math.abs(clickPx - maxPx) <= HIT_PX) {
+          dragging = 'max';
+        } else {
+          // open space: jump the nearer handle here and keep dragging it
+          dragging = Math.abs(clickPx - minPx) <= Math.abs(clickPx - maxPx) ? 'min' : 'max';
+        }
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    }
+
+    document.getElementById('resetAllBtn').addEventListener('click', () => {
+      for (let t = 0; t < meta.y_cols; t++) {
+        filters[t] = { ...targetRange[t] };
+        viewRange[t] = { ...targetRange[t] };
+        positionHandles(t);
+      }
+      recomputeFiltered();
+    });
+
+    function sourceScope() {
+      return offsets[Number(sourceEl.value)];
+    }
+
+    function recomputeFiltered() {
+      const { start, count } = sourceScope();
+      const yCols = meta.y_cols;
+
+      filteredIndices = [];
+      const hist = Array.from({ length: yCols }, () => new Array(N_BINS).fill(0));
+
+      for (let i = 0; i < count; i++) {
+        const gi = start + i;
+        const yBase = gi * yCols;
+        let pass = true;
+        for (let t = 0; t < yCols; t++) {
+          const v = Y[yBase + t];
+          if (v < filters[t].min || v > filters[t].max) pass = false;
+          // Histogram bins reflect the current zoomed view, not the full
+          // dataset range -- values currently scrolled out of view are
+          // skipped rather than piled into the edge bins (which would
+          // misrepresent those bins as taller than they really are).
+          const { min: vmin, max: vmax } = viewRange[t];
+          if (v < vmin || v > vmax) continue;
+          const bin = Math.min(N_BINS - 1, Math.max(0, Math.floor(((v - vmin) / (vmax - vmin || 1)) * N_BINS)));
+          hist[t][bin]++;
+        }
+        if (pass) filteredIndices.push(gi);
+      }
+      lastCounts = hist;
+      for (let t = 0; t < yCols; t++) drawHistogram(t, hist[t]);
+
+      const frac = count ? filteredIndices.length / count : 0;
+      matchLabelEl.innerHTML = `<b>${filteredIndices.length.toLocaleString()}</b> of ${count.toLocaleString()} match`;
+      matchFillEl.style.width = `${(frac * 100).toFixed(1)}%`;
+
+      indexEl.max = Math.max(0, filteredIndices.length - 1);
+      if (Number(indexEl.value) >= filteredIndices.length) indexEl.value = 0;
+      renderCandidate();
+    }
+
+    function drawHistogram(t, counts, opts) {
+      const canvas = histCanvases[t];
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const maxCount = Math.max(1, ...counts);
+      const barW = w / N_BINS;
+      const { min, max } = viewRange[t];
+      const f = (opts && opts.liveFilter) || filters[t];
+
+      for (let b = 0; b < N_BINS; b++) {
+        const binLo = min + (b / N_BINS) * (max - min);
+        const binHi = min + ((b + 1) / N_BINS) * (max - min);
+        const inRange = binHi >= f.min && binLo <= f.max;
+        const barH = Math.max(1, (counts[b] / maxCount) * (h - 4));
+        ctx.fillStyle = inRange ? '#5b9dff' : '#33333a';
+        ctx.fillRect(b * barW, h - barH, Math.max(1, barW - 1), barH);
+      }
+
+      // handle markers (draggable range boundaries)
+      ['min', 'max'].forEach((which) => {
+        const span = (max - min) || 1;
+        const x = ((f[which] - min) / span) * w;
+        ctx.fillStyle = '#ffb454';
+        ctx.fillRect(x - 1, 0, 2, h);
+        ctx.beginPath();
+        ctx.moveTo(x - 5, 0);
+        ctx.lineTo(x + 5, 0);
+        ctx.lineTo(x, 7);
+        ctx.closePath();
+        ctx.fill();
+      });
+
+      // marker for the current candidate's value
+      const cv = currentValues[t];
+      if (cv !== null && cv !== undefined && cv >= min && cv <= max) {
+        const x = ((cv - min) / (max - min || 1)) * w;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(x, h - 2, 3, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+
+    // R,Z Fourier synthesis: r_cos/z_sin are [m, n_idx] (m=0..4, n_idx=0..8,
+    // real n = n_idx - 4), matching this project's fixed feature layout.
+    function surfacePoints(rowStart, nfp, nTheta, nPhi) {
+      const rCos = X.subarray(rowStart, rowStart + 45);
+      const zSin = X.subarray(rowStart + 45, rowStart + 90);
+      const positions = new Float32Array(nTheta * nPhi * 3);
+      let idx = 0;
+      for (let it = 0; it < nTheta; it++) {
+        const theta = (it / nTheta) * 2 * Math.PI;
+        for (let ip = 0; ip < nPhi; ip++) {
+          const phi = (ip / nPhi) * 2 * Math.PI;
+          let R = 0, Z = 0;
+          for (let m = 0; m < 5; m++) {
+            for (let nIdx = 0; nIdx < 9; nIdx++) {
+              const n = nIdx - 4;
+              const angle = m * theta - nfp * n * phi;
+              R += rCos[m * 9 + nIdx] * Math.cos(angle);
+              Z += zSin[m * 9 + nIdx] * Math.sin(angle);
+            }
+          }
+          const x = R * Math.cos(phi);
+          const y = R * Math.sin(phi);
+          positions[idx++] = x;
+          positions[idx++] = y;
+          positions[idx++] = Z;
+        }
+      }
+      return positions;
+    }
+
+    function buildGeometry(rowStart, nfp) {
+      const nTheta = 64, nPhi = 128;
+      const positions = surfacePoints(rowStart, nfp, nTheta, nPhi);
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+      const indices = [];
+      for (let it = 0; it < nTheta; it++) {
+        const itNext = (it + 1) % nTheta;
+        for (let ip = 0; ip < nPhi; ip++) {
+          const ipNext = (ip + 1) % nPhi;
+          const a = it * nPhi + ip;
+          const b = itNext * nPhi + ip;
+          const c = itNext * nPhi + ipNext;
+          const d = it * nPhi + ipNext;
+          indices.push(a, b, c, a, c, d);
+        }
+      }
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      return geometry;
+    }
+
+    // --- Three.js scene setup ---
+    const wrap = document.getElementById('canvas-wrap');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0c0c0e);
+    const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
+    camera.position.set(2, 1.5, 2);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    wrap.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    dirLight.position.set(3, 5, 4);
+    scene.add(dirLight);
+    const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.4);
+    dirLight2.position.set(-3, -2, -4);
+    scene.add(dirLight2);
+
+    const axes = new THREE.AxesHelper(1.5);
+    scene.add(axes);
+
+    let mesh = null;
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x5b9dff, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide,
+    });
+
+    // The 3D view and the UMAP map now live in separate, independently
+    // resizable/collapsible panes, so each gets its own resize function
+    // driven by a ResizeObserver on its own container (catches both window
+    // resizes and the side-pane collapse/expand transition).
+    function resizeThree() {
+      const w = wrap.clientWidth, h = wrap.clientHeight || 1;
+      renderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    function resizeUMAP() {
+      const w = umapCanvasWrap.clientWidth, h = umapCanvasWrap.clientHeight;
+      const dpr = window.devicePixelRatio || 1;
+      tsneCanvas.width = w * dpr;
+      tsneCanvas.height = h * dpr;
+      tsneCanvas.style.width = `${w}px`;
+      tsneCanvas.style.height = `${h}px`;
+      if (tsnePoints) drawTSNE();
+    }
+    new ResizeObserver(resizeThree).observe(wrap);
+    new ResizeObserver(resizeUMAP).observe(umapCanvasWrap);
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    // Panes are resized by dragging the same strip that also toggles
+    // collapse -- a plain click (no meaningful mouse movement) collapses/
+    // expands as before; a drag past DRAG_THRESHOLD instead resizes the
+    // pane and leaves it expanded at the new width. Width is tracked in JS
+    // (not left to CSS) so a later expand-after-collapse restores exactly
+    // the size the user last dragged it to, rather than snapping back to
+    // the 340px default.
+    const DRAG_THRESHOLD = 4;
+    const MIN_PANE = 220, MAX_PANE = 640;
+
+    function setupPaneResizer(toggleBtn, pane, side, collapsedChar, expandedChar) {
+      let width = pane.getBoundingClientRect().width || 340;
+      let collapsed = false;
+      let dragging = false, moved = false, startX = 0, startWidth = 0;
+
+      function apply() {
+        pane.style.flex = collapsed ? '0 0 0px' : `0 0 ${width}px`;
+        toggleBtn.textContent = collapsed ? collapsedChar : expandedChar;
+      }
+      apply();
+
+      toggleBtn.addEventListener('mousedown', (e) => {
+        // Always registered, even while collapsed -- a plain click here
+        // must still expand it (only actual dragging is skipped below,
+        // since there's no meaningful width to drag from while at 0).
+        dragging = true; moved = false;
+        startX = e.clientX; startWidth = width; // width retains the last expanded size across a collapse
+        e.preventDefault();
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+
+      function onMove(e) {
+        if (collapsed) return; // dragging a collapsed pane isn't supported -- only click-to-expand is
+        const delta = (e.clientX - startX) * (side === 'left' ? 1 : -1);
+        if (!moved && Math.abs(delta) > DRAG_THRESHOLD) {
+          moved = true;
+          toggleBtn.classList.add('dragging');
+          pane.classList.add('dragging');
+        }
+        if (!moved) return;
+        width = Math.min(MAX_PANE, Math.max(MIN_PANE, startWidth + delta));
+        apply();
+      }
+
+      function onUp() {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        dragging = false;
+        toggleBtn.classList.remove('dragging');
+        pane.classList.remove('dragging');
+        if (!moved) {
+          collapsed = !collapsed;
+          apply();
+        }
+      }
+    }
+
+    setupPaneResizer(leftToggle, leftPane, 'left', '›', '‹');
+    setupPaneResizer(rightToggle, rightPane, 'right', '‹', '›');
+
+    document.getElementById('tsneRecomputeBtn').addEventListener('click', () => computeAndRenderUMAP());
+    tsneColorByEl.addEventListener('change', () => { if (tsnePoints) drawTSNE(); });
+
+    // Blue -> yellow -> red, for a value already normalized to [0,1].
+    function colorFor(frac) {
+      const f = Math.max(0, Math.min(1, frac));
+      const stops = [[58, 111, 216], [216, 201, 58], [216, 72, 58]];
+      const seg = f < 0.5 ? 0 : 1;
+      const local = f < 0.5 ? f * 2 : (f - 0.5) * 2;
+      const a = stops[seg], b = stops[seg + 1];
+      const r = Math.round(a[0] + (b[0] - a[0]) * local);
+      const g = Math.round(a[1] + (b[1] - a[1]) * local);
+      const bl = Math.round(a[2] + (b[2] - a[2]) * local);
+      return `rgb(${r},${g},${bl})`;
+    }
+
+    function computeAndRenderUMAP() {
+      const SAMPLE_CAP = 1000;
+      const pool = filteredIndices;
+      if (pool.length === 0) {
+        tsneStatusEl.textContent = 'no candidates match the current filters';
+        tsnePoints = null;
+        return;
+      }
+      const n = Math.min(SAMPLE_CAP, pool.length);
+      // sample without replacement
+      const shuffled = pool.slice();
+      for (let i = shuffled.length - 1; i > 0 && i >= shuffled.length - n; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const globalIndices = shuffled.slice(shuffled.length - n);
+
+      const yCols = meta.y_cols;
+      const raw = globalIndices.map((gi) => {
+        const base = gi * yCols;
+        const row = new Array(yCols);
+        for (let t = 0; t < yCols; t++) row[t] = Y[base + t];
+        return row;
+      });
+
+      // z-score normalize each metric so raw scale (qi ~0.01-0.3 vs. others
+      // spanning orders of magnitude) doesn't dominate the distance metric
+      const mean = new Array(yCols).fill(0);
+      const std = new Array(yCols).fill(0);
+      for (let t = 0; t < yCols; t++) {
+        let m = 0;
+        for (let i = 0; i < n; i++) m += raw[i][t];
+        m /= n;
+        mean[t] = m;
+        let v = 0;
+        for (let i = 0; i < n; i++) v += (raw[i][t] - m) ** 2;
+        std[t] = Math.sqrt(v / n) || 1;
+      }
+      const features = raw.map((row) => row.map((v, t) => (v - mean[t]) / std[t]));
+
+      if (n < 4) {
+        tsnePoints = { globalIndices, positions: features.map(() => [0, 0]) };
+        drawTSNE();
+        tsneStatusEl.textContent = `${n.toLocaleString()} points sampled from ${pool.length.toLocaleString()} matching candidates`;
+        return;
+      }
+
+      tsneStatusEl.textContent = `computing UMAP on ${n.toLocaleString()} points…`;
+      const nNeighbors = Math.max(2, Math.min(15, n - 1));
+      const umap = new UMAP({ nComponents: 2, nNeighbors });
+      const nEpochs = umap.initializeFit(features);
+      let epoch = 0;
+      const stepsPerTick = 5;
+
+      function tick() {
+        const target = Math.min(epoch + stepsPerTick, nEpochs);
+        for (; epoch < target; epoch++) umap.step();
+        tsnePoints = { globalIndices, positions: umap.getEmbedding() };
+        drawTSNE();
+        if (epoch < nEpochs) {
+          requestAnimationFrame(tick);
+        } else {
+          tsneStatusEl.textContent = `${n.toLocaleString()} points sampled from ${pool.length.toLocaleString()} matching candidates`;
+        }
+      }
+      requestAnimationFrame(tick);
+    }
+
+    function drawTSNE() {
+      const ctx = tsneCanvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      const w = tsneCanvas.width, h = tsneCanvas.height;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.fillStyle = '#0c0c0e';
+      ctx.fillRect(0, 0, w, h);
+      if (!tsnePoints) return;
+
+      const { positions, globalIndices } = tsnePoints;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const [x, y] of positions) {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+      const pad = 40 * dpr;
+      const spanX = (maxX - minX) || 1, spanY = (maxY - minY) || 1;
+      const scale = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY);
+      const toPx = (x, y) => [
+        pad + (x - minX) * scale + (w - 2 * pad - spanX * scale) / 2,
+        pad + (y - minY) * scale + (h - 2 * pad - spanY * scale) / 2,
+      ];
+
+      // Color bounds come from the values actually plotted right now (not
+      // the fixed global range) so the full blue->yellow->red spectrum is
+      // always in use, even when filters/zoom have narrowed the sample to a
+      // tight sub-range of a metric.
+      const byMetric = tsneColorByEl.value !== 'source';
+      const t = byMetric ? Number(tsneColorByEl.value) : 0;
+      let cmin = Infinity, cmax = -Infinity;
+      if (byMetric) {
+        for (const gi of globalIndices) {
+          const v = Y[gi * meta.y_cols + t];
+          if (v < cmin) cmin = v;
+          if (v > cmax) cmax = v;
+        }
+        if (cmin > cmax) { cmin = 0; cmax = 1; }
+      }
+      tsneLegendEl.style.visibility = byMetric ? 'visible' : 'hidden';
+      tsneLegendMinEl.textContent = byMetric ? round5(cmin) : '';
+      tsneLegendMaxEl.textContent = byMetric ? round5(cmax) : '';
+
+      const currentGi = filteredIndices[Math.max(0, Math.min(filteredIndices.length - 1, Number(indexEl.value) || 0))];
+      const sampleCounts = {};
+
+      for (let i = 0; i < globalIndices.length; i++) {
+        const gi = globalIndices[i];
+        const [px, py] = toPx(positions[i][0], positions[i][1]);
+        const isCurrent = gi === currentGi;
+        const srcCode = sourceCodeOf(gi);
+        sampleCounts[srcCode] = (sampleCounts[srcCode] || 0) + 1;
+        const dimmed = hoveredSourceCode !== null && srcCode !== hoveredSourceCode;
+        const highlighted = hoveredSourceCode !== null && srcCode === hoveredSourceCode;
+
+        let fillStyle;
+        if (byMetric) {
+          const v = Y[gi * meta.y_cols + t];
+          const frac = (v - cmin) / ((cmax - cmin) || 1);
+          fillStyle = colorFor(frac);
+        } else {
+          fillStyle = SOURCE_COLORS[srcCode % SOURCE_COLORS.length];
+        }
+
+        ctx.globalAlpha = dimmed ? 0.15 : 1;
+        const r = (isCurrent ? 7 : highlighted ? 5.5 : 4) * dpr;
+        ctx.beginPath();
+        ctx.arc(px, py, r, 0, 2 * Math.PI);
+        ctx.fillStyle = fillStyle;
+        ctx.fill();
+        if (isCurrent) {
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 2 * dpr;
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      for (const [code, els] of Object.entries(sourceCardEls)) {
+        const n = sampleCounts[code] || 0;
+        els.countEl.textContent = `${n.toLocaleString()}/${globalIndices.length.toLocaleString()}`;
+      }
+    }
+
+    tsneCanvas.addEventListener('click', (e) => {
+      if (!tsnePoints) return;
+      const rect = tsneCanvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const clickX = (e.clientX - rect.left) * dpr, clickY = (e.clientY - rect.top) * dpr;
+
+      const w = tsneCanvas.width, h = tsneCanvas.height;
+      const { positions } = tsnePoints;
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      for (const [x, y] of positions) {
+        if (x < minX) minX = x; if (x > maxX) maxX = x;
+        if (y < minY) minY = y; if (y > maxY) maxY = y;
+      }
+      const pad = 40 * dpr;
+      const spanX = (maxX - minX) || 1, spanY = (maxY - minY) || 1;
+      const scale = Math.min((w - 2 * pad) / spanX, (h - 2 * pad) / spanY);
+      const toPx = (x, y) => [
+        pad + (x - minX) * scale + (w - 2 * pad - spanX * scale) / 2,
+        pad + (y - minY) * scale + (h - 2 * pad - spanY * scale) / 2,
+      ];
+
+      let best = -1, bestDist = 12 * dpr; // hit radius in device pixels
+      for (let i = 0; i < positions.length; i++) {
+        const [px, py] = toPx(positions[i][0], positions[i][1]);
+        const dd = Math.hypot(px - clickX, py - clickY);
+        if (dd < bestDist) { bestDist = dd; best = i; }
+      }
+      if (best < 0) return;
+      const gi = tsnePoints.globalIndices[best];
+      const pos = filteredIndices.indexOf(gi);
+      if (pos < 0) return; // shouldn't happen -- sampled from filteredIndices itself
+      indexEl.value = pos;
+      renderCandidate();
+      drawTSNE();
+    });
+
+    function percentileOf(t, gi, scopeStart, scopeCount) {
+      const v = Y[gi * meta.y_cols + t];
+      let below = 0;
+      for (let i = 0; i < scopeCount; i++) {
+        if (Y[(scopeStart + i) * meta.y_cols + t] <= v) below++;
+      }
+      return Math.round((below / scopeCount) * 100);
+    }
+
+    function renderCandidate() {
+      if (filteredIndices.length === 0) {
+        globalRowEl.textContent = '–';
+        nfpValEl.textContent = '–';
+        if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh = null; }
+        currentValues = new Array(meta.y_cols).fill(null);
+        meta.target_names.forEach((_, t) => {
+          document.getElementById(`cur-${t}`).textContent = '–';
+          document.getElementById(`pct-${t}`).textContent = '';
+          drawHistogram(t, lastCounts[t] || new Array(N_BINS).fill(0));
+        });
+        if (tsnePoints) drawTSNE();
+        return;
+      }
+      const pos = Math.max(0, Math.min(filteredIndices.length - 1, Number(indexEl.value) || 0));
+      const gi = filteredIndices[pos];
+      const rowStart = gi * meta.x_cols;
+      const nfp = X[rowStart + 90];
+
+      if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); }
+      const geometry = buildGeometry(rowStart, nfp);
+      mesh = new THREE.Mesh(geometry, material);
+      scene.add(mesh);
+
+      globalRowEl.textContent = gi.toLocaleString();
+      nfpValEl.textContent = nfp;
+
+      const { start: scopeStart, count: scopeCount } = sourceScope();
+      const yStart = gi * meta.y_cols;
+      meta.target_names.forEach((name, t) => {
+        const v = Y[yStart + t];
+        currentValues[t] = v;
+        document.getElementById(`cur-${t}`).textContent = fmt(v);
+        const pct = percentileOf(t, gi, scopeStart, scopeCount);
+        document.getElementById(`pct-${t}`).textContent = `${pct}th percentile`;
+        drawHistogram(t, lastCounts[t] || new Array(N_BINS).fill(0));
+      });
+      if (tsnePoints) drawTSNE();
+    }
+
+    sourceEl.addEventListener('change', () => { indexEl.value = 0; recomputeFiltered(); });
+    indexEl.addEventListener('change', renderCandidate);
+    document.getElementById('prevBtn').addEventListener('click', () => {
+      indexEl.value = Math.max(0, Number(indexEl.value) - 1);
+      renderCandidate();
+    });
+    document.getElementById('nextBtn').addEventListener('click', () => {
+      indexEl.value = Math.min(filteredIndices.length - 1, Number(indexEl.value) + 1);
+      renderCandidate();
+    });
+    document.getElementById('randomBtn').addEventListener('click', () => {
+      indexEl.value = Math.floor(Math.random() * filteredIndices.length);
+      renderCandidate();
+    });
+
+    (async () => {
+      await loadData();
+      recomputeFiltered();
+      computeAndRenderUMAP();
+      animate();
+    })();
+  </script>
+</body>
+</html>

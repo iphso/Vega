@@ -1,0 +1,15 @@
+{
+  "name": "vega-viewer",
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "^4.15.0",
+    "three": "^0.168.0",
+    "umap-js": "^1.4.0"
+  }
+}

@@ -3,6 +3,21 @@ FROM pytorch/pytorch:2.2.0-cuda11.8-cudnn8-runtime
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
+# Needed to build booz-xform (a constellaration dependency, C++ extension
+# via CMake) from source -- the base image has cmake (via conda) but no
+# compiler toolchain at all.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gfortran ninja-build libnetcdf-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# VMEC++ (fast, low/high-fidelity-configurable equilibrium solver) and the
+# ConStellaration benchmark's own forward_model -- same boundary Fourier
+# representation and target metric names as this project's dataset, so it
+# plugs in directly as a ground-truth oracle for validating/labeling
+# surrogate-search candidates instead of assuming the surrogate extrapolates.
+RUN pip install --no-cache-dir vmecpp constellaration && \
+    pip install --no-cache-dir "numpy<2"
+
 WORKDIR /work
 
 COPY scripts/ /work/scripts/

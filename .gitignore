@@ -1,3 +1,7 @@
 output
 checkpoints
 .claude
+viewer/node_modules
+viewer/dist
+viewer/public/data
+viewer/.astro

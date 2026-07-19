@@ -1,0 +1,26 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Same C++ toolchain requirement as Dockerfile.train (vmecpp builds
+# booz-xform from source via CMake).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gfortran ninja-build libnetcdf-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Both physics oracles in one environment. Unlike Dockerfile.train, nothing
+# here pins numpy<2 -- that pin was only ever needed for torch's
+# torch.from_numpy compatibility (see EXPERIMENT_LOG), and this container has
+# no torch at all. Confirmed empirically: vmecpp + constellaration +
+# vmec-jax all import cleanly together on numpy 2.2.6 (jax/jaxlib 0.10.2
+# hard-require numpy>=2 -- numpy.dtypes.StringDType doesn't exist below 2.0
+# -- so this container could never have used the train container's pin
+# anyway).
+RUN pip install --no-cache-dir vmecpp constellaration vmec-jax
+
+WORKDIR /work
+
+COPY scripts/ /work/scripts/
+
+ENTRYPOINT ["python3"]
