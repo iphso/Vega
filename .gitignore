@@ -1,5 +1,6 @@
 output
 checkpoints
+__pycache__
 .claude
 viewer/node_modules
 viewer/dist
