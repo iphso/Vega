@@ -143,6 +143,15 @@ def compute_current_std(args, g, schedule_gen):
     cycle_idx = (schedule_gen - 1) // cycle_length
     pos = (schedule_gen - 1) % cycle_length
     peak_std = args.peak_std_start + args.peak_std_growth * cycle_idx
+    # Unlike "linear", the ratchet here had no ceiling at all -- fine over the
+    # handful of cycles run so far, but left unattended over many more cycles
+    # (e.g. a multi-day run) it grows without bound and hit rate degrades with
+    # nobody watching. --max-std caps the peak the same way it already caps
+    # "linear"'s ramp; cycling between relax_std and a capped peak forever is
+    # the intended steady state once reach stops being worth the yield cost
+    # (see EXPERIMENT_LOG §9's "cap it to hold hit-rate steady" finding).
+    if args.max_std is not None:
+        peak_std = min(peak_std, args.max_std)
 
     if pos < args.cycle_relax_gens:
         return args.relax_std, "relax", cycle_idx

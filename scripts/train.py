@@ -10,6 +10,7 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from soap import SOAP
+from train_vae import VAE as CoeffVAE, nfp_one_hot as vae_nfp_one_hot
 
 OUT_DIR = Path("/work/output")
 CKPT_DIR = Path("/work/checkpoints")
@@ -668,6 +669,38 @@ def load_split(name, data_dir=None):
     return torch.from_numpy(data["X"]).float(), torch.from_numpy(data["Y"]).float()
 
 
+def load_frozen_vae(tag, device):
+    ckpt = torch.load(CKPT_DIR / f"{tag}.pt", map_location=device)
+    vae = CoeffVAE(coeff_dim=90, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"]).to(device)
+    vae.load_state_dict(ckpt["model_state_dict"])
+    vae.eval()
+    for param in vae.parameters():
+        param.requires_grad_(False)
+    coeff_mean = torch.as_tensor(ckpt["coeff_mean"], dtype=torch.float32, device=device)
+    coeff_std = torch.as_tensor(ckpt["coeff_std"], dtype=torch.float32, device=device)
+    return vae, coeff_mean, coeff_std
+
+
+def vae_latent_features(X, vae, coeff_mean, coeff_std, device, batch=8192):
+    """Replace the 90 raw Fourier coefficients with their frozen-VAE latent
+    mean, keeping n_field_periods and the symmetry flag as-is -- so the
+    trunk sees [mu, nfp, symmetry_flag] instead of the raw 92-dim input.
+    Computed once up front in eval mode (mu, not a reparameterized sample),
+    not as part of the training loop -- the VAE is a fixed feature
+    transform here, not a differentiable part of this model."""
+    vae.eval()
+    mus = []
+    with torch.no_grad():
+        for start in range(0, X.shape[0], batch):
+            xb = X[start:start + batch].to(device)
+            coeffs = (xb[:, :90] - coeff_mean) / coeff_std
+            cond = vae_nfp_one_hot(xb[:, IDX_NFP])
+            mu, _ = vae.encode(coeffs, cond)
+            mus.append(mu.cpu())
+    latent = torch.cat(mus, dim=0)
+    return torch.cat([latent, X[:, IDX_NFP:IDX_NFP + 2]], dim=1)
+
+
 def compute_geom_features(X, grid_nu=16, grid_nv=16, chunk=4096):
     """Cheap, non-learned summary statistics of the reconstructed (R, Z)
     boundary shape -- extent/spread per toroidal angle, aggregated over
@@ -838,6 +871,13 @@ def main():
                          "learned per-task weighting beats normalization). Regression objective only. "
                          "Reported RMSE is always un-normalized back to physical units for comparability "
                          "with every other number in EXPERIMENT_LOG.")
+    p.add_argument("--vae-latent-input", default=None,
+                    help="Checkpoint tag of a pretrained VAE (scripts/train_vae.py); if set, the trunk "
+                         "sees [vae.encode(coeffs).mu, n_field_periods, symmetry_flag] instead of the raw "
+                         "92-dim input -- the VAE is frozen (not finetuned), used purely as a fixed "
+                         "dimensionality-reducing feature transform. Requires --no-spatial (the spatial "
+                         "branch needs the raw r_cos/z_sin grid, which doesn't exist in latent space) and "
+                         "is incompatible with --geom-features (also raw-coefficient-derived).")
     p.add_argument("--tag", default="best", help="checkpoint filename stem, for running multiple experiments without clobbering each other")
     p.add_argument("--seed", type=int, default=None,
                     help="random seed for model init + data shuffling, for noise-floor / repeatability checks")
@@ -858,6 +898,14 @@ def main():
 
     X_train, Y_train = load_split("train", data_dir)
     X_val, Y_val = load_split("val", data_dir)
+
+    if args.vae_latent_input:
+        assert args.no_spatial, "--vae-latent-input requires --no-spatial"
+        assert not args.geom_features, "--vae-latent-input is incompatible with --geom-features"
+        vae, vae_coeff_mean, vae_coeff_std = load_frozen_vae(args.vae_latent_input, dev)
+        X_train = vae_latent_features(X_train, vae, vae_coeff_mean, vae_coeff_std, dev)
+        X_val = vae_latent_features(X_val, vae, vae_coeff_mean, vae_coeff_std, dev)
+        print(f"[{args.tag}] vae_latent_input={args.vae_latent_input}  in_dim={X_train.shape[1]} (was 92)")
 
     # Project default has been no input/target normalization (see
     # EXPERIMENT_LOG methodology notes) -- stats computed from TRAIN only,
@@ -979,6 +1027,7 @@ def main():
                     "trunk_arch": args.trunk_arch,
                     "trunk_blocks": args.trunk_blocks,
                     "geom_features": args.geom_features,
+                    "vae_latent_input": args.vae_latent_input,
                     "use_symlog_latent": args.symlog_latent,
                     "log_target_mask": log_target_mask,
                     "objective": args.objective,
@@ -1030,6 +1079,9 @@ def main():
     X_test, Y_test = load_split("test", data_dir)
     if ckpt["geom_features"]:
         X_test = torch.cat([X_test, compute_geom_features(X_test)], dim=1)
+    if ckpt.get("vae_latent_input"):
+        test_vae, test_vae_coeff_mean, test_vae_coeff_std = load_frozen_vae(ckpt["vae_latent_input"], dev)
+        X_test = vae_latent_features(X_test, test_vae, test_vae_coeff_mean, test_vae_coeff_std, dev)
     X_test, Y_test = X_test.to(dev), Y_test.to(dev)
     if ckpt["feature_mean"] is not None:
         X_test = (X_test - ckpt["feature_mean"]) / ckpt["feature_std"]
