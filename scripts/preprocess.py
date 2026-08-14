@@ -25,7 +25,10 @@ TARGET_COLS = [
     # edge_rotational_transform ~ 0, which no smooth regressor can fit.
 ]
 
-EXPECTED_COEFF_SHAPE = (5, 9)  # (poloidal modes, toroidal modes) established via full-dataset scan
+EXPECTED_COEFF_SHAPE = (
+    5,
+    9,
+)  # (poloidal modes, toroidal modes) established via full-dataset scan
 
 
 def shape_of(v):
@@ -126,8 +129,10 @@ def main():
 
     n_samples, input_dim = X.shape
     output_dim = Y.shape[1]
-    print(f"Kept rows: {n_samples} (dropped malformed boundary: {dropped_malformed_boundary}, "
-          f"dropped invalid targets: {dropped_invalid_targets})")
+    print(
+        f"Kept rows: {n_samples} (dropped malformed boundary: {dropped_malformed_boundary}, "
+        f"dropped invalid targets: {dropped_invalid_targets})"
+    )
     print(f"Input dim: {input_dim}, Output dim: {output_dim}")
 
     feature_names = build_feature_names()
@@ -144,11 +149,15 @@ def main():
     with open(os.path.join(OUT_DIR, "family_ids.json"), "w") as f:
         json.dump(family_ids, f)
     n_unique_families = len(set(family_ids))
-    print(f"Family ids (omnigenous_field_and_targets.id) among kept rows: "
-          f"{n_unique_families} unique / {n_samples} rows "
-          f"({(1 - n_unique_families / n_samples) * 100:.1f}% duplication rate)")
+    print(
+        f"Family ids (omnigenous_field_and_targets.id) among kept rows: "
+        f"{n_unique_families} unique / {n_samples} rows "
+        f"({(1 - n_unique_families / n_samples) * 100:.1f}% duplication rate)"
+    )
 
-    feature_stats = {name: column_stats(X[:, j]) for j, name in enumerate(feature_names)}
+    feature_stats = {
+        name: column_stats(X[:, j]) for j, name in enumerate(feature_names)
+    }
     target_stats = {name: column_stats(Y[:, j]) for j, name in enumerate(TARGET_COLS)}
 
     metadata = {
@@ -160,10 +169,24 @@ def main():
         "dropped_invalid_targets": dropped_invalid_targets,
         "fourier_coeff_shape": list(EXPECTED_COEFF_SHAPE),
         "feature_layout": {
-            "r_cos": {"shape": list(EXPECTED_COEFF_SHAPE), "flatten_order": "C (row-major, m outer / n inner)", "offset": 0, "length": 45},
-            "z_sin": {"shape": list(EXPECTED_COEFF_SHAPE), "flatten_order": "C (row-major, m outer / n inner)", "offset": 45, "length": 45},
+            "r_cos": {
+                "shape": list(EXPECTED_COEFF_SHAPE),
+                "flatten_order": "C (row-major, m outer / n inner)",
+                "offset": 0,
+                "length": 45,
+            },
+            "z_sin": {
+                "shape": list(EXPECTED_COEFF_SHAPE),
+                "flatten_order": "C (row-major, m outer / n inner)",
+                "offset": 45,
+                "length": 45,
+            },
             "n_field_periods": {"offset": 90, "length": 1},
-            "is_stellarator_symmetric": {"offset": 91, "length": 1, "note": "1.0/0.0 flag; always 1.0 in this dataset"},
+            "is_stellarator_symmetric": {
+                "offset": 91,
+                "length": 1,
+                "note": "1.0/0.0 flag; always 1.0 in this dataset",
+            },
         },
         "feature_stats": feature_stats,
         "target_stats": target_stats,
@@ -181,14 +204,16 @@ def main():
     n_val = int(n_samples * 0.1)
 
     train_idx = perm[:n_train]
-    val_idx = perm[n_train:n_train + n_val]
-    test_idx = perm[n_train + n_val:]
+    val_idx = perm[n_train : n_train + n_val]
+    test_idx = perm[n_train + n_val :]
 
     np.savez(os.path.join(OUT_DIR, "train.npz"), X=X[train_idx], Y=Y[train_idx])
     np.savez(os.path.join(OUT_DIR, "val.npz"), X=X[val_idx], Y=Y[val_idx])
     np.savez(os.path.join(OUT_DIR, "test.npz"), X=X[test_idx], Y=Y[test_idx])
 
-    print(f"Split -> train: {len(train_idx)}, val: {len(val_idx)}, test: {len(test_idx)} (seed={seed})")
+    print(
+        f"Split -> train: {len(train_idx)}, val: {len(val_idx)}, test: {len(test_idx)} (seed={seed})"
+    )
 
 
 if __name__ == "__main__":

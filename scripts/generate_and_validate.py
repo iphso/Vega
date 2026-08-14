@@ -47,6 +47,7 @@ These have no physics labels (Y) -- that's the point, they're the
 characterizing that boundary directly (e.g. a feasibility classifier) rather
 than just discarding the negative examples every run currently threw away.
 """
+
 import argparse
 import json
 import multiprocessing as mp
@@ -79,9 +80,13 @@ def _validate_entry(conn, r_cos, z_sin, nfp):
     try:
         from constellaration import forward_model
         from constellaration.geometry import surface_rz_fourier
+
         try:
             boundary = surface_rz_fourier.SurfaceRZFourier(
-                r_cos=r_cos, z_sin=z_sin, n_field_periods=nfp, is_stellarator_symmetric=True,
+                r_cos=r_cos,
+                z_sin=z_sin,
+                n_field_periods=nfp,
+                is_stellarator_symmetric=True,
             )
         except Exception as e:
             conn.send((False, f"structural: {e}"))
@@ -154,22 +159,31 @@ def make_vae_cluster_sampler(args, rng):
 
     dev = torch.device("cpu")
     ckpt = torch.load(f"/work/checkpoints/{args.vae_tag}.pt", map_location=dev)
-    model = VAE(coeff_dim=90, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"]).to(dev)
+    model = VAE(coeff_dim=90, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"]).to(
+        dev
+    )
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     coeff_mean, coeff_std = ckpt["coeff_mean"], ckpt["coeff_std"]
 
     X = np.load(OUT_DIR / "X.npy")
     assign = np.load(OUT_DIR / "cluster_assignments.npy")
-    cluster_sizes = {int(k): v for k, v in json.loads((OUT_DIR / "cluster_sizes.json").read_text()).items()}
+    cluster_sizes = {
+        int(k): v
+        for k, v in json.loads((OUT_DIR / "cluster_sizes.json").read_text()).items()
+    }
     threshold = np.percentile(list(cluster_sizes.values()), args.sparse_percentile)
     sparse_clusters = {c for c, n in cluster_sizes.items() if n <= threshold}
     anchor_pool = np.where(np.isin(assign, list(sparse_clusters)))[0]
-    print(f"[{args.tag}] {len(sparse_clusters)}/{len(cluster_sizes)} clusters at/below "
-          f"p{args.sparse_percentile} (size<={threshold:.0f}) -- anchor pool: {len(anchor_pool)} rows "
-          f"of {len(X)} total")
+    print(
+        f"[{args.tag}] {len(sparse_clusters)}/{len(cluster_sizes)} clusters at/below "
+        f"p{args.sparse_percentile} (size<={threshold:.0f}) -- anchor pool: {len(anchor_pool)} rows "
+        f"of {len(X)} total"
+    )
 
-    anchor_coeffs = torch.tensor((X[anchor_pool][:, :90] - coeff_mean) / coeff_std, dtype=torch.float32)
+    anchor_coeffs = torch.tensor(
+        (X[anchor_pool][:, :90] - coeff_mean) / coeff_std, dtype=torch.float32
+    )
     anchor_nfp = torch.tensor(X[anchor_pool][:, 90], dtype=torch.float32)
     with torch.no_grad():
         mu, _ = model.encode(anchor_coeffs, nfp_one_hot(anchor_nfp))
@@ -209,13 +223,17 @@ def make_vae_prior_sampler(args, rng):
 
     dev = torch.device("cpu")
     ckpt = torch.load(f"/work/checkpoints/{args.vae_tag}.pt", map_location=dev)
-    model = VAE(coeff_dim=90, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"]).to(dev)
+    model = VAE(coeff_dim=90, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"]).to(
+        dev
+    )
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
     coeff_mean, coeff_std = ckpt["coeff_mean"], ckpt["coeff_std"]
     latent_dim = ckpt["latent_dim"]
-    print(f"[{args.tag}] VAE prior sampling: z ~ N(0,1) in the {latent_dim}-dim latent space "
-          f"(no anchor, no cluster targeting), nfp uniform over {NFP_VALUES}.")
+    print(
+        f"[{args.tag}] VAE prior sampling: z ~ N(0,1) in the {latent_dim}-dim latent space "
+        f"(no anchor, no cluster targeting), nfp uniform over {NFP_VALUES}."
+    )
 
     def sample(n):
         z = torch.randn(n, latent_dim)
@@ -240,8 +258,10 @@ def make_random_sampler(args, rng):
     feature_names = json.loads((OUT_DIR / "feature_names.json").read_text())
     lo = np.array([meta["feature_stats"][n]["min"] for n in feature_names[:90]])
     hi = np.array([meta["feature_stats"][n]["max"] for n in feature_names[:90]])
-    print(f"[{args.tag}] pure random sampling: 81 free coefficients uniform in their own observed "
-          f"[min,max], nfp uniform over {NFP_VALUES}. No VAE, no clustering, no bias toward existing data.")
+    print(
+        f"[{args.tag}] pure random sampling: 81 free coefficients uniform in their own observed "
+        f"[min,max], nfp uniform over {NFP_VALUES}. No VAE, no clustering, no bias toward existing data."
+    )
 
     def sample(n):
         coeffs = rng.uniform(lo, hi, size=(n, 90))
@@ -258,21 +278,50 @@ def make_random_sampler(args, rng):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--sampling-mode", default="vae-cluster", choices=["vae-cluster", "vae-prior", "random"])
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--sampling-mode",
+        default="vae-cluster",
+        choices=["vae-cluster", "vae-prior", "random"],
+    )
     p.add_argument("--vae-tag", default="vae_coeffs_s0", help="vae-cluster mode only")
-    p.add_argument("--target-count", type=int, default=400, help="stop once this many designs validate")
-    p.add_argument("--sparse-percentile", type=float, default=50.0, help="vae-cluster mode only")
-    p.add_argument("--explore-std", type=float, default=0.5, help="vae-cluster mode only")
+    p.add_argument(
+        "--target-count",
+        type=int,
+        default=400,
+        help="stop once this many designs validate",
+    )
+    p.add_argument(
+        "--sparse-percentile", type=float, default=50.0, help="vae-cluster mode only"
+    )
+    p.add_argument(
+        "--explore-std", type=float, default=0.5, help="vae-cluster mode only"
+    )
     p.add_argument("--n-workers", type=int, default=28)
-    p.add_argument("--batch-size", type=int, default=112, help="candidates submitted per round (multiple of n-workers)")
-    p.add_argument("--timeout-seconds", type=float, default=45.0,
-                    help="hard per-candidate wall-clock limit (terminate+kill the subprocess if exceeded) -- "
-                         "VMEC++ can occasionally hang on a low-quality geometry instead of failing fast, "
-                         "confirmed to happen under --sampling-mode random. Comfortably above the ~6-14s "
-                         "seen for legitimate low-fidelity solves.")
+    p.add_argument(
+        "--batch-size",
+        type=int,
+        default=112,
+        help="candidates submitted per round (multiple of n-workers)",
+    )
+    p.add_argument(
+        "--timeout-seconds",
+        type=float,
+        default=45.0,
+        help="hard per-candidate wall-clock limit (terminate+kill the subprocess if exceeded) -- "
+        "VMEC++ can occasionally hang on a low-quality geometry instead of failing fast, "
+        "confirmed to happen under --sampling-mode random. Comfortably above the ~6-14s "
+        "seen for legitimate low-fidelity solves.",
+    )
     p.add_argument("--checkpoint-every", type=int, default=50)
-    p.add_argument("--max-seconds", type=float, default=None, help="optional wall-clock cap instead of/in addition to target-count")
+    p.add_argument(
+        "--max-seconds",
+        type=float,
+        default=None,
+        help="optional wall-clock cap instead of/in addition to target-count",
+    )
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--tag", default="run0")
     args = p.parse_args()
@@ -280,7 +329,9 @@ def main():
     rng = np.random.default_rng(args.seed)
     target_names = json.loads((OUT_DIR / "target_names.json").read_text())
     gen_dir_name = {
-        "vae-cluster": "generated", "vae-prior": "generated_vae_prior", "random": "generated_random",
+        "vae-cluster": "generated",
+        "vae-prior": "generated_vae_prior",
+        "random": "generated_random",
     }[args.sampling_mode]
     gen_dir = OUT_DIR / gen_dir_name
     gen_dir.mkdir(parents=True, exist_ok=True)
@@ -294,11 +345,21 @@ def main():
 
     accepted_X, accepted_Y = [], []
     rejected_X, rejected_reason = [], []
-    n_attempted, n_accepted, n_reject_structural, n_reject_vmec, n_reject_unknown = 0, 0, 0, 0, 0
+    n_attempted, n_accepted, n_reject_structural, n_reject_vmec, n_reject_unknown = (
+        0,
+        0,
+        0,
+        0,
+        0,
+    )
     t_start = time.perf_counter()
 
     def _append(path, arrays_to_concat):
-        Xc = np.concatenate([np.load(path)] + arrays_to_concat) if path.exists() else np.concatenate(arrays_to_concat)
+        Xc = (
+            np.concatenate([np.load(path)] + arrays_to_concat)
+            if path.exists()
+            else np.concatenate(arrays_to_concat)
+        )
         np.save(path, Xc)
 
     def flush():
@@ -309,11 +370,15 @@ def main():
             accepted_Y.clear()
         if rejected_X:
             _append(gen_dir / "rejected_X.npy", [np.stack(rejected_X)])
-            _append(gen_dir / "rejected_reason.npy", [np.array(rejected_reason, dtype=np.int8)])
+            _append(
+                gen_dir / "rejected_reason.npy",
+                [np.array(rejected_reason, dtype=np.int8)],
+            )
             rejected_X.clear()
             rejected_reason.clear()
             (gen_dir / "rejected_reason_legend.json").write_text(
-                json.dumps({v: k for k, v in REJECT_REASON_CODES.items()}, indent=2))
+                json.dumps({v: k for k, v in REJECT_REASON_CODES.items()}, indent=2)
+            )
 
     n_timeout = 0
     while n_accepted < args.target_count:
@@ -322,11 +387,17 @@ def main():
             break
         candidates = sample_candidates(args.batch_size)
         n_attempted += len(candidates)
-        for ok, r_cos, z_sin, nfp, payload in run_batch_with_timeout(candidates, args.n_workers, args.timeout_seconds):
-            row = np.concatenate([r_cos.flatten(), z_sin.flatten(), [float(nfp), 1.0]]).astype(np.float32)
+        for ok, r_cos, z_sin, nfp, payload in run_batch_with_timeout(
+            candidates, args.n_workers, args.timeout_seconds
+        ):
+            row = np.concatenate(
+                [r_cos.flatten(), z_sin.flatten(), [float(nfp), 1.0]]
+            ).astype(np.float32)
             if ok:
                 y = np.array([payload[name] for name in target_names], dtype=np.float64)
-                if any(v is None for v in y) or not np.all(np.isfinite(y.astype(np.float64))):
+                if any(v is None for v in y) or not np.all(
+                    np.isfinite(y.astype(np.float64))
+                ):
                     n_reject_vmec += 1
                     rejected_X.append(row)
                     rejected_reason.append(REJECT_REASON_CODES["vmec"])
@@ -351,32 +422,50 @@ def main():
                 rejected_reason.append(REJECT_REASON_CODES[reason])
 
         elapsed = time.perf_counter() - t_start
-        print(f"[{args.tag}] attempted={n_attempted} accepted={n_accepted}/{args.target_count} "
-              f"(hit rate {n_accepted / max(n_attempted, 1):.1%})  "
-              f"reject: structural={n_reject_structural} vmec={n_reject_vmec} timeout={n_timeout} "
-              f"unknown={n_reject_unknown}  elapsed={elapsed:.0f}s")
+        print(
+            f"[{args.tag}] attempted={n_attempted} accepted={n_accepted}/{args.target_count} "
+            f"(hit rate {n_accepted / max(n_attempted, 1):.1%})  "
+            f"reject: structural={n_reject_structural} vmec={n_reject_vmec} timeout={n_timeout} "
+            f"unknown={n_reject_unknown}  elapsed={elapsed:.0f}s"
+        )
 
-        if len(accepted_X) >= args.checkpoint_every or len(rejected_X) >= args.checkpoint_every:
+        if (
+            len(accepted_X) >= args.checkpoint_every
+            or len(rejected_X) >= args.checkpoint_every
+        ):
             flush()
             print(f"[{args.tag}] checkpointed to {gen_dir}")
 
     flush()
     stats = {
-        "tag": args.tag, "sampling_mode": args.sampling_mode, "target_count": args.target_count,
-        "n_accepted": n_accepted, "n_attempted": n_attempted,
-        "n_reject_structural": n_reject_structural, "n_reject_vmec": n_reject_vmec, "n_timeout": n_timeout,
+        "tag": args.tag,
+        "sampling_mode": args.sampling_mode,
+        "target_count": args.target_count,
+        "n_accepted": n_accepted,
+        "n_attempted": n_attempted,
+        "n_reject_structural": n_reject_structural,
+        "n_reject_vmec": n_reject_vmec,
+        "n_timeout": n_timeout,
         "n_reject_unknown": n_reject_unknown,
         "timeout_seconds": args.timeout_seconds,
         "elapsed_seconds": time.perf_counter() - t_start,
     }
     if args.sampling_mode == "vae-cluster":
-        stats.update({"vae_tag": args.vae_tag, "sparse_percentile": args.sparse_percentile, "explore_std": args.explore_std})
+        stats.update(
+            {
+                "vae_tag": args.vae_tag,
+                "sparse_percentile": args.sparse_percentile,
+                "explore_std": args.explore_std,
+            }
+        )
     elif args.sampling_mode == "vae-prior":
         stats.update({"vae_tag": args.vae_tag})
     stats_path = gen_dir / f"run_stats_{args.tag}.json"
     stats_path.write_text(json.dumps(stats, indent=2))
-    print(f"\ndone. accepted {n_accepted} of {n_attempted} attempted "
-          f"({n_accepted / max(n_attempted, 1):.1%} hit rate) in {stats['elapsed_seconds']:.0f}s")
+    print(
+        f"\ndone. accepted {n_accepted} of {n_attempted} attempted "
+        f"({n_accepted / max(n_attempted, 1):.1%} hit rate) in {stats['elapsed_seconds']:.0f}s"
+    )
     print(f"stats saved to {stats_path}")
 
 

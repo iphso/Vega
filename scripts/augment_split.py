@@ -13,6 +13,7 @@ cluster_split_membership.json, and only designs anchored in a TRAIN cluster
 are added. Anything anchored in a val/test cluster is dropped for this
 purpose (reported, not silently discarded).
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -23,19 +24,24 @@ OUT_DIR = Path("/work/output")
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--base-split", default="cluster")
     p.add_argument("--generated-dir", default=str(OUT_DIR / "generated"))
     p.add_argument("--tag", default="cluster_augmented")
-    p.add_argument("--no-leak-check", action="store_true",
-                    help="skip the nearest-real-neighbor cluster-membership computation (the O(n_generated * "
-                         "158685) pairwise distance pass, ~65min at a 115K-row pool and growing) and just "
-                         "include every generated design unconditionally. Faster, but no longer defends "
-                         "against the §6 leakage failure mode -- generated designs anchored near val/test "
-                         "regions get folded into train, which can inflate this split's own val/test scores "
-                         "as a measure of generalization. Fine for a fast exploratory retrain loop where the "
-                         "surrogate is only being used to guide search direction, not as reported here for a "
-                         "final generalization number; rerun without this flag before trusting any of that.")
+    p.add_argument(
+        "--no-leak-check",
+        action="store_true",
+        help="skip the nearest-real-neighbor cluster-membership computation (the O(n_generated * "
+        "158685) pairwise distance pass, ~65min at a 115K-row pool and growing) and just "
+        "include every generated design unconditionally. Faster, but no longer defends "
+        "against the §6 leakage failure mode -- generated designs anchored near val/test "
+        "regions get folded into train, which can inflate this split's own val/test scores "
+        "as a measure of generalization. Fine for a fast exploratory retrain loop where the "
+        "surrogate is only being used to guide search direction, not as reported here for a "
+        "final generalization number; rerun without this flag before trusting any of that.",
+    )
     args = p.parse_args()
 
     base_dir = OUT_DIR / "splits" / args.base_split
@@ -47,8 +53,10 @@ def main():
 
     if args.no_leak_check:
         keep_mask = np.ones(len(Xg), dtype=bool)
-        print(f"[{args.tag}] --no-leak-check: including all {len(Xg)} generated designs unconditionally "
-              f"(skipped the cluster-membership leak check)")
+        print(
+            f"[{args.tag}] --no-leak-check: including all {len(Xg)} generated designs unconditionally "
+            f"(skipped the cluster-membership leak check)"
+        )
     else:
         X = np.load(OUT_DIR / "X.npy")
         meta = json.loads((OUT_DIR / "metadata.json").read_text())
@@ -56,21 +64,29 @@ def main():
         assign = np.load(OUT_DIR / "cluster_assignments.npy")
         membership = json.loads((OUT_DIR / "cluster_split_membership.json").read_text())
 
-        feat_std = np.array([meta["feature_stats"][n]["std"] for n in feature_names[:90]]).clip(min=1e-6)
+        feat_std = np.array(
+            [meta["feature_stats"][n]["std"] for n in feature_names[:90]]
+        ).clip(min=1e-6)
         Xn = X[:, :90] / feat_std
         Xgn = Xg[:, :90] / feat_std
 
         nearest_cluster = np.zeros(Xgn.shape[0], dtype=int)
         chunk = 100
         for start in range(0, Xgn.shape[0], chunk):
-            d = np.linalg.norm(Xgn[start:start + chunk, None, :] - Xn[None, :, :], axis=2)
-            nearest_cluster[start:start + chunk] = assign[d.argmin(axis=1)]
+            d = np.linalg.norm(
+                Xgn[start : start + chunk, None, :] - Xn[None, :, :], axis=2
+            )
+            nearest_cluster[start : start + chunk] = assign[d.argmin(axis=1)]
 
-        keep_mask = np.array([membership.get(str(c)) == "train" for c in nearest_cluster])
+        keep_mask = np.array(
+            [membership.get(str(c)) == "train" for c in nearest_cluster]
+        )
         n_train_anchored = keep_mask.sum()
         n_dropped = len(keep_mask) - n_train_anchored
-        print(f"generated designs: {len(keep_mask)} total, {n_train_anchored} anchored in a TRAIN cluster "
-              f"(kept), {n_dropped} anchored in val/test clusters (dropped -- would leak held-out regions)")
+        print(
+            f"generated designs: {len(keep_mask)} total, {n_train_anchored} anchored in a TRAIN cluster "
+            f"(kept), {n_dropped} anchored in val/test clusters (dropped -- would leak held-out regions)"
+        )
 
     X_aug = np.concatenate([X_train, Xg[keep_mask].astype(X_train.dtype)])
     Y_aug = np.concatenate([Y_train, Yg[keep_mask].astype(Y_train.dtype)])
@@ -82,9 +98,11 @@ def main():
         data = np.load(base_dir / f"{name}.npz")
         np.savez(out_dir / f"{name}.npz", X=data["X"], Y=data["Y"])
 
-    print(f"[{args.tag}] train={len(X_aug)} ({len(X_train)} base + {int(keep_mask.sum())} generated)  "
-          f"val={len(np.load(out_dir / 'val.npz')['X'])}  test={len(np.load(out_dir / 'test.npz')['X'])}  "
-          f"-> {out_dir}")
+    print(
+        f"[{args.tag}] train={len(X_aug)} ({len(X_train)} base + {int(keep_mask.sum())} generated)  "
+        f"val={len(np.load(out_dir / 'val.npz')['X'])}  test={len(np.load(out_dir / 'test.npz')['X'])}  "
+        f"-> {out_dir}"
+    )
 
 
 if __name__ == "__main__":

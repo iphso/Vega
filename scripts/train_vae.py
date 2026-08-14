@@ -19,6 +19,7 @@ scaled coefficients -- unlike the surrogate itself, this is a generative
 model over the coefficients, not a regressor of physical targets, so the
 project's "don't normalize" reasoning for the surrogate doesn't transfer here.
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -34,7 +35,9 @@ NFP_VALUES = [1, 2, 3, 4, 5]  # observed range, see metadata.json
 
 
 def nfp_one_hot(nfp_col):
-    idx = torch.tensor([NFP_VALUES.index(int(v)) for v in nfp_col.tolist()], device=nfp_col.device)
+    idx = torch.tensor(
+        [NFP_VALUES.index(int(v)) for v in nfp_col.tolist()], device=nfp_col.device
+    )
     return torch.nn.functional.one_hot(idx, num_classes=len(NFP_VALUES)).float()
 
 
@@ -44,14 +47,18 @@ class VAE(nn.Module):
         self.latent_dim = latent_dim
         cond_dim = n_nfp
         self.encoder = nn.Sequential(
-            nn.Linear(coeff_dim + cond_dim, hidden), nn.ReLU(),
-            nn.Linear(hidden, hidden), nn.ReLU(),
+            nn.Linear(coeff_dim + cond_dim, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, hidden),
+            nn.ReLU(),
         )
         self.to_mu = nn.Linear(hidden, latent_dim)
         self.to_logvar = nn.Linear(hidden, latent_dim)
         self.decoder = nn.Sequential(
-            nn.Linear(latent_dim + cond_dim, hidden), nn.ReLU(),
-            nn.Linear(hidden, hidden), nn.ReLU(),
+            nn.Linear(latent_dim + cond_dim, hidden),
+            nn.ReLU(),
+            nn.Linear(hidden, hidden),
+            nn.ReLU(),
             nn.Linear(hidden, coeff_dim),
         )
 
@@ -77,7 +84,9 @@ def vae_loss(recon, x, mu, logvar, beta):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     p.add_argument("--latent-dim", type=int, default=32)
     p.add_argument("--hidden", type=int, default=256)
     p.add_argument("--beta", type=float, default=0.01, help="KL weight")
@@ -87,13 +96,21 @@ def main():
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--tag", default="vae_coeffs")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
-    p.add_argument("--extra-x", action="append", default=[],
-                    help="additional X.npy path(s) (same 92-col schema as output/X.npy) to concatenate "
-                         "with the real dataset before training -- e.g. accepted synthetic designs from "
-                         "scripts/bootstrap_loop.py. Standardization stats (coeff_mean/std) still come "
-                         "from the real dataset's metadata.json only, so they stay anchored across "
-                         "generations rather than drifting with whatever synthetic data gets added.")
-    p.add_argument("--warm-start", default=None, help="checkpoint tag to initialize weights from, instead of random init")
+    p.add_argument(
+        "--extra-x",
+        action="append",
+        default=[],
+        help="additional X.npy path(s) (same 92-col schema as output/X.npy) to concatenate "
+        "with the real dataset before training -- e.g. accepted synthetic designs from "
+        "scripts/bootstrap_loop.py. Standardization stats (coeff_mean/std) still come "
+        "from the real dataset's metadata.json only, so they stay anchored across "
+        "generations rather than drifting with whatever synthetic data gets added.",
+    )
+    p.add_argument(
+        "--warm-start",
+        default=None,
+        help="checkpoint tag to initialize weights from, instead of random init",
+    )
     args = p.parse_args()
 
     torch.manual_seed(args.seed)
@@ -103,15 +120,21 @@ def main():
     X = np.load(OUT_DIR / "X.npy")
     meta = json.loads((OUT_DIR / "metadata.json").read_text())
     feature_names = json.loads((OUT_DIR / "feature_names.json").read_text())
-    coeff_mean = np.array([meta["feature_stats"][n]["mean"] for n in feature_names[:90]])
-    coeff_std = np.array([meta["feature_stats"][n]["std"] for n in feature_names[:90]]).clip(min=1e-6)
+    coeff_mean = np.array(
+        [meta["feature_stats"][n]["mean"] for n in feature_names[:90]]
+    )
+    coeff_std = np.array(
+        [meta["feature_stats"][n]["std"] for n in feature_names[:90]]
+    ).clip(min=1e-6)
 
     n_real = len(X)
     for path in args.extra_x:
         X = np.concatenate([X, np.load(path)])
     if args.extra_x:
-        print(f"[{args.tag}] {n_real:,} real rows + {len(X) - n_real:,} extra rows from {len(args.extra_x)} "
-              f"file(s) = {len(X):,} total")
+        print(
+            f"[{args.tag}] {n_real:,} real rows + {len(X) - n_real:,} extra rows from {len(args.extra_x)} "
+            f"file(s) = {len(X):,} total"
+        )
 
     coeffs = torch.tensor((X[:, :90] - coeff_mean) / coeff_std, dtype=torch.float32)
     nfp = torch.tensor(X[:, 90], dtype=torch.float32)
@@ -125,8 +148,11 @@ def main():
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"[{args.tag}] latent_dim={args.latent_dim} hidden={args.hidden} beta={args.beta} "
-          f"params={n_params:,} rows={len(dataset):,}" + (f" warm_start={args.warm_start}" if args.warm_start else ""))
+    print(
+        f"[{args.tag}] latent_dim={args.latent_dim} hidden={args.hidden} beta={args.beta} "
+        f"params={n_params:,} rows={len(dataset):,}"
+        + (f" warm_start={args.warm_start}" if args.warm_start else "")
+    )
 
     for epoch in range(1, args.epochs + 1):
         model.train()
@@ -143,17 +169,22 @@ def main():
             kl_sum += kl.item()
             n_batches += 1
         if epoch % 20 == 0 or epoch == args.epochs:
-            print(f"epoch {epoch:4d}  recon {recon_sum / n_batches:9.5f}  kl {kl_sum / n_batches:9.5f}")
+            print(
+                f"epoch {epoch:4d}  recon {recon_sum / n_batches:9.5f}  kl {kl_sum / n_batches:9.5f}"
+            )
 
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
-    torch.save({
-        "model_state_dict": model.state_dict(),
-        "latent_dim": args.latent_dim,
-        "hidden": args.hidden,
-        "coeff_mean": coeff_mean,
-        "coeff_std": coeff_std,
-        "nfp_values": NFP_VALUES,
-    }, CKPT_DIR / f"{args.tag}.pt")
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "latent_dim": args.latent_dim,
+            "hidden": args.hidden,
+            "coeff_mean": coeff_mean,
+            "coeff_std": coeff_std,
+            "nfp_values": NFP_VALUES,
+        },
+        CKPT_DIR / f"{args.tag}.pt",
+    )
     print(f"saved {CKPT_DIR / f'{args.tag}.pt'}")
 
 

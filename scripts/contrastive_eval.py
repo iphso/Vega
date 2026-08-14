@@ -9,11 +9,10 @@ those raw predicted values line up with the ground truth. This is the
 baseline the from-scratch contrastive model (train.py --objective
 contrastive) has to beat.
 """
+
 import argparse
-from pathlib import Path
 
 import torch
-
 from train import (
     CKPT_DIR,
     DualPathMLP,
@@ -28,11 +27,16 @@ from train import (
 def load_regression_model(tag, dev):
     ckpt = torch.load(CKPT_DIR / f"{tag}.pt", map_location=dev)
     model = DualPathMLP(
-        ckpt["in_dim"], ckpt["n_targets"],
-        latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"],
-        spatial_latent=ckpt["spatial_latent"], head_hidden=ckpt["head_hidden"],
-        priority_weight=ckpt["priority_weight"], use_spatial=ckpt["use_spatial"],
-        trunk_arch=ckpt.get("trunk_arch", "mlp"), trunk_blocks=ckpt.get("trunk_blocks", 3),
+        ckpt["in_dim"],
+        ckpt["n_targets"],
+        latent_dim=ckpt["latent_dim"],
+        hidden=ckpt["hidden"],
+        spatial_latent=ckpt["spatial_latent"],
+        head_hidden=ckpt["head_hidden"],
+        priority_weight=ckpt["priority_weight"],
+        use_spatial=ckpt["use_spatial"],
+        trunk_arch=ckpt.get("trunk_arch", "mlp"),
+        trunk_blocks=ckpt.get("trunk_blocks", 3),
         use_symlog_latent=ckpt.get("use_symlog_latent", False),
         log_target_mask=ckpt.get("log_target_mask"),
     ).to(dev)
@@ -43,7 +47,8 @@ def load_regression_model(tag, dev):
     result = model.load_state_dict(ckpt["model_state_dict"], strict=False)
     unexpected_missing = [k for k in result.missing_keys if k != "log_target_mask"]
     assert not unexpected_missing and not result.unexpected_keys, (
-        result.missing_keys, result.unexpected_keys
+        result.missing_keys,
+        result.unexpected_keys,
     )
     model.eval()
     return model, ckpt["target_names"], ckpt.get("geom_features", False)
@@ -51,9 +56,15 @@ def load_regression_model(tag, dev):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--tags", nargs="+", default=["single_base", "siren_base"],
-                    help="checkpoint filename stems (without .pt) to evaluate")
-    p.add_argument("--chunk", type=int, default=512, help="within-chunk all-pairs size for eval")
+    p.add_argument(
+        "--tags",
+        nargs="+",
+        default=["single_base", "siren_base"],
+        help="checkpoint filename stems (without .pt) to evaluate",
+    )
+    p.add_argument(
+        "--chunk", type=int, default=512, help="within-chunk all-pairs size for eval"
+    )
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = p.parse_args()
     dev = torch.device(args.device)
@@ -73,11 +84,17 @@ def main():
             scores = model(Xt)
             if model.log_target_mask.any():
                 scores = scores.clone()
-                scores[:, model.log_target_mask] = torch.exp(scores[:, model.log_target_mask])
+                scores[:, model.log_target_mask] = torch.exp(
+                    scores[:, model.log_target_mask]
+                )
 
-        metrics = contrastive_eval_metrics(scores, Yt, eps, log_nu=None, chunk=args.chunk)
+        metrics = contrastive_eval_metrics(
+            scores, Yt, eps, log_nu=None, chunk=args.chunk
+        )
 
-        print(f"\n=== {tag} (regression checkpoint, contrastive-at-test-time, no retraining) ===")
+        print(
+            f"\n=== {tag} (regression checkpoint, contrastive-at-test-time, no retraining) ==="
+        )
         print_contrastive_metrics(tag, metrics, target_names)
 
 

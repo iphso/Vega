@@ -23,6 +23,7 @@ Two input modes:
   --row-index N         a real row from output/X.npy, for sanity-checking
                         the oracle itself against already-known metrics.
 """
+
 import argparse
 import json
 import time
@@ -59,10 +60,16 @@ def load_from_row_index(idx):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     g = p.add_mutually_exclusive_group(required=True)
     g.add_argument("--design-json", help="path to a design saved by optimize.py --save")
-    g.add_argument("--row-index", type=int, help="index into output/X.npy, for sanity-checking the oracle")
+    g.add_argument(
+        "--row-index",
+        type=int,
+        help="index into output/X.npy, for sanity-checking the oracle",
+    )
     p.add_argument("--fidelity", default="low", choices=["low", "high"])
     args = p.parse_args()
 
@@ -77,11 +84,16 @@ def main():
 
     try:
         boundary = surface_rz_fourier.SurfaceRZFourier(
-            r_cos=r_cos, z_sin=z_sin, n_field_periods=nfp, is_stellarator_symmetric=is_sym,
+            r_cos=r_cos,
+            z_sin=z_sin,
+            n_field_periods=nfp,
+            is_stellarator_symmetric=is_sym,
         )
     except Exception as e:
-        print(f"INFEASIBLE (structural validation, before ever reaching the solver): "
-              f"{type(e).__name__}: {e}")
+        print(
+            f"INFEASIBLE (structural validation, before ever reaching the solver): "
+            f"{type(e).__name__}: {e}"
+        )
         return
 
     settings = None
@@ -92,15 +104,19 @@ def main():
     try:
         metrics, _ = forward_model.forward_model(boundary, settings=settings)
     except Exception as e:
-        print(f"INFEASIBLE (VMEC++ solver failed after {time.perf_counter() - t0:.2f}s): "
-              f"{type(e).__name__}: {e}")
+        print(
+            f"INFEASIBLE (VMEC++ solver failed after {time.perf_counter() - t0:.2f}s): "
+            f"{type(e).__name__}: {e}"
+        )
         return
     elapsed = time.perf_counter() - t0
 
     print(f"FEASIBLE -- VMEC++ converged in {elapsed:.2f}s\n")
     metrics_dict = metrics.model_dump()
     if comparison:
-        print(f"  {'target':55s} {'oracle (ground truth)':>22s} {'surrogate/dataset':>18s} {'rel. diff':>10s}")
+        print(
+            f"  {'target':55s} {'oracle (ground truth)':>22s} {'surrogate/dataset':>18s} {'rel. diff':>10s}"
+        )
         for name, oracle_val in metrics_dict.items():
             if oracle_val is None or name not in comparison:
                 continue

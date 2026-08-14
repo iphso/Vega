@@ -4,10 +4,10 @@
 contrastive_ensemble_eval_metrics for why probabilities are averaged rather
 than raw scores). Also reports each single member alone for comparison.
 """
+
 import argparse
 
 import torch
-
 from train import (
     CKPT_DIR,
     DualPathMLP,
@@ -24,14 +24,20 @@ def load_model(tag, dev):
     assert ckpt["objective"] == "contrastive", f"{tag} is not a contrastive checkpoint"
     eps = noise_floor_eps(ckpt["target_names"]).to(dev)
     model = DualPathMLP(
-        ckpt["in_dim"], ckpt["n_targets"],
-        latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"],
-        spatial_latent=ckpt["spatial_latent"], head_hidden=ckpt["head_hidden"],
-        priority_weight=ckpt["priority_weight"], use_spatial=ckpt["use_spatial"],
-        trunk_arch=ckpt.get("trunk_arch", "mlp"), trunk_blocks=ckpt.get("trunk_blocks", 3),
+        ckpt["in_dim"],
+        ckpt["n_targets"],
+        latent_dim=ckpt["latent_dim"],
+        hidden=ckpt["hidden"],
+        spatial_latent=ckpt["spatial_latent"],
+        head_hidden=ckpt["head_hidden"],
+        priority_weight=ckpt["priority_weight"],
+        use_spatial=ckpt["use_spatial"],
+        trunk_arch=ckpt.get("trunk_arch", "mlp"),
+        trunk_blocks=ckpt.get("trunk_blocks", 3),
         use_symlog_latent=ckpt.get("use_symlog_latent", False),
         log_target_mask=ckpt.get("log_target_mask"),
-        objective="contrastive", noise_floor_eps=eps,
+        objective="contrastive",
+        noise_floor_eps=eps,
     ).to(dev)
     result = model.load_state_dict(ckpt["model_state_dict"], strict=False)
     assert not result.unexpected_keys
@@ -41,8 +47,12 @@ def load_model(tag, dev):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--member-tags", nargs="+", required=True,
-                    help="checkpoint stems for the ensemble members (same architecture, different seeds)")
+    p.add_argument(
+        "--member-tags",
+        nargs="+",
+        required=True,
+        help="checkpoint stems for the ensemble members (same architecture, different seeds)",
+    )
     p.add_argument("--chunk", type=int, default=512)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = p.parse_args()
@@ -61,7 +71,9 @@ def main():
     print(f"\n=== single members: {args.member_tags} ===")
     for tag, scores in zip(args.member_tags, member_scores):
         idx = args.member_tags.index(tag)
-        metrics = contrastive_eval_metrics(scores, Y_test, eps, log_nu=member_log_nus[idx], chunk=args.chunk)
+        metrics = contrastive_eval_metrics(
+            scores, Y_test, eps, log_nu=member_log_nus[idx], chunk=args.chunk
+        )
         print_contrastive_metrics(tag, metrics, target_names)
 
     ensemble_metrics = contrastive_ensemble_eval_metrics(

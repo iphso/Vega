@@ -23,6 +23,7 @@ in the same X/Y format load_split() already expects:
              a near-exact duplicate in train), so only a spatial split
              addresses those too.
 """
+
 import argparse
 import json
 from pathlib import Path
@@ -76,14 +77,22 @@ def save_split(name, X, Y, train_idx, val_idx, test_idx):
     np.savez(split_dir / "train.npz", X=X[train_idx], Y=Y[train_idx])
     np.savez(split_dir / "val.npz", X=X[val_idx], Y=Y[val_idx])
     np.savez(split_dir / "test.npz", X=X[test_idx], Y=Y[test_idx])
-    print(f"[{name}] train={len(train_idx)} val={len(val_idx)} test={len(test_idx)} "
-          f"-> {split_dir}")
+    print(
+        f"[{name}] train={len(train_idx)} val={len(val_idx)} test={len(test_idx)} "
+        f"-> {split_dir}"
+    )
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--modes", nargs="+", default=["random", "group", "cluster"],
-                    choices=["random", "group", "cluster"])
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--modes",
+        nargs="+",
+        default=["random", "group", "cluster"],
+        choices=["random", "group", "cluster"],
+    )
     p.add_argument("--n-clusters", type=int, default=100)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -99,7 +108,14 @@ def main():
         perm = rng.permutation(n_samples)
         n_train = int(n_samples * 0.8)
         n_val = int(n_samples * 0.1)
-        save_split("random", X, Y, perm[:n_train], perm[n_train:n_train + n_val], perm[n_train + n_val:])
+        save_split(
+            "random",
+            X,
+            Y,
+            perm[:n_train],
+            perm[n_train : n_train + n_val],
+            perm[n_train + n_val :],
+        )
 
     if "group" in args.modes:
         family_ids = json.loads((OUT_DIR / "family_ids.json").read_text())
@@ -115,13 +131,17 @@ def main():
         val_idx = np.array([i for f in val_g for i in family_to_idx[f]])
         test_idx = np.array([i for f in test_g for i in family_to_idx[f]])
         save_split("group", X, Y, train_idx, val_idx, test_idx)
-        print(f"  (families: {len(train_g)} train / {len(val_g)} val / {len(test_g)} test groups, "
-              f"none shared across splits by construction)")
+        print(
+            f"  (families: {len(train_g)} train / {len(val_g)} val / {len(test_g)} test groups, "
+            f"none shared across splits by construction)"
+        )
 
     if "cluster" in args.modes:
         meta = json.loads((OUT_DIR / "metadata.json").read_text())
         feature_names = json.loads((OUT_DIR / "feature_names.json").read_text())
-        feat_std = np.array([meta["feature_stats"][n]["std"] for n in feature_names[:90]]).clip(min=1e-6)
+        feat_std = np.array(
+            [meta["feature_stats"][n]["std"] for n in feature_names[:90]]
+        ).clip(min=1e-6)
         coeffs = torch.tensor(X[:, :90] / feat_std, device=dev, dtype=torch.float32)
         assign = kmeans(coeffs, args.n_clusters, seed=args.seed).cpu().numpy()
 
@@ -138,9 +158,11 @@ def main():
         test_idx = np.array([i for c in test_c for i in cluster_to_idx[c]])
         save_split("cluster", X, Y, train_idx, val_idx, test_idx)
         sizes = sorted(cluster_sizes.values())
-        print(f"  ({args.n_clusters} clusters, sizes range {sizes[0]}-{sizes[-1]}, median {sizes[len(sizes)//2]}; "
-              f"{len(train_c)} train / {len(val_c)} val / {len(test_c)} test clusters, "
-              f"entire regions of coefficient space held out for val/test)")
+        print(
+            f"  ({args.n_clusters} clusters, sizes range {sizes[0]}-{sizes[-1]}, median {sizes[len(sizes) // 2]}; "
+            f"{len(train_c)} train / {len(val_c)} val / {len(test_c)} test clusters, "
+            f"entire regions of coefficient space held out for val/test)"
+        )
 
         # Persisted for reuse beyond the split itself -- e.g. identifying
         # under-covered regions of coefficient space (small clusters) to
@@ -154,8 +176,10 @@ def main():
         membership.update({str(c): "test" for c in test_c})
         with open(OUT_DIR / "cluster_split_membership.json", "w") as f:
             json.dump(membership, f, indent=2)
-        print(f"  saved cluster_assignments.npy ({len(assign)} rows), cluster_sizes.json, "
-              f"and cluster_split_membership.json")
+        print(
+            f"  saved cluster_assignments.npy ({len(assign)} rows), cluster_sizes.json, "
+            f"and cluster_split_membership.json"
+        )
 
 
 if __name__ == "__main__":

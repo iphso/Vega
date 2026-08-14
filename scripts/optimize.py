@@ -36,36 +36,40 @@ Design choices baked in, not exposed as knobs (see EXPERIMENT_LOG for why):
     averaging across targets, since spread is in wildly different raw units
     per target otherwise (see EXPERIMENT_LOG for the noise-floor context).
 """
+
 import argparse
 import json
 import re
 from pathlib import Path
 
 import torch
+from train import CKPT_DIR, IDX_NFP, OUT_DIR, DualPathMLP, load_split
 
-from train import CKPT_DIR, DualPathMLP, IDX_NFP, OUT_DIR, load_split
+FEATURE_NAMES_90 = [f"r_cos_m{m}_n{n}" for m in range(5) for n in range(9)] + [
+    f"z_sin_m{m}_n{n}" for m in range(5) for n in range(9)
+]
 
-FEATURE_NAMES_90 = (
-    [f"r_cos_m{m}_n{n}" for m in range(5) for n in range(9)]
-    + [f"z_sin_m{m}_n{n}" for m in range(5) for n in range(9)]
-)
-
-CONSTRAINT_RE = re.compile(
-    r"^(abs\()?([A-Za-z_]\w*)\)?\s*(<=|>=|==)\s*(-?[\d.eE+-]+)$"
-)
+CONSTRAINT_RE = re.compile(r"^(abs\()?([A-Za-z_]\w*)\)?\s*(<=|>=|==)\s*(-?[\d.eE+-]+)$")
 
 
 def load_ensemble(tags, dev):
     models, target_names = [], None
     for tag in tags:
         ckpt = torch.load(CKPT_DIR / f"{tag}.pt", map_location=dev)
-        assert ckpt["objective"] == "regression", f"{tag} is not a regression checkpoint"
+        assert ckpt["objective"] == "regression", (
+            f"{tag} is not a regression checkpoint"
+        )
         model = DualPathMLP(
-            ckpt["in_dim"], ckpt["n_targets"],
-            latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"],
-            spatial_latent=ckpt["spatial_latent"], head_hidden=ckpt["head_hidden"],
-            priority_weight=ckpt["priority_weight"], use_spatial=ckpt["use_spatial"],
-            trunk_arch=ckpt.get("trunk_arch", "mlp"), trunk_blocks=ckpt.get("trunk_blocks", 3),
+            ckpt["in_dim"],
+            ckpt["n_targets"],
+            latent_dim=ckpt["latent_dim"],
+            hidden=ckpt["hidden"],
+            spatial_latent=ckpt["spatial_latent"],
+            head_hidden=ckpt["head_hidden"],
+            priority_weight=ckpt["priority_weight"],
+            use_spatial=ckpt["use_spatial"],
+            trunk_arch=ckpt.get("trunk_arch", "mlp"),
+            trunk_blocks=ckpt.get("trunk_blocks", 3),
             use_symlog_latent=ckpt.get("use_symlog_latent", False),
             log_target_mask=ckpt.get("log_target_mask"),
         ).to(dev)
@@ -76,7 +80,9 @@ def load_ensemble(tags, dev):
             param.requires_grad_(False)
         models.append(model)
         target_names = target_names or ckpt["target_names"]
-        assert target_names == ckpt["target_names"], "ensemble members must share target order"
+        assert target_names == ckpt["target_names"], (
+            "ensemble members must share target order"
+        )
     return models, target_names
 
 
@@ -92,7 +98,12 @@ def parse_constraint(spec):
             f"can't parse constraint {spec!r}, expected e.g. 'qi<=0.02' or "
             f"'abs(edge_rotational_transform_over_n_field_periods)>=0.3'"
         )
-    use_abs, name, op, value = m.group(1) is not None, m.group(2), m.group(3), float(m.group(4))
+    use_abs, name, op, value = (
+        m.group(1) is not None,
+        m.group(2),
+        m.group(3),
+        float(m.group(4)),
+    )
     return name, op, value, use_abs
 
 
@@ -141,46 +152,107 @@ def elongation_style_score(value, lower_bound, upper_bound, minimize):
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--member-tags", nargs="+",
-                    default=["reg_mlp_big_soap_s0", "reg_mlp_big_soap_s1", "reg_mlp_big_soap_s2"])
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--member-tags",
+        nargs="+",
+        default=["reg_mlp_big_soap_s0", "reg_mlp_big_soap_s1", "reg_mlp_big_soap_s2"],
+    )
     p.add_argument("--minimize", default=None, help="target name to minimize")
-    p.add_argument("--maximize", default=None, help="target name to maximize (mutually exclusive with --minimize)")
-    p.add_argument("--constraint", action="append", default=[],
-                    help="e.g. --constraint 'qi<=0.02' --constraint 'vacuum_well>=-0.2'. Repeatable.")
-    p.add_argument("--nfp", type=int, required=True, help="fixed n_field_periods for this search")
-    p.add_argument("--n-starts", type=int, default=64, help="multi-start population size")
+    p.add_argument(
+        "--maximize",
+        default=None,
+        help="target name to maximize (mutually exclusive with --minimize)",
+    )
+    p.add_argument(
+        "--constraint",
+        action="append",
+        default=[],
+        help="e.g. --constraint 'qi<=0.02' --constraint 'vacuum_well>=-0.2'. Repeatable.",
+    )
+    p.add_argument(
+        "--nfp", type=int, required=True, help="fixed n_field_periods for this search"
+    )
+    p.add_argument(
+        "--n-starts", type=int, default=64, help="multi-start population size"
+    )
     p.add_argument("--lr", type=float, default=0.01)
-    p.add_argument("--alm-outer-iters", type=int, default=40,
-                    help="ALM outer iterations (primal solve -> dual update -> penalty growth), "
-                         "matches the paper's geometric-problem setting")
-    p.add_argument("--alm-inner-steps", type=int, default=20,
-                    help="Adam steps per outer iteration approximately solving the augmented-"
-                         "Lagrangian primal subproblem (eq. 8 in the paper)")
-    p.add_argument("--alm-rho0", type=float, default=10.0, help="initial penalty parameter, per constraint")
-    p.add_argument("--alm-rho-max", type=float, default=1e9, help="cap on the penalty parameter")
-    p.add_argument("--alm-tau", type=float, default=0.8,
-                    help="penalty only grows if new_violation > tau * old_violation, i.e. shrinking "
-                         "slower than this factor per outer iteration")
-    p.add_argument("--alm-sigma", type=float, default=5.0, help="penalty growth multiplier when triggered")
-    p.add_argument("--trust-weight", type=float, default=0.1,
-                    help="penalty on ensemble inter-member disagreement (normalized per-target by "
-                         "that target's natural std) -- 0 disables the trust-region term")
-    p.add_argument("--distance-weight", type=float, default=1.0,
-                    help="penalty on squared distance (per-coefficient std-normalized) to the "
-                         "nearest same-nfp training point -- the main defense against the optimizer "
-                         "exploiting a corner of coefficient-space the surrogate never saw real data "
-                         "in. 0 disables it (not recommended, see optimize.py module docstring).")
-    p.add_argument("--relative-tol", type=float, default=1e-2,
-                    help="ConStellaration benchmark's own feasibility tolerance: a constraint is "
-                         "satisfied iff (violation / |threshold|) <= this (paper default 1e-2). This "
-                         "is also what the ALM loop itself targets (same normalization as eq. 2).")
-    p.add_argument("--score-bounds", type=float, nargs=2, default=None, metavar=("LOWER", "UPPER"),
-                    help="if given, also report a ConStellaration-style [0,1] score for the objective "
-                         "(see elongation_style_score) -- e.g. --score-bounds 1.0 10.0 matches "
-                         "GeometricalProblem's max_elongation score.")
+    p.add_argument(
+        "--alm-outer-iters",
+        type=int,
+        default=40,
+        help="ALM outer iterations (primal solve -> dual update -> penalty growth), "
+        "matches the paper's geometric-problem setting",
+    )
+    p.add_argument(
+        "--alm-inner-steps",
+        type=int,
+        default=20,
+        help="Adam steps per outer iteration approximately solving the augmented-"
+        "Lagrangian primal subproblem (eq. 8 in the paper)",
+    )
+    p.add_argument(
+        "--alm-rho0",
+        type=float,
+        default=10.0,
+        help="initial penalty parameter, per constraint",
+    )
+    p.add_argument(
+        "--alm-rho-max", type=float, default=1e9, help="cap on the penalty parameter"
+    )
+    p.add_argument(
+        "--alm-tau",
+        type=float,
+        default=0.8,
+        help="penalty only grows if new_violation > tau * old_violation, i.e. shrinking "
+        "slower than this factor per outer iteration",
+    )
+    p.add_argument(
+        "--alm-sigma",
+        type=float,
+        default=5.0,
+        help="penalty growth multiplier when triggered",
+    )
+    p.add_argument(
+        "--trust-weight",
+        type=float,
+        default=0.1,
+        help="penalty on ensemble inter-member disagreement (normalized per-target by "
+        "that target's natural std) -- 0 disables the trust-region term",
+    )
+    p.add_argument(
+        "--distance-weight",
+        type=float,
+        default=1.0,
+        help="penalty on squared distance (per-coefficient std-normalized) to the "
+        "nearest same-nfp training point -- the main defense against the optimizer "
+        "exploiting a corner of coefficient-space the surrogate never saw real data "
+        "in. 0 disables it (not recommended, see optimize.py module docstring).",
+    )
+    p.add_argument(
+        "--relative-tol",
+        type=float,
+        default=1e-2,
+        help="ConStellaration benchmark's own feasibility tolerance: a constraint is "
+        "satisfied iff (violation / |threshold|) <= this (paper default 1e-2). This "
+        "is also what the ALM loop itself targets (same normalization as eq. 2).",
+    )
+    p.add_argument(
+        "--score-bounds",
+        type=float,
+        nargs=2,
+        default=None,
+        metavar=("LOWER", "UPPER"),
+        help="if given, also report a ConStellaration-style [0,1] score for the objective "
+        "(see elongation_style_score) -- e.g. --score-bounds 1.0 10.0 matches "
+        "GeometricalProblem's max_elongation score.",
+    )
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--save", default=None, help="optional path to save the winning design as JSON")
+    p.add_argument(
+        "--save", default=None, help="optional path to save the winning design as JSON"
+    )
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = p.parse_args()
 
@@ -197,7 +269,9 @@ def main():
     hi = torch.tensor([feature_stats[n]["max"] for n in FEATURE_NAMES_90], device=dev)
 
     models, target_names = load_ensemble(args.member_tags, dev)
-    target_std = torch.tensor([target_stats[n]["std"] for n in target_names], device=dev)
+    target_std = torch.tensor(
+        [target_stats[n]["std"] for n in target_names], device=dev
+    )
 
     obj_name = args.minimize or args.maximize
     obj_idx = target_names.index(obj_name)
@@ -208,7 +282,14 @@ def main():
     for spec in args.constraint:
         name, op, value, use_abs = parse_constraint(spec)
         constraints.append(
-            (target_names.index(name), op, value, target_stats[name]["std"], name, use_abs)
+            (
+                target_names.index(name),
+                op,
+                value,
+                target_stats[name]["std"],
+                name,
+                use_abs,
+            )
         )
 
     # Multi-start init: real training rows at the requested nfp, so the
@@ -227,22 +308,30 @@ def main():
     pool = X_train[same_nfp] if same_nfp.any() else X_train
     pool_Y = Y_train[same_nfp] if same_nfp.any() else Y_train
     if not same_nfp.any():
-        print(f"[warn] no training rows with n_field_periods == {args.nfp}; "
-              f"seeding from all rows instead (nfp will be overwritten either way)")
+        print(
+            f"[warn] no training rows with n_field_periods == {args.nfp}; "
+            f"seeding from all rows instead (nfp will be overwritten either way)"
+        )
 
     if constraints:
         real_violation = torch.zeros(pool_Y.shape[0])
         for idx_c, op, value, std_c, _name, use_abs in constraints:
-            real_violation += violation(pool_Y[:, idx_c], op, value, std_c, use_abs=use_abs)
+            real_violation += violation(
+                pool_Y[:, idx_c], op, value, std_c, use_abs=use_abs
+            )
         n_guided = args.n_starts // 2
         n_random = args.n_starts - n_guided
-        candidate_pool = torch.argsort(real_violation)[:max(n_guided * 4, 16)]
-        guided_idx = candidate_pool[torch.randint(0, candidate_pool.shape[0], (n_guided,))]
+        candidate_pool = torch.argsort(real_violation)[: max(n_guided * 4, 16)]
+        guided_idx = candidate_pool[
+            torch.randint(0, candidate_pool.shape[0], (n_guided,))
+        ]
         random_idx = torch.randint(0, pool.shape[0], (n_random,))
         idx = torch.cat([guided_idx, random_idx])
-        print(f"[seed] {n_guided} starts from the {candidate_pool.shape[0]} real same-nfp points "
-              f"closest to feasible (min true violation {real_violation[candidate_pool[0]].item():.4g}), "
-              f"{n_random} random")
+        print(
+            f"[seed] {n_guided} starts from the {candidate_pool.shape[0]} real same-nfp points "
+            f"closest to feasible (min true violation {real_violation[candidate_pool[0]].item():.4g}), "
+            f"{n_random} random"
+        )
     else:
         idx = torch.randint(0, pool.shape[0], (args.n_starts,))
     x = pool[idx][:, :90].clone().to(dev).requires_grad_(True)
@@ -260,7 +349,9 @@ def main():
     # std-normalized units, to the nearest same-nfp training point --
     # recomputed every step since the candidate moves.
     pool_free = pool[:, :90].to(dev)
-    feat_std = torch.tensor([feature_stats[n]["std"] for n in FEATURE_NAMES_90], device=dev).clamp_min(1e-6)
+    feat_std = torch.tensor(
+        [feature_stats[n]["std"] for n in FEATURE_NAMES_90], device=dev
+    ).clamp_min(1e-6)
     pool_norm = pool_free / feat_std
 
     opt = torch.optim.Adam([x], lr=args.lr)
@@ -279,8 +370,10 @@ def main():
         if n_c == 0:
             return torch.zeros((mean.shape[0], 0), device=mean.device)
         return torch.stack(
-            [paper_feasibility_violation(mean[:, idx_c], op, value, use_abs=use_abs)
-             for idx_c, op, value, _std_c, _name, use_abs in constraints],
+            [
+                paper_feasibility_violation(mean[:, idx_c], op, value, use_abs=use_abs)
+                for idx_c, op, value, _std_c, _name, use_abs in constraints
+            ],
             dim=1,
         )
 
@@ -300,11 +393,15 @@ def main():
             # region the surrogate is simply wrong in (confirmed empirically:
             # this happened, with predicted min_norm_grad going negative again
             # and distance-to-real-data jumping ~50x, before this fix).
-            penalty_scale = (rho.amax(dim=1) / args.alm_rho0) if n_c > 0 else torch.ones(args.n_starts, device=dev)
+            penalty_scale = (
+                (rho.amax(dim=1) / args.alm_rho0)
+                if n_c > 0
+                else torch.ones(args.n_starts, device=dev)
+            )
             if n_c > 0:
                 c = constraint_tilde(mean)
                 inner_term = torch.relu(y + rho * c)
-                loss = loss + ((inner_term ** 2 - y ** 2) / (2 * rho)).sum(dim=1)
+                loss = loss + ((inner_term**2 - y**2) / (2 * rho)).sum(dim=1)
             if args.distance_weight > 0:
                 nn_dist_sq = torch.cdist(x / feat_std, pool_norm).min(dim=1).values ** 2
                 loss = loss + args.distance_weight * penalty_scale * nn_dist_sq
@@ -324,7 +421,11 @@ def main():
                 c = constraint_tilde(mean)
                 if prev_c is not None:
                     shrunk_enough = c <= args.alm_tau * prev_c
-                    rho = torch.where(shrunk_enough, rho, (rho * args.alm_sigma).clamp(max=args.alm_rho_max))
+                    rho = torch.where(
+                        shrunk_enough,
+                        rho,
+                        (rho * args.alm_sigma).clamp(max=args.alm_rho_max),
+                    )
                 y = torch.relu(y + rho * c)
                 prev_c = c
 
@@ -348,39 +449,66 @@ def main():
         obj_values = obj_sign * mean[:, obj_idx]
         n_feasible = feasible.sum().item()
         if n_feasible > 0:
-            candidate_scores = torch.where(feasible, obj_values, torch.full_like(obj_values, float("inf")))
+            candidate_scores = torch.where(
+                feasible, obj_values, torch.full_like(obj_values, float("inf"))
+            )
             best = candidate_scores.argmin().item()
         else:
-            print(f"[warn] no fully feasible candidate out of {args.n_starts} starts within "
-                  f"relative-tol={args.relative_tol}; reporting least-infeasible (smallest max "
-                  f"normalized violation) instead")
+            print(
+                f"[warn] no fully feasible candidate out of {args.n_starts} starts within "
+                f"relative-tol={args.relative_tol}; reporting least-infeasible (smallest max "
+                f"normalized violation) instead"
+            )
             best = max_violation.argmin().item()
 
         nn_dist = torch.cdist(x / feat_std, pool_norm).min(dim=1).values
 
-        print(f"\n=== design search: {'minimize' if args.minimize else 'maximize'} {obj_name}, "
-              f"nfp={args.nfp}, {n_feasible}/{args.n_starts} starts feasible "
-              f"(paper's relative_tol={args.relative_tol}) ===")
+        print(
+            f"\n=== design search: {'minimize' if args.minimize else 'maximize'} {obj_name}, "
+            f"nfp={args.nfp}, {n_feasible}/{args.n_starts} starts feasible "
+            f"(paper's relative_tol={args.relative_tol}) ==="
+        )
         print(f"best candidate (start #{best}):")
-        print(f"  {obj_name} (objective): {mean[best, obj_idx].item():.6g}  "
-              f"(ensemble std {std[best, obj_idx].item():.3g})")
-        print(f"  distance to nearest same-nfp training point (std-normalized): {nn_dist[best].item():.3g}")
+        print(
+            f"  {obj_name} (objective): {mean[best, obj_idx].item():.6g}  "
+            f"(ensemble std {std[best, obj_idx].item():.3g})"
+        )
+        print(
+            f"  distance to nearest same-nfp training point (std-normalized): {nn_dist[best].item():.3g}"
+        )
         for k, (idx_c, op, value, _std_c, name, use_abs) in enumerate(constraints):
             pv = c_final[best, k].item()
-            status = "OK" if pv <= args.relative_tol else f"VIOLATED (relative viol. {pv:.4g})"
+            status = (
+                "OK"
+                if pv <= args.relative_tol
+                else f"VIOLATED (relative viol. {pv:.4g})"
+            )
             label = f"abs({name})" if use_abs else name
-            print(f"  constraint {label} {op} {value}: predicted {mean[best, idx_c].item():.6g}  [{status}]")
+            print(
+                f"  constraint {label} {op} {value}: predicted {mean[best, idx_c].item():.6g}  [{status}]"
+            )
         print(f"  feasible per paper's exact definition: {bool(feasible[best].item())}")
         if args.score_bounds:
             lower_b, upper_b = args.score_bounds
-            score = elongation_style_score(mean[best, obj_idx].item(), lower_b, upper_b, minimize=bool(args.minimize))
-            print(f"  ConStellaration-style score (bounds {lower_b},{upper_b}): "
-                  f"{score:.4f}  (0 if any constraint infeasible per paper definition)")
+            score = elongation_style_score(
+                mean[best, obj_idx].item(),
+                lower_b,
+                upper_b,
+                minimize=bool(args.minimize),
+            )
+            print(
+                f"  ConStellaration-style score (bounds {lower_b},{upper_b}): "
+                f"{score:.4f}  (0 if any constraint infeasible per paper definition)"
+            )
             if not bool(feasible[best].item()):
-                print(f"  -> reported score would be 0.0 by the paper's own scoring rule (infeasible)")
+                print(
+                    "  -> reported score would be 0.0 by the paper's own scoring rule (infeasible)"
+                )
         print("  all predicted targets:")
         for k, name in enumerate(target_names):
-            print(f"    {name:55s} {mean[best, k].item():12.5g}  (+/- {std[best, k].item():.3g})")
+            print(
+                f"    {name:55s} {mean[best, k].item():12.5g}  (+/- {std[best, k].item():.3g})"
+            )
 
         if args.save:
             design = {
@@ -388,8 +516,12 @@ def main():
                 "z_sin": x[best, 45:90].tolist(),
                 "n_field_periods": args.nfp,
                 "is_stellarator_symmetric": 1.0,
-                "predicted_targets": {name: mean[best, k].item() for k, name in enumerate(target_names)},
-                "predicted_targets_std": {name: std[best, k].item() for k, name in enumerate(target_names)},
+                "predicted_targets": {
+                    name: mean[best, k].item() for k, name in enumerate(target_names)
+                },
+                "predicted_targets_std": {
+                    name: std[best, k].item() for k, name in enumerate(target_names)
+                },
             }
             Path(args.save).write_text(json.dumps(design, indent=2))
             print(f"\nsaved winning design to {args.save}")

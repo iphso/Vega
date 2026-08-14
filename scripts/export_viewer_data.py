@@ -10,6 +10,7 @@ version -- they have no Y labels, and folding them in means every consumer
 of this export has to handle a "no metrics" case. Revisit if/when the
 viewer grows a feasible/infeasible view.
 """
+
 import json
 from pathlib import Path
 
@@ -29,11 +30,23 @@ VIEWER_DATA_DIR = Path("/work/viewer/public/data")
 # now: real data vs. everything the VAE-bootstrap process has produced.
 SOURCES = [
     ("real", [(OUT_DIR / "X.npy", OUT_DIR / "Y.npy")]),
-    ("bootstrap", [
-        (OUT_DIR / "generated_vae_prior" / "X.npy", OUT_DIR / "generated_vae_prior" / "Y.npy"),
-        (OUT_DIR / "bootstrap_bootstrap0" / "X.npy", OUT_DIR / "bootstrap_bootstrap0" / "Y.npy"),
-        (OUT_DIR / "gradient_walk_walk1" / "X.npy", OUT_DIR / "gradient_walk_walk1" / "Y.npy"),
-    ]),
+    (
+        "bootstrap",
+        [
+            (
+                OUT_DIR / "generated_vae_prior" / "X.npy",
+                OUT_DIR / "generated_vae_prior" / "Y.npy",
+            ),
+            (
+                OUT_DIR / "bootstrap_bootstrap0" / "X.npy",
+                OUT_DIR / "bootstrap_bootstrap0" / "Y.npy",
+            ),
+            (
+                OUT_DIR / "gradient_walk_walk1" / "X.npy",
+                OUT_DIR / "gradient_walk_walk1" / "Y.npy",
+            ),
+        ],
+    ),
 ]
 
 
@@ -50,7 +63,9 @@ def main():
                 continue
             X = np.load(x_path).astype(np.float32)
             Y = np.load(y_path).astype(np.float32)
-            assert len(X) == len(Y), f"{name} ({x_path}): X/Y length mismatch ({len(X)} vs {len(Y)})"
+            assert len(X) == len(Y), (
+                f"{name} ({x_path}): X/Y length mismatch ({len(X)} vs {len(Y)})"
+            )
             X_pieces.append(X)
             Y_pieces.append(Y)
         if not X_pieces:
@@ -61,7 +76,7 @@ def main():
         Y_parts.append(Y)
         source_codes.append(np.full(len(X), code, dtype=np.uint8))
         source_legend[code] = name
-        source_counts[name] = int(len(X))
+        source_counts[name] = len(X)
         print(f"{name}: {len(X):,} rows")
 
     X_all = np.concatenate(X_parts)
@@ -74,7 +89,7 @@ def main():
     source_all.tofile(VIEWER_DATA_DIR / "source.bin")
 
     meta = {
-        "n": int(len(X_all)),
+        "n": len(X_all),
         "x_cols": int(X_all.shape[1]),
         "y_cols": int(Y_all.shape[1]),
         "target_names": target_names,
@@ -89,7 +104,9 @@ def main():
     }
     (VIEWER_DATA_DIR / "meta.json").write_text(json.dumps(meta, indent=2))
     print(f"\ntotal: {len(X_all):,} rows -> {VIEWER_DATA_DIR}")
-    print(f"X.bin {X_all.nbytes/1e6:.1f}MB  Y.bin {Y_all.nbytes/1e6:.1f}MB  source.bin {source_all.nbytes/1e6:.1f}MB")
+    print(
+        f"X.bin {X_all.nbytes / 1e6:.1f}MB  Y.bin {Y_all.nbytes / 1e6:.1f}MB  source.bin {source_all.nbytes / 1e6:.1f}MB"
+    )
 
 
 if __name__ == "__main__":

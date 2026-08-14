@@ -80,6 +80,7 @@ schema as output/X.npy) with a parallel generation_idx.npy for provenance,
 and {rejected_X,rejected_reason,rejected_generation_idx}.npy for the
 nonphysical side (same reason codes as generate_and_validate.py).
 """
+
 import argparse
 import json
 import subprocess
@@ -89,9 +90,12 @@ from pathlib import Path
 
 import numpy as np
 import torch
-
 from generate_and_validate import (
-    NFP_VALUES, REJECT_REASON_CODES, ZERO_COEFF_IDX, make_random_sampler, run_batch_with_timeout,
+    NFP_VALUES,
+    REJECT_REASON_CODES,
+    ZERO_COEFF_IDX,
+    make_random_sampler,
+    run_batch_with_timeout,
 )
 
 OUT_DIR = Path("/work/output")
@@ -100,16 +104,26 @@ CKPT_DIR = Path("/work/checkpoints")
 
 def load_vae(tag):
     from train_vae import VAE
+
     dev = torch.device("cpu")
     ckpt = torch.load(CKPT_DIR / f"{tag}.pt", map_location=dev)
-    model = VAE(coeff_dim=90, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"]).to(dev)
+    model = VAE(coeff_dim=90, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"]).to(
+        dev
+    )
     model.load_state_dict(ckpt["model_state_dict"])
     model.eval()
-    return model, ckpt["coeff_mean"], ckpt["coeff_std"], ckpt["latent_dim"], ckpt["hidden"]
+    return (
+        model,
+        ckpt["coeff_mean"],
+        ckpt["coeff_std"],
+        ckpt["latent_dim"],
+        ckpt["hidden"],
+    )
 
 
 def sample_from_vae(model, coeff_mean, coeff_std, latent_dim, n, rng, std):
     from train_vae import nfp_one_hot
+
     z = std * torch.randn(n, latent_dim)
     nfp_batch = rng.choice(NFP_VALUES, size=n)
     nfp_t = torch.tensor(nfp_batch, dtype=torch.float32)
@@ -162,8 +176,16 @@ def compute_current_std(args, g, schedule_gen):
     return peak_std, "fill", cycle_idx
 
 
-def make_directed_sampler(current_model_bundle, surrogate, target_idx, direction,
-                           n_steps, step_size, anchor_pool_X, rng):
+def make_directed_sampler(
+    current_model_bundle,
+    surrogate,
+    target_idx,
+    direction,
+    n_steps,
+    step_size,
+    anchor_pool_X,
+    rng,
+):
     """Gradient-directed candidates: encode real anchors with the CURRENT
     generation's VAE, then take n_steps of plain-autograd gradient descent
     (normalized-direction steps, no adaptive shrinking -- this loop doesn't
@@ -180,6 +202,7 @@ def make_directed_sampler(current_model_bundle, surrogate, target_idx, direction
     surrogate's blind spots.
     """
     from train_vae import nfp_one_hot
+
     c_model, c_mean, c_std, c_latent, _ = current_model_bundle
     coeff_mean_t = torch.tensor(c_mean, dtype=torch.float32)
     coeff_std_t = torch.tensor(c_std, dtype=torch.float32)
@@ -188,8 +211,12 @@ def make_directed_sampler(current_model_bundle, surrogate, target_idx, direction
     def sample(n):
         replace = len(anchor_pool_X) < n
         anchor_rows = rng.choice(len(anchor_pool_X), size=n, replace=replace)
-        anchor_coeffs = torch.tensor((anchor_pool_X[anchor_rows][:, :90] - c_mean) / c_std, dtype=torch.float32)
-        anchor_nfp = torch.tensor(anchor_pool_X[anchor_rows][:, 90], dtype=torch.float32)
+        anchor_coeffs = torch.tensor(
+            (anchor_pool_X[anchor_rows][:, :90] - c_mean) / c_std, dtype=torch.float32
+        )
+        anchor_nfp = torch.tensor(
+            anchor_pool_X[anchor_rows][:, 90], dtype=torch.float32
+        )
         nfp_cond = nfp_one_hot(anchor_nfp)
         ones = torch.ones(n, 1)
 
@@ -200,14 +227,20 @@ def make_directed_sampler(current_model_bundle, surrogate, target_idx, direction
         for _ in range(n_steps):
             coeffs = c_model.decode(z, nfp_cond) * coeff_std_t + coeff_mean_t
             pred = surrogate(torch.cat([coeffs, anchor_nfp.unsqueeze(1), ones], dim=1))
-            grad, = torch.autograd.grad(pred[:, target_idx].sum(), z)
+            (grad,) = torch.autograd.grad(pred[:, target_idx].sum(), z)
             with torch.no_grad():
                 grad_norm = grad.norm(dim=1, keepdim=True).clamp_min(1e-12)
-                z = (z + sign * step_size * grad / grad_norm).detach().requires_grad_(True)
+                z = (
+                    (z + sign * step_size * grad / grad_norm)
+                    .detach()
+                    .requires_grad_(True)
+                )
 
         with torch.no_grad():
             coeffs_final = c_model.decode(z, nfp_cond) * coeff_std_t + coeff_mean_t
-            pred_final = surrogate(torch.cat([coeffs_final, anchor_nfp.unsqueeze(1), ones], dim=1))
+            pred_final = surrogate(
+                torch.cat([coeffs_final, anchor_nfp.unsqueeze(1), ones], dim=1)
+            )
         sample.last_predicted = pred_final[:, target_idx].numpy().copy()
 
         coeffs_np = coeffs_final.numpy()
@@ -223,8 +256,17 @@ def make_directed_sampler(current_model_bundle, surrogate, target_idx, direction
     return sample
 
 
-def make_mixed_sampler(anchor_model_bundle, current_model_bundle, random_sampler, directed_sampler,
-                        anchor_frac, random_frac, directed_frac, current_std, rng):
+def make_mixed_sampler(
+    anchor_model_bundle,
+    current_model_bundle,
+    random_sampler,
+    directed_sampler,
+    anchor_frac,
+    random_frac,
+    directed_frac,
+    current_std,
+    rng,
+):
     """Returns sample(n) -> (candidates, tags), tags marking which
     sub-sampler produced each candidate ("anchor"/"random"/"directed"/
     "current") so the caller can report the directed sub-batch's own
@@ -240,7 +282,9 @@ def make_mixed_sampler(anchor_model_bundle, current_model_bundle, random_sampler
         n_current = n - n_anchor - n_random - n_directed
         out, tags = [], []
         if n_anchor:
-            out += sample_from_vae(a_model, a_mean, a_std, a_latent, n_anchor, rng, std=1.0)
+            out += sample_from_vae(
+                a_model, a_mean, a_std, a_latent, n_anchor, rng, std=1.0
+            )
             tags += ["anchor"] * n_anchor
         if n_random:
             out += random_sampler(n_random)
@@ -249,7 +293,9 @@ def make_mixed_sampler(anchor_model_bundle, current_model_bundle, random_sampler
             out += directed_sampler(n_directed)
             tags += ["directed"] * n_directed
         if n_current:
-            out += sample_from_vae(c_model, c_mean, c_std, c_latent, n_current, rng, std=current_std)
+            out += sample_from_vae(
+                c_model, c_mean, c_std, c_latent, n_current, rng, std=current_std
+            )
             tags += ["current"] * n_current
         combined = list(zip(out, tags))
         rng.shuffle(combined)
@@ -265,9 +311,14 @@ def load_coverage_reference(sparse_percentile, subsample, rng):
     X = np.load(OUT_DIR / "X.npy")
     meta = json.loads((OUT_DIR / "metadata.json").read_text())
     feature_names = json.loads((OUT_DIR / "feature_names.json").read_text())
-    feat_std = np.array([meta["feature_stats"][n]["std"] for n in feature_names[:90]]).clip(min=1e-6)
+    feat_std = np.array(
+        [meta["feature_stats"][n]["std"] for n in feature_names[:90]]
+    ).clip(min=1e-6)
     assign = np.load(OUT_DIR / "cluster_assignments.npy")
-    cluster_sizes = {int(k): v for k, v in json.loads((OUT_DIR / "cluster_sizes.json").read_text()).items()}
+    cluster_sizes = {
+        int(k): v
+        for k, v in json.loads((OUT_DIR / "cluster_sizes.json").read_text()).items()
+    }
     threshold = np.percentile(list(cluster_sizes.values()), sparse_percentile)
     sparse_clusters = {c for c, n in cluster_sizes.items() if n <= threshold}
 
@@ -283,61 +334,130 @@ def coverage_fraction(Xg, X_sub, assign_sub, sparse_clusters, feat_std, chunk=20
     Xgn = (Xg[:, :90] / feat_std).astype(np.float32)
     nearest = np.zeros(len(Xgn), dtype=int)
     for start in range(0, len(Xgn), chunk):
-        d = np.linalg.norm(Xgn[start:start + chunk, None, :] - X_sub[None, :, :], axis=2)
-        nearest[start:start + chunk] = assign_sub[d.argmin(axis=1)]
+        d = np.linalg.norm(
+            Xgn[start : start + chunk, None, :] - X_sub[None, :, :], axis=2
+        )
+        nearest[start : start + chunk] = assign_sub[d.argmin(axis=1)]
     return float(np.mean([c in sparse_clusters for c in nearest]))
 
 
 def main():
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--base-vae-tag", default="vae_coeffs_s0", help="real-data-only VAE, used as the fixed anchor")
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    p.add_argument(
+        "--base-vae-tag",
+        default="vae_coeffs_s0",
+        help="real-data-only VAE, used as the fixed anchor",
+    )
     p.add_argument("--tag", default="bootstrap0")
     p.add_argument("--generations", type=int, default=5)
     p.add_argument("--seconds-per-generation", type=float, default=7200.0)
-    p.add_argument("--vae-epochs", type=int, default=100, help="epochs per generation's VAE retrain (warm-started, so fewer than a from-scratch fit)")
+    p.add_argument(
+        "--vae-epochs",
+        type=int,
+        default=100,
+        help="epochs per generation's VAE retrain (warm-started, so fewer than a from-scratch fit)",
+    )
     p.add_argument("--anchor-frac", type=float, default=0.10)
-    p.add_argument("--random-frac", type=float, default=0.10,
-                    help="fraction of every batch sampled independently per-coefficient, bypassing the VAE "
-                         "entirely -- near-0% hit rate expected, kept for the rejected-candidate pool as "
-                         "zero-learned-bias negative examples, not for adding accepted designs")
-    p.add_argument("--std-growth", type=float, default=0.10,
-                    help="latent std inflation per generation -- the goal here is extending coverage/range, "
-                         "not metric accuracy, so this defaults more aggressive than a typical exploration schedule")
-    p.add_argument("--max-std", type=float, default=None,
-                    help="linear schedule only: cap on current_std (1.0 + std_growth*generation) -- without "
-                         "this, generation count and exploration radius are hard-tied together. Set this to "
-                         "freeze std at its current level and just keep accumulating at that radius.")
-    p.add_argument("--schedule", default="linear", choices=["linear", "cycle"],
-                    help="linear: current_std = 1.0 + std_growth*generation (optionally capped by --max-std) -- "
-                         "monotonic, so expanding reach and stabilizing hit-rate are mutually exclusive. "
-                         "cycle: repeating relax -> expand -> fill phases (see --cycle-*/--relax-std/"
-                         "--peak-std-* args) -- periodically bursts std outward to seed new territory, then "
-                         "holds at the new peak to consolidate/densify before relaxing and bursting again, "
-                         "with the peak itself ratcheting up cycle over cycle.")
-    p.add_argument("--cycle-relax-gens", type=int, default=1,
-                    help="cycle schedule: generations held at --relax-std (hit-rate recovery, VAE consolidation)")
-    p.add_argument("--cycle-expand-gens", type=int, default=2,
-                    help="cycle schedule: generations linearly ramping std from --relax-std to that cycle's peak")
-    p.add_argument("--cycle-fill-gens", type=int, default=2,
-                    help="cycle schedule: generations held at that cycle's peak std (densify the new frontier)")
-    p.add_argument("--relax-std", type=float, default=1.5,
-                    help="cycle schedule: the low point each cycle relaxes to")
-    p.add_argument("--peak-std-start", type=float, default=2.2,
-                    help="cycle schedule: peak std for the first cycle")
-    p.add_argument("--peak-std-growth", type=float, default=0.2,
-                    help="cycle schedule: how much the peak std increases each successive cycle")
-    p.add_argument("--directed-frac", type=float, default=0.0,
-                    help="fraction of every batch from gradient-directed search toward --directed-target "
-                         "(0 = off, matching prior behavior exactly). See module docstring for what this "
-                         "does and doesn't guarantee.")
+    p.add_argument(
+        "--random-frac",
+        type=float,
+        default=0.10,
+        help="fraction of every batch sampled independently per-coefficient, bypassing the VAE "
+        "entirely -- near-0% hit rate expected, kept for the rejected-candidate pool as "
+        "zero-learned-bias negative examples, not for adding accepted designs",
+    )
+    p.add_argument(
+        "--std-growth",
+        type=float,
+        default=0.10,
+        help="latent std inflation per generation -- the goal here is extending coverage/range, "
+        "not metric accuracy, so this defaults more aggressive than a typical exploration schedule",
+    )
+    p.add_argument(
+        "--max-std",
+        type=float,
+        default=None,
+        help="linear schedule only: cap on current_std (1.0 + std_growth*generation) -- without "
+        "this, generation count and exploration radius are hard-tied together. Set this to "
+        "freeze std at its current level and just keep accumulating at that radius.",
+    )
+    p.add_argument(
+        "--schedule",
+        default="linear",
+        choices=["linear", "cycle"],
+        help="linear: current_std = 1.0 + std_growth*generation (optionally capped by --max-std) -- "
+        "monotonic, so expanding reach and stabilizing hit-rate are mutually exclusive. "
+        "cycle: repeating relax -> expand -> fill phases (see --cycle-*/--relax-std/"
+        "--peak-std-* args) -- periodically bursts std outward to seed new territory, then "
+        "holds at the new peak to consolidate/densify before relaxing and bursting again, "
+        "with the peak itself ratcheting up cycle over cycle.",
+    )
+    p.add_argument(
+        "--cycle-relax-gens",
+        type=int,
+        default=1,
+        help="cycle schedule: generations held at --relax-std (hit-rate recovery, VAE consolidation)",
+    )
+    p.add_argument(
+        "--cycle-expand-gens",
+        type=int,
+        default=2,
+        help="cycle schedule: generations linearly ramping std from --relax-std to that cycle's peak",
+    )
+    p.add_argument(
+        "--cycle-fill-gens",
+        type=int,
+        default=2,
+        help="cycle schedule: generations held at that cycle's peak std (densify the new frontier)",
+    )
+    p.add_argument(
+        "--relax-std",
+        type=float,
+        default=1.5,
+        help="cycle schedule: the low point each cycle relaxes to",
+    )
+    p.add_argument(
+        "--peak-std-start",
+        type=float,
+        default=2.2,
+        help="cycle schedule: peak std for the first cycle",
+    )
+    p.add_argument(
+        "--peak-std-growth",
+        type=float,
+        default=0.2,
+        help="cycle schedule: how much the peak std increases each successive cycle",
+    )
+    p.add_argument(
+        "--directed-frac",
+        type=float,
+        default=0.0,
+        help="fraction of every batch from gradient-directed search toward --directed-target "
+        "(0 = off, matching prior behavior exactly). See module docstring for what this "
+        "does and doesn't guarantee.",
+    )
     p.add_argument("--directed-target", default="max_elongation")
     p.add_argument("--directed-direction", default="min", choices=["min", "max"])
-    p.add_argument("--directed-steps", type=int, default=3,
-                    help="gradient steps per generation for the directed sub-batch (fresh anchors each "
-                         "generation, not a persistent walk across generations)")
-    p.add_argument("--directed-step-size", type=float, default=0.1, help="normalized latent step size")
-    p.add_argument("--surrogate-tag", default="split_vae_prior_augmented_s0",
-                    help="static surrogate checkpoint for --directed-frac -- not retrained each generation")
+    p.add_argument(
+        "--directed-steps",
+        type=int,
+        default=3,
+        help="gradient steps per generation for the directed sub-batch (fresh anchors each "
+        "generation, not a persistent walk across generations)",
+    )
+    p.add_argument(
+        "--directed-step-size",
+        type=float,
+        default=0.1,
+        help="normalized latent step size",
+    )
+    p.add_argument(
+        "--surrogate-tag",
+        default="split_vae_prior_augmented_s0",
+        help="static surrogate checkpoint for --directed-frac -- not retrained each generation",
+    )
     p.add_argument("--sparse-percentile", type=float, default=50.0)
     p.add_argument("--coverage-subsample", type=int, default=3000)
     p.add_argument("--n-workers", type=int, default=28)
@@ -361,22 +481,31 @@ def main():
     latent_dim, hidden = base_ckpt["latent_dim"], base_ckpt["hidden"]
 
     X_sub, assign_sub, sparse_clusters, feat_std = load_coverage_reference(
-        args.sparse_percentile, args.coverage_subsample, rng)
+        args.sparse_percentile, args.coverage_subsample, rng
+    )
 
     surrogate = directed_target_idx = X_anchor_pool = None
     if args.directed_frac > 0:
         from gradient_walk import load_surrogate
+
         surrogate, surrogate_target_names = load_surrogate(args.surrogate_tag)
-        assert surrogate_target_names == target_names, \
+        assert surrogate_target_names == target_names, (
             "surrogate's target order doesn't match target_names.json -- can't trust the target index"
+        )
         directed_target_idx = target_names.index(args.directed_target)
         X_anchor_pool = np.load(OUT_DIR / "X.npy")
-        print(f"[{args.tag}] directed search active: {args.directed_direction} {args.directed_target} "
-              f"({args.directed_frac:.0%} of every batch, {args.directed_steps} steps, "
-              f"surrogate={args.surrogate_tag})")
+        print(
+            f"[{args.tag}] directed search active: {args.directed_direction} {args.directed_target} "
+            f"({args.directed_frac:.0%} of every batch, {args.directed_steps} steps, "
+            f"surrogate={args.surrogate_tag})"
+        )
 
     def _append(path, arrays):
-        arr = np.concatenate([np.load(path)] + arrays) if path.exists() else np.concatenate(arrays)
+        arr = (
+            np.concatenate([np.load(path)] + arrays)
+            if path.exists()
+            else np.concatenate(arrays)
+        )
         np.save(path, arr)
 
     # Auto-resume: a second invocation with the same --tag continues the same
@@ -399,8 +528,10 @@ def main():
         prev_vae_tag = last_record["vae_tag"]
         if last_record.get("schedule") == args.schedule == "cycle":
             start_schedule_gen = last_record.get("schedule_gen", 0) + 1
-        print(f"[{args.tag}] resuming from generation {start_gen} (warm start from {prev_vae_tag}, "
-              f"schedule_gen starting at {start_schedule_gen})")
+        print(
+            f"[{args.tag}] resuming from generation {start_gen} (warm start from {prev_vae_tag}, "
+            f"schedule_gen starting at {start_schedule_gen})"
+        )
 
     for g in range(start_gen, start_gen + args.generations):
         schedule_gen = start_schedule_gen + (g - start_gen)
@@ -409,12 +540,24 @@ def main():
         if (pool_dir / "X.npy").exists():
             extra_x_args = ["--extra-x", str(pool_dir / "X.npy")]
         train_cmd = [
-            sys.executable, "scripts/train_vae.py",
-            "--latent-dim", str(latent_dim), "--hidden", str(hidden),
-            "--epochs", str(args.vae_epochs), "--tag", gen_vae_tag,
-            "--warm-start", prev_vae_tag, "--seed", str(args.seed + g),
+            sys.executable,
+            "scripts/train_vae.py",
+            "--latent-dim",
+            str(latent_dim),
+            "--hidden",
+            str(hidden),
+            "--epochs",
+            str(args.vae_epochs),
+            "--tag",
+            gen_vae_tag,
+            "--warm-start",
+            prev_vae_tag,
+            "--seed",
+            str(args.seed + g),
         ] + extra_x_args
-        print(f"[{args.tag}] generation {g}: retraining VAE -> {gen_vae_tag} (warm start from {prev_vae_tag})")
+        print(
+            f"[{args.tag}] generation {g}: retraining VAE -> {gen_vae_tag} (warm start from {prev_vae_tag})"
+        )
         subprocess.run(train_cmd, check=True)
         prev_vae_tag = gen_vae_tag
 
@@ -424,18 +567,37 @@ def main():
         directed_sampler = None
         if args.directed_frac > 0:
             directed_sampler = make_directed_sampler(
-                current_bundle, surrogate, directed_target_idx, args.directed_direction,
-                args.directed_steps, args.directed_step_size, X_anchor_pool, rng)
+                current_bundle,
+                surrogate,
+                directed_target_idx,
+                args.directed_direction,
+                args.directed_steps,
+                args.directed_step_size,
+                X_anchor_pool,
+                rng,
+            )
         sample_candidates = make_mixed_sampler(
-            anchor_bundle, current_bundle, random_sampler, directed_sampler,
-            args.anchor_frac, args.random_frac, args.directed_frac, current_std, rng)
-        print(f"[{args.tag}] generation {g}: sampling with anchor_frac={args.anchor_frac} "
-              f"random_frac={args.random_frac} directed_frac={args.directed_frac} current_std={current_std:.3f} "
-              f"phase={phase} cycle={cycle_idx} schedule_gen={schedule_gen} for {args.seconds_per_generation:.0f}s")
+            anchor_bundle,
+            current_bundle,
+            random_sampler,
+            directed_sampler,
+            args.anchor_frac,
+            args.random_frac,
+            args.directed_frac,
+            current_std,
+            rng,
+        )
+        print(
+            f"[{args.tag}] generation {g}: sampling with anchor_frac={args.anchor_frac} "
+            f"random_frac={args.random_frac} directed_frac={args.directed_frac} current_std={current_std:.3f} "
+            f"phase={phase} cycle={cycle_idx} schedule_gen={schedule_gen} for {args.seconds_per_generation:.0f}s"
+        )
 
         accepted_X, accepted_Y, gen_idx_acc = [], [], []
         rejected_X, rejected_reason, gen_idx_rej = [], [], []
-        n_attempted = n_accepted = n_reject_structural = n_reject_vmec = n_timeout = n_reject_unknown = 0
+        n_attempted = n_accepted = n_reject_structural = n_reject_vmec = n_timeout = (
+            n_reject_unknown
+        ) = 0
         n_directed_attempted = n_directed_accepted = 0
         directed_measured_values, directed_predicted_values = [], []
         t_start = time.perf_counter()
@@ -444,66 +606,119 @@ def main():
             if accepted_X:
                 _append(pool_dir / "X.npy", [np.stack(accepted_X)])
                 _append(pool_dir / "Y.npy", [np.stack(accepted_Y)])
-                _append(pool_dir / "generation_idx.npy", [np.array(gen_idx_acc, dtype=np.int32)])
-                accepted_X.clear(); accepted_Y.clear(); gen_idx_acc.clear()
+                _append(
+                    pool_dir / "generation_idx.npy",
+                    [np.array(gen_idx_acc, dtype=np.int32)],
+                )
+                accepted_X.clear()
+                accepted_Y.clear()
+                gen_idx_acc.clear()
             if rejected_X:
                 _append(pool_dir / "rejected_X.npy", [np.stack(rejected_X)])
-                _append(pool_dir / "rejected_reason.npy", [np.array(rejected_reason, dtype=np.int8)])
-                _append(pool_dir / "rejected_generation_idx.npy", [np.array(gen_idx_rej, dtype=np.int32)])
-                rejected_X.clear(); rejected_reason.clear(); gen_idx_rej.clear()
+                _append(
+                    pool_dir / "rejected_reason.npy",
+                    [np.array(rejected_reason, dtype=np.int8)],
+                )
+                _append(
+                    pool_dir / "rejected_generation_idx.npy",
+                    [np.array(gen_idx_rej, dtype=np.int32)],
+                )
+                rejected_X.clear()
+                rejected_reason.clear()
+                gen_idx_rej.clear()
                 (pool_dir / "rejected_reason_legend.json").write_text(
-                    json.dumps({v: k for k, v in REJECT_REASON_CODES.items()}, indent=2))
+                    json.dumps({v: k for k, v in REJECT_REASON_CODES.items()}, indent=2)
+                )
 
         gen_accepted_X, gen_accepted_Y = [], []
         while time.perf_counter() - t_start < args.seconds_per_generation:
             candidates, tags = sample_candidates(args.batch_size)
             n_attempted += len(candidates)
-            if directed_sampler is not None and directed_sampler.last_predicted is not None:
-                directed_predicted_values.extend(directed_sampler.last_predicted.tolist())
+            if (
+                directed_sampler is not None
+                and directed_sampler.last_predicted is not None
+            ):
+                directed_predicted_values.extend(
+                    directed_sampler.last_predicted.tolist()
+                )
             # run_batch_with_timeout yields in completion order, not submission
             # order -- match each result back to its sampler tag by exact value.
-            tag_lookup = {(r.tobytes(), z.tobytes(), nfp): tag for (r, z, nfp), tag in zip(candidates, tags)}
-            for ok, r_cos, z_sin, nfp, payload in run_batch_with_timeout(candidates, args.n_workers, args.timeout_seconds):
-                tag = tag_lookup.get((r_cos.tobytes(), z_sin.tobytes(), nfp), "unknown_source")
+            tag_lookup = {
+                (r.tobytes(), z.tobytes(), nfp): tag
+                for (r, z, nfp), tag in zip(candidates, tags)
+            }
+            for ok, r_cos, z_sin, nfp, payload in run_batch_with_timeout(
+                candidates, args.n_workers, args.timeout_seconds
+            ):
+                tag = tag_lookup.get(
+                    (r_cos.tobytes(), z_sin.tobytes(), nfp), "unknown_source"
+                )
                 if tag == "directed":
                     n_directed_attempted += 1
-                row = np.concatenate([r_cos.flatten(), z_sin.flatten(), [float(nfp), 1.0]]).astype(np.float32)
+                row = np.concatenate(
+                    [r_cos.flatten(), z_sin.flatten(), [float(nfp), 1.0]]
+                ).astype(np.float32)
                 if ok:
-                    y = np.array([payload[name] for name in target_names], dtype=np.float64)
-                    if any(v is None for v in y) or not np.all(np.isfinite(y.astype(np.float64))):
+                    y = np.array(
+                        [payload[name] for name in target_names], dtype=np.float64
+                    )
+                    if any(v is None for v in y) or not np.all(
+                        np.isfinite(y.astype(np.float64))
+                    ):
                         n_reject_vmec += 1
-                        rejected_X.append(row); rejected_reason.append(REJECT_REASON_CODES["vmec"]); gen_idx_rej.append(g)
+                        rejected_X.append(row)
+                        rejected_reason.append(REJECT_REASON_CODES["vmec"])
+                        gen_idx_rej.append(g)
                         continue
-                    accepted_X.append(row); accepted_Y.append(y.astype(np.float32)); gen_idx_acc.append(g)
-                    gen_accepted_X.append(row); gen_accepted_Y.append(y)
+                    accepted_X.append(row)
+                    accepted_Y.append(y.astype(np.float32))
+                    gen_idx_acc.append(g)
+                    gen_accepted_X.append(row)
+                    gen_accepted_Y.append(y)
                     n_accepted += 1
                     if tag == "directed":
                         n_directed_accepted += 1
                         directed_measured_values.append(y[directed_target_idx])
                 else:
                     if payload.startswith("structural"):
-                        n_reject_structural += 1; reason = "structural"
+                        n_reject_structural += 1
+                        reason = "structural"
                     elif "timed out" in payload:
-                        n_timeout += 1; reason = "timeout"
+                        n_timeout += 1
+                        reason = "timeout"
                     elif payload.startswith("unknown"):
-                        n_reject_unknown += 1; reason = "unknown"
+                        n_reject_unknown += 1
+                        reason = "unknown"
                     else:
-                        n_reject_vmec += 1; reason = "vmec"
-                    rejected_X.append(row); rejected_reason.append(REJECT_REASON_CODES[reason]); gen_idx_rej.append(g)
+                        n_reject_vmec += 1
+                        reason = "vmec"
+                    rejected_X.append(row)
+                    rejected_reason.append(REJECT_REASON_CODES[reason])
+                    gen_idx_rej.append(g)
 
             elapsed = time.perf_counter() - t_start
-            print(f"[{args.tag}][gen{g}] attempted={n_attempted} accepted={n_accepted} "
-                  f"(hit rate {n_accepted / max(n_attempted, 1):.1%})  "
-                  f"reject: structural={n_reject_structural} vmec={n_reject_vmec} timeout={n_timeout} "
-                  f"unknown={n_reject_unknown}  elapsed={elapsed:.0f}s")
+            print(
+                f"[{args.tag}][gen{g}] attempted={n_attempted} accepted={n_accepted} "
+                f"(hit rate {n_accepted / max(n_attempted, 1):.1%})  "
+                f"reject: structural={n_reject_structural} vmec={n_reject_vmec} timeout={n_timeout} "
+                f"unknown={n_reject_unknown}  elapsed={elapsed:.0f}s"
+            )
 
-            if len(accepted_X) >= args.checkpoint_every or len(rejected_X) >= args.checkpoint_every:
+            if (
+                len(accepted_X) >= args.checkpoint_every
+                or len(rejected_X) >= args.checkpoint_every
+            ):
                 flush()
 
         flush()
 
-        cov = coverage_fraction(np.stack(gen_accepted_X), X_sub, assign_sub, sparse_clusters, feat_std) \
-            if gen_accepted_X else None
+        cov = (
+            coverage_fraction(
+                np.stack(gen_accepted_X), X_sub, assign_sub, sparse_clusters, feat_std
+            )
+            if gen_accepted_X
+            else None
+        )
 
         # Range extension is the actual metric of interest here (broadening the
         # feasible-region prior), not surrogate accuracy -- track how far this
@@ -519,8 +734,10 @@ def main():
             pool_beyond_min = np.maximum(0, real_min - pool_Y.min(axis=0))
             range_extension = {
                 name: {
-                    "gen_beyond_max": float(gen_beyond_max[i]), "gen_beyond_min": float(gen_beyond_min[i]),
-                    "pool_beyond_max": float(pool_beyond_max[i]), "pool_beyond_min": float(pool_beyond_min[i]),
+                    "gen_beyond_max": float(gen_beyond_max[i]),
+                    "gen_beyond_min": float(gen_beyond_min[i]),
+                    "pool_beyond_max": float(pool_beyond_max[i]),
+                    "pool_beyond_min": float(pool_beyond_min[i]),
                 }
                 for i, name in enumerate(target_names)
             }
@@ -528,39 +745,65 @@ def main():
         directed_stats = None
         if args.directed_frac > 0:
             directed_stats = {
-                "target": args.directed_target, "direction": args.directed_direction,
-                "n_attempted": n_directed_attempted, "n_accepted": n_directed_accepted,
+                "target": args.directed_target,
+                "direction": args.directed_direction,
+                "n_attempted": n_directed_attempted,
+                "n_accepted": n_directed_accepted,
                 "hit_rate": n_directed_accepted / max(n_directed_attempted, 1),
                 # predicted = surrogate's own belief, over every attempted directed
                 # candidate; measured = real VMEC++ value, over only the accepted
                 # ones. A large gap between these is the surrogate being wrong,
                 # not the search failing.
-                "predicted_target_mean": float(np.mean(directed_predicted_values)) if directed_predicted_values else None,
-                "measured_target_mean": float(np.mean(directed_measured_values)) if directed_measured_values else None,
+                "predicted_target_mean": float(np.mean(directed_predicted_values))
+                if directed_predicted_values
+                else None,
+                "measured_target_mean": float(np.mean(directed_measured_values))
+                if directed_measured_values
+                else None,
             }
 
         record = {
-            "generation": g, "vae_tag": gen_vae_tag, "current_std": current_std,
-            "schedule": args.schedule, "schedule_gen": schedule_gen, "phase": phase, "cycle_idx": cycle_idx,
-            "n_attempted": n_attempted, "n_accepted": n_accepted,
+            "generation": g,
+            "vae_tag": gen_vae_tag,
+            "current_std": current_std,
+            "schedule": args.schedule,
+            "schedule_gen": schedule_gen,
+            "phase": phase,
+            "cycle_idx": cycle_idx,
+            "n_attempted": n_attempted,
+            "n_accepted": n_accepted,
             "hit_rate": n_accepted / max(n_attempted, 1),
-            "n_reject_structural": n_reject_structural, "n_reject_vmec": n_reject_vmec, "n_timeout": n_timeout,
+            "n_reject_structural": n_reject_structural,
+            "n_reject_vmec": n_reject_vmec,
+            "n_timeout": n_timeout,
             "n_reject_unknown": n_reject_unknown,
             "directed": directed_stats,
             "coverage_fraction_under_covered": cov,
             "range_extension": range_extension,
             "elapsed_seconds": time.perf_counter() - t_start,
-            "pool_size_after": (len(np.load(pool_dir / "X.npy")) if (pool_dir / "X.npy").exists() else 0),
+            "pool_size_after": (
+                len(np.load(pool_dir / "X.npy")) if (pool_dir / "X.npy").exists() else 0
+            ),
         }
         with open(log_path, "a") as f:
             f.write(json.dumps(record) + "\n")
-        directed_summary = (f"  directed: {directed_stats['n_accepted']}/{directed_stats['n_attempted']} "
-                             f"({directed_stats['hit_rate']:.1%})  predicted_{args.directed_target}_mean="
-                             f"{directed_stats['predicted_target_mean']}  measured_{args.directed_target}_mean="
-                             f"{directed_stats['measured_target_mean']}") if directed_stats else ""
-        print(f"[{args.tag}] generation {g} done: {json.dumps(record)}{directed_summary}")
+        directed_summary = (
+            (
+                f"  directed: {directed_stats['n_accepted']}/{directed_stats['n_attempted']} "
+                f"({directed_stats['hit_rate']:.1%})  predicted_{args.directed_target}_mean="
+                f"{directed_stats['predicted_target_mean']}  measured_{args.directed_target}_mean="
+                f"{directed_stats['measured_target_mean']}"
+            )
+            if directed_stats
+            else ""
+        )
+        print(
+            f"[{args.tag}] generation {g} done: {json.dumps(record)}{directed_summary}"
+        )
 
-    print(f"[{args.tag}] all {args.generations} generations complete. pool at {pool_dir}, log at {log_path}")
+    print(
+        f"[{args.tag}] all {args.generations} generations complete. pool at {pool_dir}, log at {log_path}"
+    )
 
 
 if __name__ == "__main__":

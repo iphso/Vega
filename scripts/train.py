@@ -6,11 +6,11 @@ from pathlib import Path
 
 import numpy as np
 import torch
+from soap import SOAP
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-
-from soap import SOAP
-from train_vae import VAE as CoeffVAE, nfp_one_hot as vae_nfp_one_hot
+from train_vae import VAE as CoeffVAE
+from train_vae import nfp_one_hot as vae_nfp_one_hot
 
 OUT_DIR = Path("/work/output")
 CKPT_DIR = Path("/work/checkpoints")
@@ -115,7 +115,9 @@ def contrastive_predicted_label(d, eps=None, log_nu=None):
     """
     if log_nu is not None:
         log_p_win_i, log_p_win_j, log_p_tie = davidson_log_probs(d, log_nu)
-        stacked = torch.stack([log_p_win_j, log_p_tie, log_p_win_i], dim=0)  # order -1,0,+1
+        stacked = torch.stack(
+            [log_p_win_j, log_p_tie, log_p_win_i], dim=0
+        )  # order -1,0,+1
         return stacked.argmax(dim=0).float() - 1.0
     label = torch.zeros_like(d)
     label = torch.where(d > eps, torch.ones_like(d), label)
@@ -154,8 +156,8 @@ def contrastive_eval_metrics(scores, Y, eps, log_nu=None, chunk=512, seed=0):
     total = torch.zeros(T, device=scores.device)
 
     for start in range(0, scores.shape[0] - 1, chunk):
-        s_c = scores[start:start + chunk]
-        y_c = Y[start:start + chunk]
+        s_c = scores[start : start + chunk]
+        y_c = Y[start : start + chunk]
         if s_c.shape[0] < 2:
             continue
         i_idx, j_idx, true_label = all_pairs_labels(y_c, eps)
@@ -185,7 +187,9 @@ def contrastive_eval_metrics(scores, Y, eps, log_nu=None, chunk=512, seed=0):
     }
 
 
-def contrastive_ensemble_eval_metrics(member_scores, member_log_nus, Y, eps, chunk=512, seed=0):
+def contrastive_ensemble_eval_metrics(
+    member_scores, member_log_nus, Y, eps, chunk=512, seed=0
+):
     """Same metrics as contrastive_eval_metrics, but for an ensemble of
     independently-trained contrastive models. Each member has its own score
     scale and its own learned log_nu (they're not calibrated to a shared
@@ -218,7 +222,7 @@ def contrastive_ensemble_eval_metrics(member_scores, member_log_nus, Y, eps, chu
 
     n = Y.shape[0]
     for start in range(0, n - 1, chunk):
-        y_c = Y[start:start + chunk]
+        y_c = Y[start : start + chunk]
         if y_c.shape[0] < 2:
             continue
         i_idx, j_idx, true_label = all_pairs_labels(y_c, eps)
@@ -227,7 +231,7 @@ def contrastive_ensemble_eval_metrics(member_scores, member_log_nus, Y, eps, chu
         p_win_j = torch.zeros_like(true_label)
         p_tie = torch.zeros_like(true_label)
         for scores, log_nu in zip(member_scores, member_log_nus):
-            s_c = scores[start:start + chunk]
+            s_c = scores[start : start + chunk]
             d = s_c[i_idx] - s_c[j_idx]
             log_p_win_i, log_p_win_j, log_p_tie = davidson_log_probs(d, log_nu)
             p_win_i += log_p_win_i.exp()
@@ -308,11 +312,17 @@ class HalfSirenBlock(nn.Module):
     recombine at every layer, not just once at the very end.
     """
 
-    def __init__(self, in_dim, out_dim, is_first=False, first_omega=30.0, hidden_omega=1.0):
+    def __init__(
+        self, in_dim, out_dim, is_first=False, first_omega=30.0, hidden_omega=1.0
+    ):
         super().__init__()
         half_out = out_dim // 2
-        self.sine = SineLayer(in_dim, half_out, is_first=is_first,
-                               omega_0=first_omega if is_first else hidden_omega)
+        self.sine = SineLayer(
+            in_dim,
+            half_out,
+            is_first=is_first,
+            omega_0=first_omega if is_first else hidden_omega,
+        )
         self.relu = nn.Sequential(nn.Linear(in_dim, out_dim - half_out), nn.ReLU())
 
     def forward(self, x):
@@ -326,13 +336,22 @@ class HalfSirenTrunk(nn.Module):
     design, this lets sine and ReLU features mix across every layer.
     """
 
-    def __init__(self, in_dim, hidden, latent_dim, n_blocks=3, first_omega=30.0, hidden_omega=1.0):
+    def __init__(
+        self, in_dim, hidden, latent_dim, n_blocks=3, first_omega=30.0, hidden_omega=1.0
+    ):
         super().__init__()
         blocks = []
         d_in = in_dim
         for i in range(n_blocks):
-            blocks.append(HalfSirenBlock(d_in, hidden, is_first=(i == 0),
-                                          first_omega=first_omega, hidden_omega=hidden_omega))
+            blocks.append(
+                HalfSirenBlock(
+                    d_in,
+                    hidden,
+                    is_first=(i == 0),
+                    first_omega=first_omega,
+                    hidden_omega=hidden_omega,
+                )
+            )
             d_in = hidden
         self.blocks = nn.Sequential(*blocks)
         self.out_proj = nn.Linear(hidden, latent_dim)
@@ -355,8 +374,11 @@ class ModeAttentionEncoder(nn.Module):
         self.extra_proj = nn.Linear(2, d_model)
         self.pos_embed = nn.Parameter(torch.randn(N_COEFFS, d_model) * 0.02)
         encoder_layer = nn.TransformerEncoderLayer(
-            d_model=d_model, nhead=n_heads, dim_feedforward=d_model * 4,
-            batch_first=True, activation="relu",
+            d_model=d_model,
+            nhead=n_heads,
+            dim_feedforward=d_model * 4,
+            batch_first=True,
+            activation="relu",
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=n_layers)
         self.out_proj = nn.Linear(d_model, latent_dim)
@@ -367,7 +389,7 @@ class ModeAttentionEncoder(nn.Module):
         tokens = torch.stack([r_cos, z_sin], dim=-1)  # (batch, 45, 2)
         tokens = self.token_proj(tokens) + self.pos_embed.unsqueeze(0)
 
-        extra = x[:, IDX_NFP:IDX_NFP + 2]  # n_field_periods, symmetry flag
+        extra = x[:, IDX_NFP : IDX_NFP + 2]  # n_field_periods, symmetry flag
         extra_tok = self.extra_proj(extra).unsqueeze(1)
         tokens = torch.cat([tokens, extra_tok], dim=1)  # (batch, 46, d_model)
 
@@ -412,13 +434,15 @@ class SpatialEncoderCNN(nn.Module):
         n_pools = 0
         for c_out in channels:
             layers += [
-                nn.Conv2d(c_in, c_out, kernel_size=3, padding=1, padding_mode="circular"),
+                nn.Conv2d(
+                    c_in, c_out, kernel_size=3, padding=1, padding_mode="circular"
+                ),
                 nn.ReLU(),
                 nn.AvgPool2d(2),
             ]
             c_in = c_out
             n_pools += 1
-        assert grid_nu % (2 ** n_pools) == 0 and grid_nv % (2 ** n_pools) == 0, (
+        assert grid_nu % (2**n_pools) == 0 and grid_nv % (2**n_pools) == 0, (
             "GRID_NU/GRID_NV must be divisible by 2**len(channels) for this pooling schedule"
         )
         self.conv = nn.Sequential(*layers)
@@ -469,18 +493,35 @@ class DualPathMLP(nn.Module):
       directly is a much harder function to fit than its log.
     """
 
-    def __init__(self, in_dim, n_targets, latent_dim=128, hidden=256, spatial_latent=64,
-                 head_hidden=64, priority_weight=None, use_spatial=True, trunk_arch="mlp",
-                 trunk_blocks=3, use_symlog_latent=False, log_target_mask=None,
-                 objective="regression", noise_floor_eps=None):
+    def __init__(
+        self,
+        in_dim,
+        n_targets,
+        latent_dim=128,
+        hidden=256,
+        spatial_latent=64,
+        head_hidden=64,
+        priority_weight=None,
+        use_spatial=True,
+        trunk_arch="mlp",
+        trunk_blocks=3,
+        use_symlog_latent=False,
+        log_target_mask=None,
+        objective="regression",
+        noise_floor_eps=None,
+    ):
         super().__init__()
         self.objective = objective
         self.use_spatial = use_spatial
         self.use_symlog_latent = use_symlog_latent
-        self.trunk_spectral = build_spectral_trunk(trunk_arch, in_dim, hidden, latent_dim, n_blocks=trunk_blocks)
+        self.trunk_spectral = build_spectral_trunk(
+            trunk_arch, in_dim, hidden, latent_dim, n_blocks=trunk_blocks
+        )
 
         if use_spatial:
-            self.spatial_encoder = SpatialEncoderCNN(GRID_NU, GRID_NV, out_dim=spatial_latent)
+            self.spatial_encoder = SpatialEncoderCNN(
+                GRID_NU, GRID_NV, out_dim=spatial_latent
+            )
             combined_dim = latent_dim + spatial_latent
         else:
             self.spatial_encoder = None
@@ -495,10 +536,16 @@ class DualPathMLP(nn.Module):
         # a scalar equilibrium property isn't necessarily a linear function
         # of the fused latent, and a single Linear(latent, 1) was likely
         # underfitting the harder targets.
-        self.heads = nn.ModuleList([
-            nn.Sequential(nn.Linear(head_in_dim, head_hidden), nn.ReLU(), nn.Linear(head_hidden, 1))
-            for _ in range(n_targets)
-        ])
+        self.heads = nn.ModuleList(
+            [
+                nn.Sequential(
+                    nn.Linear(head_in_dim, head_hidden),
+                    nn.ReLU(),
+                    nn.Linear(head_hidden, 1),
+                )
+                for _ in range(n_targets)
+            ]
+        )
         self.log_vars = nn.Parameter(torch.zeros(n_targets))
         if objective == "contrastive":
             # Learned per-target log tie-propensity for the Davidson pairwise
@@ -506,7 +553,9 @@ class DualPathMLP(nn.Module):
             # present, for contrastively-trained checkpoints so old
             # regression checkpoints keep loading with a strict state dict.
             self.log_nu = nn.Parameter(torch.zeros(n_targets))
-            assert noise_floor_eps is not None, "contrastive objective requires noise_floor_eps"
+            assert noise_floor_eps is not None, (
+                "contrastive objective requires noise_floor_eps"
+            )
             self.register_buffer("noise_floor_eps", noise_floor_eps)
         if priority_weight is None:
             priority_weight = torch.ones(n_targets)
@@ -516,7 +565,9 @@ class DualPathMLP(nn.Module):
         self.register_buffer("log_target_mask", log_target_mask)
 
         m = torch.arange(N_MODES_M).float()
-        n = torch.arange(N_MODES_N).float() - (N_MODES_N - 1) / 2  # centered, e.g. -4..4
+        n = (
+            torch.arange(N_MODES_N).float() - (N_MODES_N - 1) / 2
+        )  # centered, e.g. -4..4
         theta = torch.arange(GRID_NU).float() / GRID_NU * 2 * math.pi
         zeta = torch.arange(GRID_NV).float() / GRID_NV * 2 * math.pi
         self.register_buffer("m_grid", m)
@@ -572,17 +623,23 @@ class DualPathMLP(nn.Module):
         else:
             target_train = target
 
-        sq_err = (pred - target_train) ** 2  # (batch, n_targets), mixed log/physical space
+        sq_err = (
+            pred - target_train
+        ) ** 2  # (batch, n_targets), mixed log/physical space
         per_task_mse = sq_err.mean(dim=0)  # (n_targets,)
         precision = torch.exp(-self.log_vars)
         # priority_weight is a fixed (non-learned) multiplier on top of the
         # automatically-learned uncertainty weight, for targets we care
         # about more than the automatic scheme alone would reflect.
-        per_task_loss = self.priority_weight * (precision * per_task_mse + self.log_vars)
+        per_task_loss = self.priority_weight * (
+            precision * per_task_mse + self.log_vars
+        )
 
         if self.log_target_mask.any():
             pred_phys = pred.clone()
-            pred_phys[:, self.log_target_mask] = torch.exp(pred[:, self.log_target_mask])
+            pred_phys[:, self.log_target_mask] = torch.exp(
+                pred[:, self.log_target_mask]
+            )
             per_task_mse_report = ((pred_phys - target) ** 2).mean(dim=0).detach()
         else:
             per_task_mse_report = per_task_mse.detach()
@@ -633,7 +690,8 @@ class DualPathMLP(nn.Module):
         d = scores[i_idx] - scores[j_idx]
         log_p_win_i, log_p_win_j, log_p_tie = davidson_log_probs(d, self.log_nu)
         nll = torch.where(
-            true_label > 0.5, -log_p_win_i,
+            true_label > 0.5,
+            -log_p_win_i,
             torch.where(true_label < -0.5, -log_p_win_j, -log_p_tie),
         )
         mask_win_i = (true_label > 0.5).float()
@@ -660,7 +718,9 @@ class DualPathMLP(nn.Module):
         w_win_j = n_win_j ** (1 - alpha_k)
         w_tie = n_tie ** (1 - alpha_k)
         w_sum = w_win_i + w_win_j + w_tie
-        per_task_loss = (w_win_i * mean_win_i + w_win_j * mean_win_j + w_tie * mean_tie) / w_sum
+        per_task_loss = (
+            w_win_i * mean_win_i + w_win_j * mean_win_j + w_tie * mean_tie
+        ) / w_sum
         return per_task_loss.sum(), per_task_loss.detach()
 
 
@@ -671,7 +731,9 @@ def load_split(name, data_dir=None):
 
 def load_frozen_vae(tag, device):
     ckpt = torch.load(CKPT_DIR / f"{tag}.pt", map_location=device)
-    vae = CoeffVAE(coeff_dim=90, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"]).to(device)
+    vae = CoeffVAE(
+        coeff_dim=90, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"]
+    ).to(device)
     vae.load_state_dict(ckpt["model_state_dict"])
     vae.eval()
     for param in vae.parameters():
@@ -692,13 +754,13 @@ def vae_latent_features(X, vae, coeff_mean, coeff_std, device, batch=8192):
     mus = []
     with torch.no_grad():
         for start in range(0, X.shape[0], batch):
-            xb = X[start:start + batch].to(device)
+            xb = X[start : start + batch].to(device)
             coeffs = (xb[:, :90] - coeff_mean) / coeff_std
             cond = vae_nfp_one_hot(xb[:, IDX_NFP])
             mu, _ = vae.encode(coeffs, cond)
             mus.append(mu.cpu())
     latent = torch.cat(mus, dim=0)
-    return torch.cat([latent, X[:, IDX_NFP:IDX_NFP + 2]], dim=1)
+    return torch.cat([latent, X[:, IDX_NFP : IDX_NFP + 2]], dim=1)
 
 
 def compute_geom_features(X, grid_nu=16, grid_nv=16, chunk=4096):
@@ -712,13 +774,19 @@ def compute_geom_features(X, grid_nu=16, grid_nv=16, chunk=4096):
     per-batch during training, since it's a fixed deterministic transform.
     """
     m = torch.arange(N_MODES_M).float().view(1, N_MODES_M, 1, 1, 1)
-    n = (torch.arange(N_MODES_N).float() - (N_MODES_N - 1) / 2).view(1, 1, N_MODES_N, 1, 1)
-    theta = (torch.arange(grid_nu).float() / grid_nu * 2 * math.pi).view(1, 1, 1, grid_nu, 1)
-    zeta = (torch.arange(grid_nv).float() / grid_nv * 2 * math.pi).view(1, 1, 1, 1, grid_nv)
+    n = (torch.arange(N_MODES_N).float() - (N_MODES_N - 1) / 2).view(
+        1, 1, N_MODES_N, 1, 1
+    )
+    theta = (torch.arange(grid_nu).float() / grid_nu * 2 * math.pi).view(
+        1, 1, 1, grid_nu, 1
+    )
+    zeta = (torch.arange(grid_nv).float() / grid_nv * 2 * math.pi).view(
+        1, 1, 1, 1, grid_nv
+    )
 
     feats_list = []
     for start in range(0, X.shape[0], chunk):
-        Xc = X[start:start + chunk]
+        Xc = X[start : start + chunk]
         r_cos = Xc[:, IDX_R_COS].view(-1, N_MODES_M, N_MODES_N)
         z_sin = Xc[:, IDX_Z_SIN].view(-1, N_MODES_M, N_MODES_N)
         nfp = Xc[:, IDX_NFP].view(-1, 1, 1, 1, 1)
@@ -732,13 +800,22 @@ def compute_geom_features(X, grid_nu=16, grid_nv=16, chunk=4096):
         R_mean_theta = R.mean(dim=1)
         Z_mean_theta = Z.mean(dim=1)
 
-        feats = torch.stack([
-            R_range.mean(1), R_range.amax(1), R_range.amin(1),
-            Z_range.mean(1), Z_range.amax(1), Z_range.amin(1),
-            elong_proxy.mean(1), elong_proxy.amax(1),
-            R_mean_theta.mean(1), R_mean_theta.std(1),
-            Z_mean_theta.std(1),
-        ], dim=1)  # (batch, 11)
+        feats = torch.stack(
+            [
+                R_range.mean(1),
+                R_range.amax(1),
+                R_range.amin(1),
+                Z_range.mean(1),
+                Z_range.amax(1),
+                Z_range.amin(1),
+                elong_proxy.mean(1),
+                elong_proxy.amax(1),
+                R_mean_theta.mean(1),
+                R_mean_theta.std(1),
+                Z_mean_theta.std(1),
+            ],
+            dim=1,
+        )  # (batch, 11)
         feats_list.append(feats)
     return torch.cat(feats_list, dim=0)
 
@@ -765,18 +842,24 @@ def print_breakdown(label, mse, target_names):
 
 
 def print_contrastive_breakdown(label, per_task_nll, target_names):
-    print(f"  per-target {label} class-balanced pairwise NLL (nats, Davidson tie model):")
+    print(
+        f"  per-target {label} class-balanced pairwise NLL (nats, Davidson tie model):"
+    )
     for name, v in zip(target_names, per_task_nll):
         print(f"    {name:55s} {v.item():12.5g}")
 
 
 def print_contrastive_metrics(label, metrics, target_names):
     print(f"  per-target {label} contrastive metrics:")
-    print(f"    {'target':55s} {'acc3':>8s} {'concord':>8s} {'tie_P':>8s} {'tie_R':>8s} {'tie_rate':>8s}")
+    print(
+        f"    {'target':55s} {'acc3':>8s} {'concord':>8s} {'tie_P':>8s} {'tie_R':>8s} {'tie_rate':>8s}"
+    )
     for k, name in enumerate(target_names):
-        print(f"    {name:55s} {metrics['acc3'][k]:8.4f} {metrics['concordance'][k]:8.4f} "
-              f"{metrics['tie_precision'][k]:8.4f} {metrics['tie_recall'][k]:8.4f} "
-              f"{metrics['tie_rate_true'][k]:8.4f}")
+        print(
+            f"    {name:55s} {metrics['acc3'][k]:8.4f} {metrics['concordance'][k]:8.4f} "
+            f"{metrics['tie_precision'][k]:8.4f} {metrics['tie_recall'][k]:8.4f} "
+            f"{metrics['tie_rate_true'][k]:8.4f}"
+        )
 
 
 def make_normalized_mse_loss(target_mean, target_std):
@@ -787,6 +870,7 @@ def make_normalized_mse_loss(target_mean, target_std):
     physical units first, so it stays comparable to every other RMSE number
     in EXPERIMENT_LOG regardless of what space the model was trained in.
     """
+
     def loss_fn(pred, target_norm):
         per_task_mse_norm = ((pred - target_norm) ** 2).mean(dim=0)
         loss = per_task_mse_norm.sum()
@@ -794,6 +878,7 @@ def make_normalized_mse_loss(target_mean, target_std):
         target_phys = target_norm * target_std + target_mean
         per_task_mse_report = ((pred_phys - target_phys) ** 2).mean(dim=0).detach()
         return loss, per_task_mse_report
+
     return loss_fn
 
 
@@ -802,89 +887,162 @@ def main():
     p.add_argument("--epochs", type=int, default=50)
     p.add_argument("--batch", type=int, default=256)
     p.add_argument("--lr", type=float, default=1e-3)
-    p.add_argument("--optimizer", default="adam", choices=["adam", "soap"],
-                    help="adam: existing default. soap: Shampoo-preconditioned Adam "
-                         "(https://arxiv.org/abs/2409.11321, scripts/soap.py) -- second-order-ish, "
-                         "usually wants a higher lr than Adam (paper default 3e-3) and has real "
-                         "per-step overhead from eigh/QR on each layer's preconditioner.")
+    p.add_argument(
+        "--optimizer",
+        default="adam",
+        choices=["adam", "soap"],
+        help="adam: existing default. soap: Shampoo-preconditioned Adam "
+        "(https://arxiv.org/abs/2409.11321, scripts/soap.py) -- second-order-ish, "
+        "usually wants a higher lr than Adam (paper default 3e-3) and has real "
+        "per-step overhead from eigh/QR on each layer's preconditioner.",
+    )
     p.add_argument("--soap-weight-decay", type=float, default=0.01)
-    p.add_argument("--soap-precondition-frequency", type=int, default=50,
-                    help="how often (in steps) to refresh the preconditioner eigenbasis via QR. "
-                         "Profiled: 10->50 alone is roughly a 1.6x step-time speedup at hidden=2048.")
-    p.add_argument("--soap-max-precond-dim", type=int, default=1024,
-                    help="skip preconditioning any parameter axis wider than this (falls back to "
-                         "plain per-axis Adam-like scaling on that axis, no rotation). This is the "
-                         "big lever: an axis this wide costs an O(dim^3) outer-product update EVERY "
-                         "step, not just at each precondition_frequency refresh -- capping below the "
-                         "current 2048-wide trunk layers cut per-step time roughly in half by itself.")
-    p.add_argument("--soap-normalize-grads", action="store_true",
-                    help="per SOAP's own docs, helps at large precondition_frequency (~100) but hurts "
-                         "at small (~10) -- off by default since our default frequency (50) is in between "
-                         "and untested either way.")
-    p.add_argument("--soap-linalg-backend", default="default", choices=["default", "magma"],
-                    help="torch.backends.cuda.preferred_linalg_library() for SOAP's eigh/QR calls. "
-                         "'default' (cusolver) is faster but crashes (illegal CUDA memory access) on "
-                         "~2048x2048+ matrices in this project's pytorch/cuda image -- only needed if "
-                         "--soap-max-precond-dim is raised back up past ~1536 or so.")
+    p.add_argument(
+        "--soap-precondition-frequency",
+        type=int,
+        default=50,
+        help="how often (in steps) to refresh the preconditioner eigenbasis via QR. "
+        "Profiled: 10->50 alone is roughly a 1.6x step-time speedup at hidden=2048.",
+    )
+    p.add_argument(
+        "--soap-max-precond-dim",
+        type=int,
+        default=1024,
+        help="skip preconditioning any parameter axis wider than this (falls back to "
+        "plain per-axis Adam-like scaling on that axis, no rotation). This is the "
+        "big lever: an axis this wide costs an O(dim^3) outer-product update EVERY "
+        "step, not just at each precondition_frequency refresh -- capping below the "
+        "current 2048-wide trunk layers cut per-step time roughly in half by itself.",
+    )
+    p.add_argument(
+        "--soap-normalize-grads",
+        action="store_true",
+        help="per SOAP's own docs, helps at large precondition_frequency (~100) but hurts "
+        "at small (~10) -- off by default since our default frequency (50) is in between "
+        "and untested either way.",
+    )
+    p.add_argument(
+        "--soap-linalg-backend",
+        default="default",
+        choices=["default", "magma"],
+        help="torch.backends.cuda.preferred_linalg_library() for SOAP's eigh/QR calls. "
+        "'default' (cusolver) is faster but crashes (illegal CUDA memory access) on "
+        "~2048x2048+ matrices in this project's pytorch/cuda image -- only needed if "
+        "--soap-max-precond-dim is raised back up past ~1536 or so.",
+    )
     p.add_argument("--hidden", type=int, default=256)
     p.add_argument("--latent", type=int, default=128)
     p.add_argument("--spatial-latent", type=int, default=64)
     p.add_argument("--head-hidden", type=int, default=64)
-    p.add_argument("--val-interval", type=int, default=5, help="epochs between validation passes")
-    p.add_argument("--priority-target", default=None,
-                    help="optional target name to upweight in the loss beyond the automatic "
-                         "uncertainty weighting -- off by default, this skews the objective and "
-                         "isn't a fair architecture comparison")
+    p.add_argument(
+        "--val-interval", type=int, default=5, help="epochs between validation passes"
+    )
+    p.add_argument(
+        "--priority-target",
+        default=None,
+        help="optional target name to upweight in the loss beyond the automatic "
+        "uncertainty weighting -- off by default, this skews the objective and "
+        "isn't a fair architecture comparison",
+    )
     p.add_argument("--priority-weight", type=float, default=1.0)
-    p.add_argument("--no-spatial", action="store_true",
-                    help="disable the spatial (IFFT + CNN) branch -- plain single-path MLP")
-    p.add_argument("--trunk-arch", default="mlp", choices=["mlp", "siren", "half_siren", "attention"],
-                    help="spectral-branch trunk architecture")
-    p.add_argument("--trunk-blocks", type=int, default=3, help="number of chained blocks for half_siren")
-    p.add_argument("--geom-features", action="store_true",
-                    help="augment input with derived geometric summary stats of the reconstructed boundary")
-    p.add_argument("--symlog-latent", action="store_true",
-                    help="concat symlog(z) onto the latent before heads")
-    p.add_argument("--log-targets", action="store_true",
-                    help="predict log(target) for wide-dynamic-range targets (see LOG_TARGET_NAMES)")
-    p.add_argument("--objective", default="regression", choices=["regression", "contrastive"],
-                    help="regression: fit target values directly (default). contrastive: train the "
-                         "same per-target heads as a pairwise bigger/smaller/basically-the-same "
-                         "comparator via a Davidson tie model over in-batch pairs, instead of "
-                         "matching absolute values. Forces single-path (--no-spatial) -- trunk-arch "
-                         "comparison only, per current scope.")
-    p.add_argument("--tie-weight-cap", type=float, default=5.0,
-                    help="contrastive objective only: caps the effective majority:minority "
-                         "per-class loss weight ratio at this value, per target, derived live from "
-                         "each target's own in-batch class counts -- rather than one flat "
-                         "reweighting strength for every target regardless of how rare its ties "
-                         "actually are. See contrastive_loss docstring.")
-    p.add_argument("--normalize-inputs", action="store_true",
-                    help="standardize the 92 input features (per-feature mean/std from the TRAIN "
-                         "split only) before feeding the trunk. Project default has been not to "
-                         "(inputs already zero-mean, O(0.01-0.4), see metadata.json) -- this flag "
-                         "exists to actually test that assumption rather than continue to assume it.")
-    p.add_argument("--normalize-targets", action="store_true",
-                    help="z-score targets (per-target mean/std from the TRAIN split only) and train "
-                         "with a plain unweighted MSE sum instead of the learned uncertainty-weighted "
-                         "loss -- tests the project's other standing assumption (raw physical units + "
-                         "learned per-task weighting beats normalization). Regression objective only. "
-                         "Reported RMSE is always un-normalized back to physical units for comparability "
-                         "with every other number in EXPERIMENT_LOG.")
-    p.add_argument("--vae-latent-input", default=None,
-                    help="Checkpoint tag of a pretrained VAE (scripts/train_vae.py); if set, the trunk "
-                         "sees [vae.encode(coeffs).mu, n_field_periods, symmetry_flag] instead of the raw "
-                         "92-dim input -- the VAE is frozen (not finetuned), used purely as a fixed "
-                         "dimensionality-reducing feature transform. Requires --no-spatial (the spatial "
-                         "branch needs the raw r_cos/z_sin grid, which doesn't exist in latent space) and "
-                         "is incompatible with --geom-features (also raw-coefficient-derived).")
-    p.add_argument("--tag", default="best", help="checkpoint filename stem, for running multiple experiments without clobbering each other")
-    p.add_argument("--seed", type=int, default=None,
-                    help="random seed for model init + data shuffling, for noise-floor / repeatability checks")
-    p.add_argument("--split", default=None,
-                    help="load train/val/test.npz from output/splits/<split>/ instead of the default "
-                         "output/ location. 'random'/'group'/'cluster' come from scripts/make_splits.py; "
-                         "any other directory under output/splits/ (e.g. a manually-augmented one) works too.")
+    p.add_argument(
+        "--no-spatial",
+        action="store_true",
+        help="disable the spatial (IFFT + CNN) branch -- plain single-path MLP",
+    )
+    p.add_argument(
+        "--trunk-arch",
+        default="mlp",
+        choices=["mlp", "siren", "half_siren", "attention"],
+        help="spectral-branch trunk architecture",
+    )
+    p.add_argument(
+        "--trunk-blocks",
+        type=int,
+        default=3,
+        help="number of chained blocks for half_siren",
+    )
+    p.add_argument(
+        "--geom-features",
+        action="store_true",
+        help="augment input with derived geometric summary stats of the reconstructed boundary",
+    )
+    p.add_argument(
+        "--symlog-latent",
+        action="store_true",
+        help="concat symlog(z) onto the latent before heads",
+    )
+    p.add_argument(
+        "--log-targets",
+        action="store_true",
+        help="predict log(target) for wide-dynamic-range targets (see LOG_TARGET_NAMES)",
+    )
+    p.add_argument(
+        "--objective",
+        default="regression",
+        choices=["regression", "contrastive"],
+        help="regression: fit target values directly (default). contrastive: train the "
+        "same per-target heads as a pairwise bigger/smaller/basically-the-same "
+        "comparator via a Davidson tie model over in-batch pairs, instead of "
+        "matching absolute values. Forces single-path (--no-spatial) -- trunk-arch "
+        "comparison only, per current scope.",
+    )
+    p.add_argument(
+        "--tie-weight-cap",
+        type=float,
+        default=5.0,
+        help="contrastive objective only: caps the effective majority:minority "
+        "per-class loss weight ratio at this value, per target, derived live from "
+        "each target's own in-batch class counts -- rather than one flat "
+        "reweighting strength for every target regardless of how rare its ties "
+        "actually are. See contrastive_loss docstring.",
+    )
+    p.add_argument(
+        "--normalize-inputs",
+        action="store_true",
+        help="standardize the 92 input features (per-feature mean/std from the TRAIN "
+        "split only) before feeding the trunk. Project default has been not to "
+        "(inputs already zero-mean, O(0.01-0.4), see metadata.json) -- this flag "
+        "exists to actually test that assumption rather than continue to assume it.",
+    )
+    p.add_argument(
+        "--normalize-targets",
+        action="store_true",
+        help="z-score targets (per-target mean/std from the TRAIN split only) and train "
+        "with a plain unweighted MSE sum instead of the learned uncertainty-weighted "
+        "loss -- tests the project's other standing assumption (raw physical units + "
+        "learned per-task weighting beats normalization). Regression objective only. "
+        "Reported RMSE is always un-normalized back to physical units for comparability "
+        "with every other number in EXPERIMENT_LOG.",
+    )
+    p.add_argument(
+        "--vae-latent-input",
+        default=None,
+        help="Checkpoint tag of a pretrained VAE (scripts/train_vae.py); if set, the trunk "
+        "sees [vae.encode(coeffs).mu, n_field_periods, symmetry_flag] instead of the raw "
+        "92-dim input -- the VAE is frozen (not finetuned), used purely as a fixed "
+        "dimensionality-reducing feature transform. Requires --no-spatial (the spatial "
+        "branch needs the raw r_cos/z_sin grid, which doesn't exist in latent space) and "
+        "is incompatible with --geom-features (also raw-coefficient-derived).",
+    )
+    p.add_argument(
+        "--tag",
+        default="best",
+        help="checkpoint filename stem, for running multiple experiments without clobbering each other",
+    )
+    p.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="random seed for model init + data shuffling, for noise-floor / repeatability checks",
+    )
+    p.add_argument(
+        "--split",
+        default=None,
+        help="load train/val/test.npz from output/splits/<split>/ instead of the default "
+        "output/ location. 'random'/'group'/'cluster' come from scripts/make_splits.py; "
+        "any other directory under output/splits/ (e.g. a manually-augmented one) works too.",
+    )
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = p.parse_args()
 
@@ -901,11 +1059,15 @@ def main():
 
     if args.vae_latent_input:
         assert args.no_spatial, "--vae-latent-input requires --no-spatial"
-        assert not args.geom_features, "--vae-latent-input is incompatible with --geom-features"
+        assert not args.geom_features, (
+            "--vae-latent-input is incompatible with --geom-features"
+        )
         vae, vae_coeff_mean, vae_coeff_std = load_frozen_vae(args.vae_latent_input, dev)
         X_train = vae_latent_features(X_train, vae, vae_coeff_mean, vae_coeff_std, dev)
         X_val = vae_latent_features(X_val, vae, vae_coeff_mean, vae_coeff_std, dev)
-        print(f"[{args.tag}] vae_latent_input={args.vae_latent_input}  in_dim={X_train.shape[1]} (was 92)")
+        print(
+            f"[{args.tag}] vae_latent_input={args.vae_latent_input}  in_dim={X_train.shape[1]} (was 92)"
+        )
 
     # Project default has been no input/target normalization (see
     # EXPERIMENT_LOG methodology notes) -- stats computed from TRAIN only,
@@ -919,7 +1081,9 @@ def main():
 
     target_mean = target_std = None
     if args.normalize_targets:
-        assert args.objective == "regression", "--normalize-targets only applies to the regression objective"
+        assert args.objective == "regression", (
+            "--normalize-targets only applies to the regression objective"
+        )
         target_mean = Y_train.mean(dim=0)
         target_std = Y_train.std(dim=0).clamp_min(1e-6)
         Y_train = (Y_train - target_mean) / target_std
@@ -929,8 +1093,12 @@ def main():
         X_train = torch.cat([X_train, compute_geom_features(X_train)], dim=1)
         X_val = torch.cat([X_val, compute_geom_features(X_val)], dim=1)
 
-    train_loader = DataLoader(TensorDataset(X_train, Y_train), batch_size=args.batch, shuffle=True)
-    val_loader = DataLoader(TensorDataset(X_val, Y_val), batch_size=args.batch, shuffle=False)
+    train_loader = DataLoader(
+        TensorDataset(X_train, Y_train), batch_size=args.batch, shuffle=True
+    )
+    val_loader = DataLoader(
+        TensorDataset(X_val, Y_val), batch_size=args.batch, shuffle=False
+    )
 
     n_targets = Y_train.shape[1]
     priority_weight = torch.ones(n_targets)
@@ -946,29 +1114,45 @@ def main():
     eps = None
     if args.objective == "contrastive":
         if use_spatial:
-            print("[contrastive] forcing single-path (--no-spatial) -- trunk-arch comparison only")
+            print(
+                "[contrastive] forcing single-path (--no-spatial) -- trunk-arch comparison only"
+            )
             use_spatial = False
         eps = noise_floor_eps(target_names).to(dev)
 
     model = DualPathMLP(
-        X_train.shape[1], n_targets,
-        latent_dim=args.latent, hidden=args.hidden, spatial_latent=args.spatial_latent,
-        head_hidden=args.head_hidden, priority_weight=priority_weight,
-        use_spatial=use_spatial, trunk_arch=args.trunk_arch, trunk_blocks=args.trunk_blocks,
-        use_symlog_latent=args.symlog_latent, log_target_mask=log_target_mask,
-        objective=args.objective, noise_floor_eps=eps,
+        X_train.shape[1],
+        n_targets,
+        latent_dim=args.latent,
+        hidden=args.hidden,
+        spatial_latent=args.spatial_latent,
+        head_hidden=args.head_hidden,
+        priority_weight=priority_weight,
+        use_spatial=use_spatial,
+        trunk_arch=args.trunk_arch,
+        trunk_blocks=args.trunk_blocks,
+        use_symlog_latent=args.symlog_latent,
+        log_target_mask=log_target_mask,
+        objective=args.objective,
+        noise_floor_eps=eps,
     ).to(dev)
     if args.optimizer == "soap":
         torch.backends.cuda.preferred_linalg_library(args.soap_linalg_backend)
-        opt = SOAP(model.parameters(), lr=args.lr, weight_decay=args.soap_weight_decay,
-                   precondition_frequency=args.soap_precondition_frequency,
-                   max_precond_dim=args.soap_max_precond_dim,
-                   normalize_grads=args.soap_normalize_grads)
+        opt = SOAP(
+            model.parameters(),
+            lr=args.lr,
+            weight_decay=args.soap_weight_decay,
+            precondition_frequency=args.soap_precondition_frequency,
+            max_precond_dim=args.soap_max_precond_dim,
+            normalize_grads=args.soap_normalize_grads,
+        )
     else:
         opt = torch.optim.Adam(model.parameters(), lr=args.lr)
 
     if args.objective == "contrastive":
-        loss_fn = lambda pred, yb: model.contrastive_loss(pred, yb, weight_cap=args.tie_weight_cap)
+        loss_fn = lambda pred, yb: model.contrastive_loss(
+            pred, yb, weight_cap=args.tie_weight_cap
+        )
         breakdown_fn = print_contrastive_breakdown
     elif args.normalize_targets:
         loss_fn = make_normalized_mse_loss(target_mean.to(dev), target_std.to(dev))
@@ -978,9 +1162,11 @@ def main():
         breakdown_fn = print_breakdown
 
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"[{args.tag}] architecture={'dual-path' if use_spatial else 'single-path'}  "
-          f"objective={args.objective}  trunk={args.trunk_arch}  optimizer={args.optimizer}  lr={args.lr}  "
-          f"in_dim={X_train.shape[1]}  params={n_params:,}  seed={args.seed}")
+    print(
+        f"[{args.tag}] architecture={'dual-path' if use_spatial else 'single-path'}  "
+        f"objective={args.objective}  trunk={args.trunk_arch}  optimizer={args.optimizer}  lr={args.lr}  "
+        f"in_dim={X_train.shape[1]}  params={n_params:,}  seed={args.seed}"
+    )
 
     CKPT_DIR.mkdir(parents=True, exist_ok=True)
     best_val = float("inf")
@@ -1007,8 +1193,14 @@ def main():
             continue
 
         val_loss, val_metric = run_eval(model, val_loader, dev, n_targets, loss_fn)
-        summary = f"  mean_val_rmse {val_metric.sqrt().mean().item():.5f}" if args.objective == "regression" else ""
-        print(f"epoch {epoch:3d}  train_nll {train_loss:9.4f}  val_nll {val_loss:9.4f}{summary}")
+        summary = (
+            f"  mean_val_rmse {val_metric.sqrt().mean().item():.5f}"
+            if args.objective == "regression"
+            else ""
+        )
+        print(
+            f"epoch {epoch:3d}  train_nll {train_loss:9.4f}  val_nll {val_loss:9.4f}{summary}"
+        )
         breakdown_fn("val", val_metric, target_names)
 
         if val_loss < best_val:
@@ -1045,20 +1237,34 @@ def main():
 
     train_seconds = time.perf_counter() - train_start
     ckpt_path = CKPT_DIR / f"{args.tag}.pt"
-    print(f"training done. best val_loss {best_val:.4f}  params={n_params:,}  "
-          f"train_time={train_seconds:.1f}s  checkpoint saved to {ckpt_path}")
+    print(
+        f"training done. best val_loss {best_val:.4f}  params={n_params:,}  "
+        f"train_time={train_seconds:.1f}s  checkpoint saved to {ckpt_path}"
+    )
 
     # Final test-set evaluation, using the best checkpoint (not necessarily
     # the last epoch's weights).
     ckpt = torch.load(ckpt_path, map_location=dev)
-    test_eps = noise_floor_eps(ckpt["target_names"]).to(dev) if ckpt["objective"] == "contrastive" else None
+    test_eps = (
+        noise_floor_eps(ckpt["target_names"]).to(dev)
+        if ckpt["objective"] == "contrastive"
+        else None
+    )
     test_model = DualPathMLP(
-        ckpt["in_dim"], ckpt["n_targets"],
-        latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"], spatial_latent=ckpt["spatial_latent"],
-        head_hidden=ckpt["head_hidden"], priority_weight=ckpt["priority_weight"],
-        use_spatial=ckpt["use_spatial"], trunk_arch=ckpt["trunk_arch"], trunk_blocks=ckpt["trunk_blocks"],
-        use_symlog_latent=ckpt["use_symlog_latent"], log_target_mask=ckpt["log_target_mask"],
-        objective=ckpt["objective"], noise_floor_eps=test_eps,
+        ckpt["in_dim"],
+        ckpt["n_targets"],
+        latent_dim=ckpt["latent_dim"],
+        hidden=ckpt["hidden"],
+        spatial_latent=ckpt["spatial_latent"],
+        head_hidden=ckpt["head_hidden"],
+        priority_weight=ckpt["priority_weight"],
+        use_spatial=ckpt["use_spatial"],
+        trunk_arch=ckpt["trunk_arch"],
+        trunk_blocks=ckpt["trunk_blocks"],
+        use_symlog_latent=ckpt["use_symlog_latent"],
+        log_target_mask=ckpt["log_target_mask"],
+        objective=ckpt["objective"],
+        noise_floor_eps=test_eps,
     ).to(dev)
     test_model.load_state_dict(ckpt["model_state_dict"])
 
@@ -1070,9 +1276,13 @@ def main():
     # training model's stale loss params would silently corrupt exactly the
     # per-target numbers being reported here.
     if ckpt["objective"] == "contrastive":
-        test_loss_fn = lambda pred, yb: test_model.contrastive_loss(pred, yb, weight_cap=args.tie_weight_cap)
+        test_loss_fn = lambda pred, yb: test_model.contrastive_loss(
+            pred, yb, weight_cap=args.tie_weight_cap
+        )
     elif ckpt["target_mean"] is not None:
-        test_loss_fn = make_normalized_mse_loss(ckpt["target_mean"].to(dev), ckpt["target_std"].to(dev))
+        test_loss_fn = make_normalized_mse_loss(
+            ckpt["target_mean"].to(dev), ckpt["target_std"].to(dev)
+        )
     else:
         test_loss_fn = test_model.weighted_loss
 
@@ -1080,15 +1290,23 @@ def main():
     if ckpt["geom_features"]:
         X_test = torch.cat([X_test, compute_geom_features(X_test)], dim=1)
     if ckpt.get("vae_latent_input"):
-        test_vae, test_vae_coeff_mean, test_vae_coeff_std = load_frozen_vae(ckpt["vae_latent_input"], dev)
-        X_test = vae_latent_features(X_test, test_vae, test_vae_coeff_mean, test_vae_coeff_std, dev)
+        test_vae, test_vae_coeff_mean, test_vae_coeff_std = load_frozen_vae(
+            ckpt["vae_latent_input"], dev
+        )
+        X_test = vae_latent_features(
+            X_test, test_vae, test_vae_coeff_mean, test_vae_coeff_std, dev
+        )
     X_test, Y_test = X_test.to(dev), Y_test.to(dev)
     if ckpt["feature_mean"] is not None:
         X_test = (X_test - ckpt["feature_mean"]) / ckpt["feature_std"]
     if ckpt["target_mean"] is not None:
         Y_test = (Y_test - ckpt["target_mean"]) / ckpt["target_std"]
-    test_loader = DataLoader(TensorDataset(X_test, Y_test), batch_size=args.batch, shuffle=False)
-    test_loss, test_metric = run_eval(test_model, test_loader, dev, n_targets, test_loss_fn)
+    test_loader = DataLoader(
+        TensorDataset(X_test, Y_test), batch_size=args.batch, shuffle=False
+    )
+    test_loss, test_metric = run_eval(
+        test_model, test_loader, dev, n_targets, test_loss_fn
+    )
 
     print(f"\n=== TEST (checkpoint from epoch {ckpt['epoch']}) ===")
     if ckpt["objective"] == "contrastive":
@@ -1096,10 +1314,14 @@ def main():
         print_contrastive_breakdown("test", test_metric, target_names)
         with torch.no_grad():
             test_scores = test_model(X_test)
-        full_metrics = contrastive_eval_metrics(test_scores, Y_test, test_eps, log_nu=test_model.log_nu)
+        full_metrics = contrastive_eval_metrics(
+            test_scores, Y_test, test_eps, log_nu=test_model.log_nu
+        )
         print_contrastive_metrics("test (full sweep)", full_metrics, target_names)
     else:
-        print(f"test_nll {test_loss:9.4f}  mean_test_rmse {test_metric.sqrt().mean().item():.5f}")
+        print(
+            f"test_nll {test_loss:9.4f}  mean_test_rmse {test_metric.sqrt().mean().item():.5f}"
+        )
         print_breakdown("test", test_metric, target_names)
 
 
