@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# x86-only image: VMEC++ wheels + constellaration (simsopt / booz_xform).
+# Do not build this for aarch64 — simsopt fails there. Use:
+#   docker compose run --rm oracle-x86 ...
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential gfortran ninja-build libnetcdf-dev git cmake \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip install --no-cache-dir vmecpp constellaration
+
+WORKDIR /work
+COPY scripts/ /work/scripts/
+
+ENTRYPOINT ["python3"]

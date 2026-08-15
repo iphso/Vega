@@ -2,25 +2,41 @@ FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# DESC/JAX should not go looking for a GPU in this CPU-only oracle image.
+ENV JAX_PLATFORMS=cpu
 
-# Same C++ toolchain requirement as Dockerfile.train (vmecpp builds
-# booz-xform from source via CMake).
+# C++ toolchain for vmecpp / booz-xform / jax-finufft. git is required:
+# those packages use CMake FetchContent to clone eigen/xsimd. OpenBLAS is
+# required to build vmecpp from source on aarch64 (no manylinux wheel).
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gfortran ninja-build libnetcdf-dev \
+    build-essential gfortran ninja-build libnetcdf-dev git cmake \
+    libopenblas-dev liblapack-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Both physics oracles in one environment. Unlike Dockerfile.train, nothing
-# here pins numpy<2 -- that pin was only ever needed for torch's
-# torch.from_numpy compatibility (see EXPERIMENT_LOG), and this container has
-# no torch at all. Confirmed empirically: vmecpp + constellaration +
-# vmec-jax all import cleanly together on numpy 2.2.6 (jax/jaxlib 0.10.2
-# hard-require numpy>=2 -- numpy.dtypes.StringDType doesn't exist below 2.0
-# -- so this container could never have used the train container's pin
-# anyway).
-RUN pip install --no-cache-dir vmecpp constellaration vmec-jax
+# DESC is the shipping physics-bundle backend. Installed first so a
+# vmecpp/constellaration fight cannot unwind a working DESC layer.
+#
+# vmec-jax is intentionally not installed: it pins jax==0.10.x while
+# desc-opt requires jax>=0.6.2,<0.10. scripts/vmec_jax_oracle.py still
+# documents the rbc/zbs transpose gotcha.
+#
+# numpy is left unpinned (the numpy<2 pin in Dockerfile.train was only
+# ever for torch).
+RUN pip install --no-cache-dir desc-opt pytest
+
+# backend="vmecpp" is the physics service's default and is fully wired: it
+# serves pre-solved booz_xform packs from vega_testing/vmecpp_highfi/ and
+# never calls vmecpp.solve, so only the import surface is needed here.
+# constellaration (and the simsopt/booz_xform toolchain that generates those
+# packs) is deliberately NOT in this image -- it fails to compile on aarch64
+# against current pybind11, and lives in the x86-only Dockerfile.vmecpp
+# instead. Its own layer regardless, so a vmecpp break cannot unwind DESC.
+RUN pip install --no-cache-dir vmecpp
+RUN pip install --no-cache-dir fastapi uvicorn
 
 WORKDIR /work
 
 COPY scripts/ /work/scripts/
+COPY tests/ /work/tests/
 
 ENTRYPOINT ["python3"]

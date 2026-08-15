@@ -5,6 +5,7 @@ services:
       - ./output:/work/output
       - ./scripts:/work/scripts
       - ./viewer:/work/viewer
+      - ./vega_testing:/work/vega_testing:ro
       - hf-cache:/root/.cache/huggingface
     entrypoint: ["python3"]
 
@@ -27,7 +28,58 @@ services:
     volumes:
       - ./output:/work/output
       - ./scripts:/work/scripts
+      - ./vega_testing:/work/vega_testing:ro
+      - ./tests:/work/tests
     entrypoint: ["python3"]
+
+  oracle-x86:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile.vmecpp
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+      - ./vega_testing:/work/vega_testing
+      - ./tests:/work/tests
+    entrypoint: ["python3"]
+
+  pytest:
+    build:
+      context: .
+      dockerfile: Dockerfile.oracle
+    volumes:
+      - ./scripts:/work/scripts
+      - ./vega_testing:/work/vega_testing:ro
+      - ./tests:/work/tests
+    working_dir: /work
+    entrypoint: ["python3", "-m", "pytest"]
+    command: ["/work/tests", "-q"]
+
+  physics:
+    build:
+      context: .
+      dockerfile: Dockerfile.oracle
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+      - ./vega_testing:/work/vega_testing:ro
+      - ./tests:/work/tests
+    ports:
+      - "8090:8090"
+    command:
+      - "-m"
+      - "uvicorn"
+      - "physics_service:app"
+      - "--app-dir"
+      - "/work/scripts"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8090"
+      - "--reload"
+      - "--reload-dir"
+      - "/work/scripts"
 
   viewer:
     build:
