@@ -1,0 +1,34 @@
+{
+  "n": 308,
+  "seed": 0,
+  "n_tested_pool": 108280,
+  "n_converged_in_sample": 308,
+  "converge_rate_sample": 0.692,
+  "median_qi_converged": 0.017615884443166842,
+  "median_time_s": 403.0621231980622,
+  "source_screen": "artifacts/vae_runs/new_samples/screen_cumulative_all.npz",
+  "source_coeffs": "generated_samples/new_samples/X.npy",
+  "X_shape": [
+    308,
+    92
+  ],
+  "Y_vmec_shape": [
+    308,
+    12
+  ],
+  "note": "Shared X/Y plus DESC and VMEC run folders are aligned on the same 308 candidates (high-fi VMEC++ successes).",
+  "n_sampled": 500,
+  "filter": "Subset of the prior 346 converged VAE-screen rows: kept only the 308 that succeeded under constellaration high-fidelity VMEC++ (vmecpp_highfi). Original dump indices are in file_rows.npy; prior vega_testing row indices are in kept_old_indices.npy.",
+  "runs": {
+    "desc_L6M6N4": "DESC vacuum L=6 M=6 N=4",
+    "desc_L8M8N8": "DESC vacuum L=M=N=8",
+    "desc_L12M12N12": "DESC vacuum L=M=N=12",
+    "vmecpp_lowfi": "VMEC++ + booz_xform (constellaration low-fi)",
+    "vmecpp_highfi": "VMEC++ + booz_xform (constellaration high-fi)"
+  },
+  "removed_files": {
+    "converged.npy": "all-True after filtering",
+    "vega_sample_500.npz": "redundant bundle of the unfiltered 500 rows",
+    "vega_testing": "saved HTML directory listing, not data"
+  }
+}
