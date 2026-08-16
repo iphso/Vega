@@ -1,4 +1,5 @@
 ---
+import 'katex/dist/katex.min.css';
 ---
 <html lang="en">
 <head>
@@ -23,6 +24,9 @@
     html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
     #app { display: flex; height: 100%; }
 
+    .katex { font-size: 1.05em; color: inherit; }
+    .katex .mord, .katex .mrel, .katex .mbin { color: inherit; }
+
     .side-pane { flex: 0 0 340px; overflow: hidden; transition: flex-basis .18s ease; }
     .side-pane.dragging { transition: none; }
     .side-pane .pane-content { width: 100%; height: 100%; overflow-y: auto; padding: 18px; }
@@ -40,12 +44,166 @@
     #leftToggle { border-right: 1px solid var(--border); }
     #rightToggle { border-left: 1px solid var(--border); }
 
-    #centerPane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-    #topBar { padding: 18px 18px 0; }
-    #canvas-wrap { flex: 1; position: relative; }
+    #centerPane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding-bottom: 16px; }
+    #topBar { padding: 18px 18px 0; flex: 0 0 auto; }
+    #stage { flex: 1; min-height: 0; position: relative; }
+    #canvas-wrap, #physics-wrap {
+      position: absolute; inset: 0;
+    }
+    #canvas-wrap { display: block; }
     #canvas-wrap canvas { display: block; }
+    #canvas-wrap.hidden { display: none; }
+
+    .mode-switch { display: flex; gap: 0; margin-top: 12px; }
+    .mode-switch button { flex: 1; border-radius: 0; }
+    .mode-switch button + button { margin-left: -1px; }
+    .mode-switch button:first-child { border-radius: 6px 0 0 6px; }
+    .mode-switch button:last-child { border-radius: 0 6px 6px 0; }
+    .mode-switch button.active { background: var(--accent-dim); border-color: var(--accent); }
+
+    #physics-wrap { display: none; min-height: 0; }
+    #physics-wrap.visible {
+      display: grid;
+      grid-template-rows: minmax(120px, 42%) minmax(240px, 58%);
+    }
+    #physics-3d { min-height: 0; min-width: 0; position: relative; overflow: hidden; }
+    #physics-3d canvas { display: block; width: 100% !important; height: 100% !important; }
+    #physics-analysis {
+      min-height: 0; min-width: 0; display: grid; gap: 0;
+      grid-template-columns: 1fr 1fr 1fr;
+      overflow: hidden;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    #physics-analysis[data-focus="poincare"] { grid-template-columns: 1.45fr 1fr 1fr; }
+    #physics-analysis[data-focus="boozerCut"] { grid-template-columns: 1fr 1.45fr 1fr; }
+    #physics-analysis[data-focus="boozerB"] { grid-template-columns: 1fr 1fr 1.45fr; }
+    .analysis-panel {
+      min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+      border-right: 1px solid var(--border); cursor: pointer; background: var(--bg);
+    }
+    .analysis-panel:last-child { border-right: none; }
+    .analysis-panel.active { box-shadow: inset 0 2px 0 var(--accent); background: #101014; }
+    .analysis-panel .panel-label {
+      flex: 0 0 auto; font-size: 11px;
+      color: var(--text-faint); padding: 6px 10px 0; font-weight: 600;
+    }
+    .analysis-panel .panel-sub {
+      flex: 0 0 auto; font-size: 10px; color: var(--text-faint);
+      padding: 0 10px 2px;
+    }
+    .analysis-panel.active .panel-label { color: var(--accent); }
+    .plot-frame { flex: 1; min-height: 140px; position: relative; }
+    .plot-frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    .axis-x, .axis-y, .plot-caption {
+      position: absolute; pointer-events: none; color: var(--text-dim); z-index: 1;
+    }
+    .axis-x { bottom: 6px; left: 50%; transform: translateX(-20%); font-size: 12px; }
+    .axis-y {
+      left: 2px; top: 50%; transform: translateY(-50%) rotate(-90deg);
+      transform-origin: center; font-size: 12px; white-space: nowrap;
+    }
+    .plot-caption { top: 8px; left: 44px; font-size: 11px; color: var(--text-faint); }
+    .panel-hint { color: var(--accent); opacity: 0.75; }
+    /* KaTeX axis/colorbar labels pinned over the heatmap canvas. Children
+       are absolutely placed by the drawing code from the plot geometry;
+       pointer-events stay off so the canvas keeps its click picking. */
+    .plot-labels {
+      position: absolute; inset: 0; pointer-events: none; z-index: 1;
+      font-size: 11px; color: var(--text-dim);
+    }
+    .plot-labels > div { position: absolute; white-space: nowrap; line-height: 1; }
+    .plot-labels .hm-tick { font-size: 10px; }
+    /* Casing for the white-on-any-colormap ζ mark is set inline where the
+       flag is placed, next to the canvas stroke it has to match. */
+    .plot-labels .hm-flag { font-size: 12px; font-weight: 600; }
+    /* Hover chrome: same overlay trick, but built once and only mutated,
+       so a mousemove never repaints the heatmap. */
+    .plot-hover { position: absolute; inset: 0; pointer-events: none; z-index: 2; }
+    .plot-hover[data-on="0"] { display: none; }
+    .hm-cross {
+      position: absolute; transform: translate(-50%, -50%);
+      border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 2px;
+      box-shadow: 0 0 0 1px rgba(8, 8, 12, 0.75);
+    }
+    .hm-tip {
+      position: absolute; background: rgba(12, 12, 16, 0.92);
+      border: 1px solid var(--border); border-radius: 5px; padding: 4px 7px;
+      font-size: 10px; color: var(--text); white-space: nowrap;
+      display: grid; gap: 1px;
+    }
+    .hm-tip > div { display: flex; gap: 6px; align-items: baseline; }
+    .hm-tip .k { color: var(--text-dim); min-width: 22px; }
+    .hm-tip .v { font-variant-numeric: tabular-nums; margin-left: auto; }
+    .analysis-panel[data-mode="boozerCut"] .axis-x,
+    .analysis-panel[data-mode="boozerCut"] .axis-y,
+    .analysis-panel[data-mode="poincare"] .axis-x,
+    .analysis-panel[data-mode="poincare"] .axis-y { display: none; }
+    #canvas-boozer-b { cursor: crosshair; }
+    .explain-box {
+      font-size: 12px; color: var(--text-dim); line-height: 1.45;
+      background: var(--card-2); border-radius: 8px; padding: 10px 12px; margin-top: 8px;
+    }
+    .explain-box b { color: var(--text); display: block; margin-bottom: 4px; font-size: 12px; }
+    .explain-box .detail { color: var(--text-faint); margin-top: 6px; font-size: 11px; }
+    .radio-col { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+    .radio-col legend, .radio-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 2px;
+    }
+    .radio-col label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+
+    .ctrl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; font-size: 12px; color: var(--text-dim); }
+    .ctrl-row label { flex: 1; }
+    .ctrl-row .val { flex: 0 0 52px; text-align: right; font-variant-numeric: tabular-nums; color: var(--text); }
+    input[type=range] {
+      display: block; width: 100%; margin: 6px 0 0; accent-color: var(--handle);
+    }
+    .ctrl-row input[type=range] {
+      flex: 1 1 100%; width: 100%; min-width: 0; margin-top: 2px;
+    }
+    .ctrl-hint { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+    /* The |B| normalization note. Slightly stronger than .ctrl-hint because
+       it explains what the colormap units mean, which is not guessable. */
+    .ctrl-note {
+      font-size: 11px; line-height: 1.45; color: var(--text-dim);
+      margin-top: 6px; padding: 6px 8px;
+      border-left: 2px solid var(--text-faint);
+      background: rgba(255, 255, 255, 0.03);
+    }
+    .ctrl-note .katex { font-size: 1em; }
+    .phi-rad-labels {
+      position: relative; height: 20px; margin-top: 2px;
+      font-size: 15px; color: var(--text-dim);
+    }
+    .phi-rad-labels .mid {
+      position: absolute; left: 50%; transform: translateX(-50%);
+    }
+    .phi-rad-labels .end { position: absolute; right: 0; }
+    .s-ticks {
+      display: flex; justify-content: space-between; margin-top: 2px;
+      font-size: 10px; color: var(--text-faint); font-variant-numeric: tabular-nums;
+    }
+    .toggle-row { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
+    .toggle-row label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+    #physicsCard { display: none; }
+    #physicsCard.visible { display: block; }
+    /* Filters are Design-only; plot modes must not show this pane. */
+    #app:not([data-mode="design"]) #designFilters,
+    #app:not([data-mode="design"]) #matchBar,
+    #app:not([data-mode="design"]) #filters {
+      display: none !important;
+    }
+    /* Always empty now -- hidden so its margin does not leave a gap.
+       Restoring the summary line means undoing this and the early return
+       in setPhysicsReadout. */
+    #physicsReadout { display: none; font-size: 11px; color: var(--text-dim); margin-top: 10px; line-height: 1.6; }
+    #physicsReadout b { color: var(--text); font-weight: 600; }
 
     h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    /* Byline rides the title's baseline and is pushed to the far edge, so it
+       reads as a credit on the header rather than a second line of subtitle. */
+    #titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    #byline { font-size: 11px; color: var(--text-faint); letter-spacing: 0.02em; white-space: nowrap; }
     #subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 
     .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 14px; }
@@ -117,6 +275,7 @@
     #hint { font-size: 11px; color: var(--text-faint); margin-top: 6px; line-height: 1.5; }
 
     #umapCanvasWrap { flex: 1; position: relative; margin-top: 14px; min-height: 160px; }
+    #candidateCard { flex: 0 0 auto; }
     #tsneCanvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; border-radius: var(--radius); background: #0c0c0e; }
     #tsneStatus { font-size: 11px; color: var(--text-dim); margin-top: 8px; }
     #tsneLegend { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 10px; color: var(--text-faint); }
@@ -141,7 +300,7 @@
   </style>
 </head>
 <body>
-  <div id="app">
+  <div id="app" data-mode="design">
     <div id="leftPane" class="side-pane">
       <div class="pane-content">
         <div class="card">
@@ -159,16 +318,7 @@
           <canvas id="tsneCanvas"></canvas>
           <div id="sourceCards" class="source-cards"></div>
         </div>
-      </div>
-    </div>
-    <button class="pane-toggle-btn" id="leftToggle">‹</button>
-
-    <div id="centerPane">
-      <div id="topBar">
-        <h1>Vega candidate viewer</h1>
-        <div id="subtitle">loading…</div>
-
-        <div class="card">
+        <div class="card" id="candidateCard">
           <div class="section-title">Candidate</div>
           <select id="source">
           </select>
@@ -184,23 +334,177 @@
           </div>
         </div>
       </div>
+    </div>
+    <button class="pane-toggle-btn" id="leftToggle">‹</button>
+
+    <div id="centerPane">
+      <div id="topBar">
+        <div id="titleRow">
+          <h1>Vega candidate viewer</h1>
+          <span id="byline">made by IPH Labs</span>
+        </div>
+        <div id="subtitle">loading…</div>
+        <div class="mode-switch" id="modeSwitch">
+          <button type="button" data-mode="design" class="active">Design</button>
+          <button type="button" data-mode="poincare">Poincaré</button>
+          <button type="button" data-mode="boozerCut">Boozer Cut</button>
+          <button type="button" data-mode="boozerB">Boozer B</button>
+        </div>
+      </div>
+      <div id="stage">
       <div id="canvas-wrap"></div>
+      <div id="physics-wrap">
+        <div id="physics-3d"></div>
+        <div id="physics-analysis" data-focus="poincare">
+          <div class="analysis-panel" data-mode="poincare">
+            <div class="panel-label">Poincaré · <span id="math-poincare-title"></span></div>
+            <div class="panel-sub">physical R–Z geometry</div>
+            <div class="plot-frame">
+              <canvas id="canvas-poincare"></canvas>
+              <div class="axis-y" id="axis-poincare-y"></div>
+              <div class="axis-x" id="axis-poincare-x"></div>
+              <div class="plot-caption" id="caption-poincare"></div>
+            </div>
+          </div>
+          <div class="analysis-panel" data-mode="boozerCut">
+            <div class="panel-label">Boozer Cut · <span id="math-cut-title"></span></div>
+            <div class="panel-sub">physical R–Z geometry</div>
+            <div class="plot-frame">
+              <canvas id="canvas-boozer-cut"></canvas>
+              <div class="axis-y" id="axis-cut-y"></div>
+              <div class="axis-x" id="axis-cut-x"></div>
+              <div class="plot-caption" id="caption-boozer-cut"></div>
+            </div>
+          </div>
+          <div class="analysis-panel" data-mode="boozerB">
+            <div class="panel-label">Boozer B map · <span id="math-bmap-title"></span></div>
+            <div class="panel-sub">
+              coordinate representation ·
+              <span class="panel-hint">hover to preview on the 3D surface · click to pin</span>
+            </div>
+            <div class="plot-frame">
+              <canvas id="canvas-boozer-b"></canvas>
+              <div class="plot-labels" id="bmap-labels"></div>
+              <div class="plot-hover" id="bmap-hover" data-on="0"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
     </div>
 
     <button class="pane-toggle-btn" id="rightToggle">›</button>
     <div id="rightPane" class="side-pane">
       <div class="pane-content" id="panel">
-        <div class="card" id="matchBar">
-          <div class="section-title">
-            Filters
-            <button class="link" id="resetAllBtn">reset all</button>
+        <div class="card" id="physicsCard">
+          <div class="section-title" id="physicsCardTitle">Physics</div>
+          <div id="physicsExplain" class="explain-box"></div>
+          <div id="status">idle</div>
+          <div class="ctrl-row">
+            <label for="sSlider">flux surface <span id="math-s"></span></label>
+            <span class="val" id="sVal">1.00</span>
           </div>
-          <div id="matchLabel"></div>
-          <div class="track"><div class="fill" id="matchFill"></div></div>
-          <div id="hint">Drag the amber handles to set a range. Click a handle's number to type one. Drag on open space to jump the nearest handle there.</div>
+          <div class="ctrl-hint">3D / Boozer surface · Poincaré always shows all four</div>
+          <input id="sSlider" type="range" min="0.25" max="1" step="0.25" value="1" />
+          <div class="s-ticks"><span>0.25</span><span>0.50</span><span>0.75</span><span>1</span></div>
+          <label for="cmapSelect" style="display:block;margin-top:10px;font-size:12px;color:var(--text-dim)">colormap</label>
+          <select id="cmapSelect">
+            <option value="viridis" selected>viridis</option>
+            <option value="plasma">plasma</option>
+          </select>
+          <label for="eqBackend" style="display:block;margin-top:10px;font-size:12px;color:var(--text-dim)">equilibrium</label>
+          <!-- VMEC++ is the default: it returns a physical rotational
+               transform on all 308 rows, DESC on 40. -->
+          <select id="eqBackend">
+            <option value="vmecpp" selected>VMEC++</option>
+            <option value="desc">DESC</option>
+          </select>
+          <div class="ctrl-note" id="bNormNote"></div>
+
+          <div id="poincareCtrls" style="display:none">
+            <div class="ctrl-row">
+              <label for="phiSlider"><span id="math-phi"></span></label>
+              <input id="phiSlider" type="range" min="0" max="6.2832" step="0.05" value="0" />
+              <span class="val" id="phiVal">0.00</span>
+            </div>
+            <div class="phi-rad-labels">
+              <span class="mid" id="math-phi-pi"></span>
+              <span class="end" id="math-phi-2pi"></span>
+            </div>
+            <div class="ctrl-row">
+              <label for="nSeeds">seeds / surface</label>
+              <input id="nSeeds" type="number" min="1" max="24" step="1" value="8" />
+            </div>
+            <div class="ctrl-hint">starting θ₀ on each of s = 0.25, 0.5, 0.75, 1</div>
+            <div class="ctrl-row">
+              <label for="nTurns">punctures / seed</label>
+              <input id="nTurns" type="number" min="1" max="100" step="1" value="32" />
+            </div>
+            <div class="ctrl-hint">hits on the φ plane per field line</div>
+            <div class="toggle-row">
+              <label><input type="checkbox" id="showPhiPlane" checked /> plane</label>
+            </div>
+          </div>
+
+          <div id="boozerCutCtrls" style="display:none">
+            <div class="ctrl-row">
+              <label for="zetaSlider"><span id="math-zeta"></span></label>
+              <input id="zetaSlider" type="range" min="0" max="0.833" step="0.167" value="0" />
+              <span class="val" id="zetaVal">0.000</span>
+            </div>
+            <div class="ctrl-row">
+              <span>cuts</span>
+              <span class="val" id="nCutsVal">6</span>
+            </div>
+            <div class="radio-col">
+              <div class="radio-label">Projection</div>
+              <label><input type="radio" name="cutProj" value="RZ" checked /> <span id="math-rz"></span></label>
+              <label><input type="radio" name="cutProj" value="XZ" /> <span id="math-xz"></span></label>
+            </div>
+          </div>
+
+          <div id="boozerBCtrls" style="display:none">
+            <div class="ctrl-row">
+              <span>resolution</span>
+              <span class="val" id="resVal">32 × 48</span>
+            </div>
+            <div class="ctrl-row">
+              <span><span id="math-B-range"></span> range</span>
+              <span class="val" id="bRangeVal">auto</span>
+            </div>
+            <div class="toggle-row">
+              <label><input type="checkbox" id="contoursOn" checked /> contours</label>
+            </div>
+            <div class="ctrl-row">
+              <label for="nContours">contours</label>
+              <input id="nContours" type="range" min="0" max="16" step="1" value="8" />
+              <span class="val" id="nContoursVal">8</span>
+            </div>
+          </div>
+
+          <div class="toggle-row">
+            <label><input type="checkbox" id="showB" checked /> <span id="math-B-surf"></span> on surface</label>
+            <label><input type="checkbox" id="showAxes" checked /> axes</label>
+          </div>
+          <div class="btn-row">
+            <button type="button" id="resetPhysicsView">reset view</button>
+          </div>
+          <div id="physicsReadout"></div>
         </div>
 
-        <div id="filters"></div>
+        <div id="designFilters">
+          <div class="card" id="matchBar">
+            <div class="section-title">
+              Filters
+              <button class="link" id="resetAllBtn">reset all</button>
+            </div>
+            <div id="matchLabel"></div>
+            <div class="track"><div class="fill" id="matchFill"></div></div>
+            <div id="hint">Drag the amber handles to set a range. Click a handle's number to type one. Drag on open space to jump the nearest handle there.</div>
+          </div>
+
+          <div id="filters"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -209,6 +513,17 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
     import { UMAP } from 'umap-js';
+    import { requestPhysics } from '../lib/physicsClient';
+    import { createPhysicsScene } from '../lib/physicsScene';
+    import { heatmapPick } from '../lib/heatmap';
+    import { tex, B_NORM } from '../lib/math';
+    import { drawBoozerB, drawBoozerBHover } from '../lib/modes/boozerB';
+    import { drawBoozerCut, interpolatedCut, EQUAL_CUTS } from '../lib/modes/boozerCut';
+    import { drawPoincare } from '../lib/modes/poincare';
+    import {
+      modeExplain, selectionFromHeatmap,
+      refreshSelectionXyz, nearestPoincareSeedIndex,
+    } from '../lib/physicsSync';
 
     const subtitleEl = document.getElementById('subtitle');
     const sourceEl = document.getElementById('source');
@@ -647,10 +962,8 @@
     function buildGeometry(rowStart, nfp) {
       const nTheta = 64, nPhi = 128;
       const positions = surfacePoints(rowStart, nfp, nTheta, nPhi);
-
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
       const indices = [];
       for (let it = 0; it < nTheta; it++) {
         const itNext = (it + 1) % nTheta;
@@ -694,15 +1007,531 @@
 
     let mesh = null;
     const material = new THREE.MeshStandardMaterial({
-      color: 0x5b9dff, metalness: 0.1, roughness: 0.6, side: THREE.DoubleSide,
+      color: 0x5b9dff, emissive: 0x16345c, metalness: 0.08, roughness: 0.5,
+      side: THREE.DoubleSide,
     });
+
+    // Physics modes use a second THREE scene so Design's camera/mesh stay
+    // untouched. The DESC surface lives in #physics-3d; the 2D panel is
+    // a canvas heatmap / R–Z plot, not a paint-over of surfacePoints().
+    const physicsWrap = document.getElementById('physics-wrap');
+    const physics3dEl = document.getElementById('physics-3d');
+    const physicsAnalysis = document.getElementById('physics-analysis');
+    const canvasBoozerB = document.getElementById('canvas-boozer-b');
+    const bmapLabels = document.getElementById('bmap-labels');
+    const bmapHover = document.getElementById('bmap-hover');
+    // Declared up here, not next to the handlers, so anything that runs
+    // during init can clear the hover without hitting the TDZ.
+    let hoverPick = null;
+    let hoverQueued = false;
+    const canvasBoozerCut = document.getElementById('canvas-boozer-cut');
+    const canvasPoincare = document.getElementById('canvas-poincare');
+    const physicsCard = document.getElementById('physicsCard');
+    const physicsCardTitle = document.getElementById('physicsCardTitle');
+    const physicsExplain = document.getElementById('physicsExplain');
+    const statusEl = document.getElementById('status');
+    const physicsReadout = document.getElementById('physicsReadout');
+    const eqBackendEl = document.getElementById('eqBackend');
+    const sSlider = document.getElementById('sSlider');
+    const sVal = document.getElementById('sVal');
+    const cmapSelect = document.getElementById('cmapSelect');
+    const nContoursEl = document.getElementById('nContours');
+    const nContoursVal = document.getElementById('nContoursVal');
+    const zetaSlider = document.getElementById('zetaSlider');
+    const zetaVal = document.getElementById('zetaVal');
+    zetaSlider.min = '0';
+    zetaSlider.step = String(1 / EQUAL_CUTS);
+    zetaSlider.max = String((EQUAL_CUTS - 1) / EQUAL_CUTS);
+    const phiSlider = document.getElementById('phiSlider');
+    const phiVal = document.getElementById('phiVal');
+    const nSeedsEl = document.getElementById('nSeeds');
+    const nTurnsEl = document.getElementById('nTurns');
+    const physicsScene = createPhysicsScene(physics3dEl);
+
+    function setMath(id, src) {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = tex(src);
+    }
+    setMath('math-cut-title', '\\zeta=\\mathrm{const}');
+    setMath('math-poincare-title', '\\varphi=\\mathrm{const}');
+    setMath('math-bmap-title', `${B_NORM}(\\theta,\\zeta)`);
+    setMath('math-s', 's');
+    setMath('math-B-range', B_NORM);
+    setMath('math-B-surf', B_NORM);
+    setMath('math-zeta', '\\zeta');
+    setMath('math-phi', '\\varphi\\ \\mathrm{plane}');
+    setMath('math-phi-pi', '\\pi');
+    setMath('math-phi-2pi', '2\\pi');
+    setMath('math-rz', 'R\\!-\\!Z');
+    setMath('math-xz', 'X\\!-\\!Z');
+    setMath('axis-poincare-y', 'Z');
+    setMath('axis-poincare-x', 'R');
+
+    let viewMode = 'design';
+    let physicsBundle = null;
+    let physicsAbort = null;
+    let physicsSel = null;
+
+    function currentGi() {
+      if (!filteredIndices.length) return null;
+      const pos = Math.max(0, Math.min(filteredIndices.length - 1, Number(indexEl.value) || 0));
+      return filteredIndices[pos];
+    }
+
+    function boundaryFromGi(gi) {
+      const rowStart = gi * meta.x_cols;
+      const r_cos = [];
+      const z_sin = [];
+      for (let m = 0; m < 5; m++) {
+        const r = [];
+        const z = [];
+        for (let n = 0; n < 9; n++) {
+          r.push(X[rowStart + m * 9 + n]);
+          z.push(X[rowStart + 45 + m * 9 + n]);
+        }
+        r_cos.push(r);
+        z_sin.push(z);
+      }
+      return { r_cos, z_sin, nfp: X[rowStart + 90] };
+    }
+
+    function physicsRequestBody(gi) {
+      const { r_cos, z_sin, nfp } = boundaryFromGi(gi);
+      return {
+        r_cos, z_sin, nfp: Number(nfp),
+        backend: eqBackendEl.value || 'vmecpp',
+        poincare: {
+          n_seeds: Number(nSeedsEl.value) || 8,
+          n_turns: Number(nTurnsEl.value) || 32,
+          phi: Number(phiSlider.value) || 0,
+          direction: 'forward',
+        },
+      };
+    }
+
+    // The slider is labelled and stepped in s (normalized toroidal flux), so
+    // it must be matched against flux.s -- NOT flux.rho, which is sqrt(s).
+    // Comparing against rho picked s=0.25 for a slider at 0.50 and s=0.49 for
+    // a slider at 0.75, and put rho into meta.s, which silently killed the
+    // Poincare seed match in nearestPoincareSeedIndex (it compares meta.s
+    // against seed.s, which is always in s).
+    function fluxIndex(bundle, s) {
+      const flux = bundle && bundle.flux;
+      if (!flux || !flux.s || !flux.s.length) return 0;
+      let k = 0, best = Infinity;
+      for (let i = 0; i < flux.s.length; i++) {
+        const d = Math.abs(flux.s[i] - s);
+        if (d < best) { best = d; k = i; }
+      }
+      return k;
+    }
+
+    function bundleAtS(bundle, s) {
+      const flux = bundle && bundle.flux;
+      if (!flux || !flux.s || !flux.s.length) return bundle;
+      const k = fluxIndex(bundle, s);
+      const meanT = flux.B_mean_T ? flux.B_mean_T[k] : bundle.meta.B_ref_T;
+      return {
+        ...bundle,
+        // B_ref_T follows the slider: the shipped B arrays are already
+        // divided by this surface's mean, so the readout has to name the
+        // mean for the surface being shown, not the one the bundle was
+        // built at.
+        meta: { ...bundle.meta, s: flux.s[k], iota_s: flux.iota[k], B_ref_T: meanT },
+        surface3d: {
+          n_theta: flux.n_theta,
+          n_zeta: flux.n_zeta,
+          nfp_grid: flux.nfp_grid,
+          s: flux.s[k],
+          vertices: flux.vertices[k],
+          B: flux.B[k],
+        },
+        boozer_B: {
+          n_theta: flux.n_theta,
+          n_zeta: flux.n_zeta,
+          theta: flux.theta,
+          zeta: flux.zeta,
+          B: flux.boozer_B[k],
+          xyz: flux.boozer_xyz ? flux.boozer_xyz[k] : (bundle.boozer_B && bundle.boozer_B.xyz),
+          field_period_note: bundle.boozer_B && bundle.boozer_B.field_period_note,
+        },
+        cuts: flux.cuts[k],
+      };
+    }
+
+    function activeBundle() {
+      return bundleAtS(physicsBundle, Number(sSlider.value));
+    }
+
+    function formatS(s) {
+      const v = Number(s);
+      if (Math.abs(v - 1) < 1e-6) return '1.00';
+      return v.toFixed(2);
+    }
+
+    function syncSReadout(s) {
+      sVal.textContent = formatS(s);
+    }
+
+    function currentZeta() {
+      const nfp = (physicsBundle && physicsBundle.meta.nfp) || 1;
+      return Number(zetaSlider.value) * (2 * Math.PI) / nfp;
+    }
+
+    function cutProjection() {
+      const el = document.querySelector('input[name="cutProj"]:checked');
+      return (el && el.value) || 'RZ';
+    }
+
+    function updateZetaReadout() {
+      zetaVal.textContent = currentZeta().toFixed(3);
+    }
+
+    function highlightSeedIndex(bundle) {
+      return nearestPoincareSeedIndex(bundle, physicsSel);
+    }
+
+    function afterLayout(fn) {
+      requestAnimationFrame(() => requestAnimationFrame(fn));
+    }
+
+    function physicsSceneOpts() {
+      const bundle = activeBundle();
+      const cut = bundle && bundle.cuts ? interpolatedCut(bundle, currentZeta()) : null;
+      const hi = bundle ? highlightSeedIndex(bundle) : -1;
+      const isCut = viewMode === 'boozerCut';
+      const isP = viewMode === 'poincare';
+      const isB = viewMode === 'boozerB';
+      return {
+        cmap: cmapSelect.value,
+        showB: document.getElementById('showB').checked,
+        // Not in Poincaré: the reading there is the puncture pattern on the
+        // φ plane, and the axis curve is a bright line straight through the
+        // middle of it. Its toggle is hidden in this mode too, so the
+        // checkbox state is deliberately ignored rather than forced off --
+        // it stays as the user left it for the Boozer modes.
+        // No toggle for this any more: the axis is drawn everywhere except
+        // Poincare, where it is meaningless on a puncture plot.
+        showAxis: !isP,
+        showAxes: document.getElementById('showAxes').checked,
+        // The white ζ rim, always on in both Boozer modes -- it is what ties
+        // the slider to a place on the device, so it is not a toggle. The
+        // all-planes loops that used to sit beside it are gone; only the
+        // swept cut is drawn.
+        showCutPlane: isCut || isB,
+        showPhiPlane: isP && document.getElementById('showPhiPlane').checked,
+        showFieldLines: false,
+        cutXyz: cut ? cut.xyz : null,
+        zeta: currentZeta(),
+        markerXyz: physicsSel && physicsSel.xyz,
+        highlightSeed: hi,
+        phi: Number(phiSlider.value) || 0,
+      };
+    }
+
+    function paintPhysics2d() {
+      const bundle = activeBundle();
+      if (!bundle || viewMode === 'design') return;
+      try {
+        const nfp = bundle.meta.nfp || 1;
+        const hi = highlightSeedIndex(bundle);
+        const focusBoozer = viewMode === 'boozerCut' || viewMode === 'boozerB';
+        if (bundle.boozer_B) {
+          const period = (2 * Math.PI) / nfp;
+          const z = currentZeta();
+          const u = (((z % period) + period) % period) / period;
+          drawBoozerB(canvasBoozerB, bundle, {
+            cmap: cmapSelect.value,
+            nContours: Number(nContoursEl.value),
+            contoursOn: document.getElementById('contoursOn').checked,
+            marker: physicsSel,
+            zetaLine: focusBoozer ? { u } : null,
+            labelHost: bmapLabels,
+          });
+        }
+        drawBoozerCut(canvasBoozerCut, bundle, currentZeta(), {
+          projection: cutProjection(),
+          marker: physicsSel,
+          highlightZeta: focusBoozer,
+        });
+        drawPoincare(canvasPoincare, bundle, {
+          cmap: cmapSelect.value,
+          highlightSeed: hi,
+        });
+        const period = (2 * Math.PI) / nfp;
+        const dZeta = period / EQUAL_CUTS;
+        document.getElementById('caption-boozer-cut').innerHTML =
+          tex(`\\Delta\\zeta = ${dZeta.toFixed(2)}`) + ` · ${EQUAL_CUTS} slices`;
+        const nSeedLines = bundle.poincare && bundle.poincare.seeds ? bundle.poincare.seeds.length : 0;
+        const nSurf = bundle.poincare && bundle.poincare.surfaces_s ? bundle.poincare.surfaces_s.length : 0;
+        const perSurf = nSurf ? Math.round(nSeedLines / nSurf) : 0;
+        const phi = (bundle.poincare && bundle.poincare.phi) || 0;
+        document.getElementById('caption-poincare').innerHTML =
+          tex(`\\varphi = ${phi.toFixed(3)}`) + ` · ${nSurf} surfaces · ${perSurf} seeds`;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function paintPhysics3d() {
+      const bundle = activeBundle();
+      if (!bundle || viewMode === 'design') return;
+      physicsScene.setBundle(bundle, physicsSceneOpts());
+      physicsScene.resize();
+    }
+
+    function paintPhysics() {
+      paintPhysics3d();
+      paintPhysics2d();
+    }
+
+    function setPhysicsReadout(bundle) {
+      if (!bundle) {
+        physicsReadout.innerHTML = '';
+        document.getElementById('bRangeVal').textContent = 'auto';
+        return;
+      }
+      const m = bundle.meta;
+      // The solver/iota/⟨B⟩ summary line is deliberately not rendered. The
+      // numbers still reach the panel rows below (resolution, |B|/⟨B⟩
+      // range) and the colorbar, which is where they are read from.
+      physicsReadout.innerHTML = '';
+      document.getElementById('bRangeVal').textContent =
+        `[${m.B_min.toFixed(2)}, ${m.B_max.toFixed(2)}]`;
+      const flux = bundle.flux;
+      if (flux) {
+        document.getElementById('resVal').textContent = `${flux.n_theta} × ${flux.n_zeta}`;
+      }
+      document.getElementById('nCutsVal').textContent = String(EQUAL_CUTS);
+    }
+
+    // Written once: the colormap is dimensionless and the reason is not
+    // guessable from the plot. The two codes normalize the toroidal flux
+    // differently, so their raw tesla differ by a constant factor; dividing
+    // by the surface mean cancels it and leaves the modulation, which is
+    // the physically comparable quantity.
+    function setBNormNote() {
+      document.getElementById('bNormNote').innerHTML =
+        `Plots show ${tex(B_NORM)}, not tesla — the backends use different flux ` +
+        `conventions, so only the ratio is comparable. ` +
+        `${tex('\\langle|\\vec{B}|\\rangle')} in tesla is in the readout.`;
+    }
+
+    setBNormNote();
+
+    function setPhysicsMode(mode) {
+      viewMode = mode;
+      applyModeChrome();
+      if (viewMode !== 'design') loadPhysicsForCurrent();
+    }
+
+    function applyModeChrome() {
+      const isDesign = viewMode === 'design';
+      // A mode switch can hide the map without the pointer ever leaving it,
+      // which would strand the ghost on the torus.
+      clearBmapHover();
+      document.getElementById('app').dataset.mode = viewMode;
+      wrap.classList.toggle('hidden', !isDesign);
+      physicsWrap.classList.toggle('visible', !isDesign);
+      physicsCard.classList.toggle('visible', !isDesign);
+      const designFilters = document.getElementById('designFilters');
+      designFilters.hidden = !isDesign;
+      designFilters.style.display = isDesign ? '' : 'none';
+      document.getElementById('boozerBCtrls').style.display = viewMode === 'boozerB' ? '' : 'none';
+      document.getElementById('boozerCutCtrls').style.display = viewMode === 'boozerCut' ? '' : 'none';
+      document.getElementById('poincareCtrls').style.display = viewMode === 'poincare' ? '' : 'none';
+      document.querySelectorAll('#modeSwitch button').forEach((btn) => {
+        btn.classList.toggle('active', btn.dataset.mode === viewMode);
+      });
+      document.querySelectorAll('#physics-analysis .analysis-panel').forEach((panel) => {
+        panel.classList.toggle('active', panel.dataset.mode === viewMode);
+      });
+      physicsAnalysis.dataset.focus = isDesign ? '' : viewMode;
+      const explain = modeExplain(viewMode);
+      physicsCardTitle.textContent = explain.title || 'Physics';
+      if (explain.title) {
+        physicsExplain.innerHTML =
+          `<b>${explain.title}</b>${explain.body}<div class="detail">${explain.detail}</div>`;
+        physicsExplain.style.display = '';
+      } else {
+        physicsExplain.style.display = 'none';
+      }
+      afterLayout(() => {
+        if (viewMode === 'design') resizeThree();
+        else {
+          physicsScene.resize();
+          paintPhysics();
+        }
+      });
+    }
+
+    async function loadPhysicsForCurrent() {
+      const gi = currentGi();
+      if (gi == null || viewMode === 'design') return;
+      if (physicsAbort) physicsAbort.abort();
+      physicsAbort = new AbortController();
+      const body = physicsRequestBody(gi);
+      statusEl.textContent = 'loading…';
+      try {
+        const bundle = await requestPhysics(body, {
+          signal: physicsAbort.signal,
+          onStatus: (msg) => { statusEl.textContent = msg; },
+        });
+        if (currentGi() !== gi || viewMode === 'design') return;
+        physicsBundle = bundle;
+        const active = activeBundle();
+        if (physicsSel) physicsSel = refreshSelectionXyz(active, physicsSel);
+        setPhysicsReadout(active);
+        updateZetaReadout();
+        afterLayout(() => paintPhysics());
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        statusEl.textContent = physicsErrorText(err, body.backend);
+        physicsBundle = null;
+        setPhysicsReadout(null);
+      }
+    }
+
+    /** Turn a service error into one readable line.
+
+    Both backends serve pre-solved equilibria only, so the common failure is
+    simply "this candidate has no saved equilibrium for that backend" -- worth
+    saying plainly instead of leaking `physics job 500: {"detail":...}`. */
+    function physicsErrorText(err, backend) {
+      const raw = String((err && err.message) || err);
+      let detail = raw;
+      const brace = raw.indexOf('{');
+      if (brace !== -1) {
+        try {
+          const parsed = JSON.parse(raw.slice(brace));
+          if (parsed && parsed.detail) detail = String(parsed.detail);
+        } catch { /* not JSON; keep the raw text */ }
+      }
+      if (/no saved (VMEC\+\+|DESC)/i.test(detail) || /FileNotFoundError/.test(detail)) {
+        const name = backend === 'vmecpp' ? 'VMEC++' : 'DESC';
+        return `no saved ${name} equilibrium for this candidate`;
+      }
+      return detail;
+    }
+
+    document.getElementById('modeSwitch').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-mode]');
+      if (!btn) return;
+      setPhysicsMode(btn.dataset.mode);
+    });
+    physicsAnalysis.addEventListener('click', (e) => {
+      if (e.target.closest('canvas')) return;
+      const panel = e.target.closest('.analysis-panel[data-mode]');
+      if (!panel) return;
+      setPhysicsMode(panel.dataset.mode);
+    });
+    // Hover preview: the same pick the click uses, but it only paints the
+    // overlay and slides a ghost along the 3D surface. Nothing is committed
+    // -- the pinned selection, the ζ slider and the other panels stay put.
+    // rAF-throttled, since mousemove fires far faster than a frame.
+    function flushHover() {
+      hoverQueued = false;
+      const bundle = activeBundle();
+      const pick = hoverPick;
+      drawBoozerBHover(bmapHover, canvasBoozerB, bundle, pick);
+      const sel = pick && bundle && bundle.boozer_B
+        ? selectionFromHeatmap(bundle, pick)
+        : null;
+      physicsScene.setHoverMarker(sel && sel.xyz);
+    }
+    function queueHover(pick) {
+      hoverPick = pick;
+      if (hoverQueued) return;
+      hoverQueued = true;
+      requestAnimationFrame(flushHover);
+    }
+    function clearBmapHover() {
+      hoverPick = null;
+      if (bmapHover) bmapHover.dataset.on = '0';
+      physicsScene.setHoverMarker(null);
+    }
+    canvasBoozerB.addEventListener('mousemove', (e) => {
+      const bundle = activeBundle();
+      if (!bundle || !bundle.boozer_B) return;
+      const bb = bundle.boozer_B;
+      queueHover(heatmapPick(
+        canvasBoozerB, e.clientX, e.clientY, bb.n_theta, bb.n_zeta, bundle.meta.nfp || 1,
+      ));
+    });
+    canvasBoozerB.addEventListener('mouseleave', clearBmapHover);
+    canvasBoozerB.addEventListener('click', (e) => {
+      const bundle = activeBundle();
+      if (!bundle || !bundle.boozer_B) return;
+      const bb = bundle.boozer_B;
+      const pick = heatmapPick(
+        canvasBoozerB, e.clientX, e.clientY, bb.n_theta, bb.n_zeta, bundle.meta.nfp || 1,
+      );
+      if (!pick) return;
+      physicsSel = selectionFromHeatmap(bundle, pick);
+      const nfp = bundle.meta.nfp || 1;
+      const period = (2 * Math.PI) / nfp;
+      const frac = ((physicsSel.zetaB / period) % 1 + 1) % 1;
+      const k = Math.round(frac * EQUAL_CUTS) % EQUAL_CUTS;
+      zetaSlider.value = String(k / EQUAL_CUTS);
+      updateZetaReadout();
+      paintPhysics();
+    });
+
+    sSlider.addEventListener('input', () => {
+      if (physicsBundle) {
+        const bundle = activeBundle();
+        syncSReadout(bundle.meta.s);
+        if (physicsSel) physicsSel = refreshSelectionXyz(bundle, physicsSel);
+        setPhysicsReadout(bundle);
+        paintPhysics();
+      } else {
+        syncSReadout(sSlider.value);
+      }
+    });
+    cmapSelect.addEventListener('change', paintPhysics);
+    eqBackendEl.addEventListener('change', () => {
+      physicsBundle = null;
+      if (viewMode !== 'design') loadPhysicsForCurrent();
+    });
+    nContoursEl.addEventListener('input', () => {
+      nContoursVal.textContent = nContoursEl.value;
+      paintPhysics2d();
+    });
+    document.getElementById('contoursOn').addEventListener('change', paintPhysics2d);
+    zetaSlider.addEventListener('input', () => {
+      updateZetaReadout();
+      if (physicsSel && physicsBundle) {
+        physicsSel = refreshSelectionXyz(activeBundle(), { ...physicsSel, zetaB: currentZeta() });
+      }
+      paintPhysics();
+    });
+    phiSlider.addEventListener('input', () => {
+      phiVal.textContent = Number(phiSlider.value).toFixed(2);
+      if (viewMode === 'poincare') paintPhysics3d();
+    });
+    phiSlider.addEventListener('change', () => loadPhysicsForCurrent());
+    nSeedsEl.addEventListener('change', () => loadPhysicsForCurrent());
+    nTurnsEl.addEventListener('change', () => loadPhysicsForCurrent());
+    document.querySelectorAll('input[name="cutProj"]').forEach((el) => {
+      el.addEventListener('change', paintPhysics2d);
+    });
+    ['showB', 'showAxes', 'showPhiPlane'].forEach((id) => {
+      document.getElementById(id).addEventListener('change', paintPhysics);
+    });
+    document.getElementById('resetPhysicsView').addEventListener('click', () => physicsScene.resetView());
+
+    new ResizeObserver(() => {
+      if (viewMode !== 'design') paintPhysics2d();
+    }).observe(physicsAnalysis);
+
 
     // The 3D view and the UMAP map now live in separate, independently
     // resizable/collapsible panes, so each gets its own resize function
     // driven by a ResizeObserver on its own container (catches both window
     // resizes and the side-pane collapse/expand transition).
     function resizeThree() {
-      const w = wrap.clientWidth, h = wrap.clientHeight || 1;
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      if (w < 2 || h < 2) return;
       renderer.setSize(w, h);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
@@ -1010,6 +1839,7 @@
           drawHistogram(t, lastCounts[t] || new Array(N_BINS).fill(0));
         });
         if (tsnePoints) drawTSNE();
+        if (viewMode !== 'design') loadPhysicsForCurrent();
         return;
       }
       const pos = Math.max(0, Math.min(filteredIndices.length - 1, Number(indexEl.value) || 0));
@@ -1036,6 +1866,7 @@
         drawHistogram(t, lastCounts[t] || new Array(N_BINS).fill(0));
       });
       if (tsnePoints) drawTSNE();
+      if (viewMode !== 'design') loadPhysicsForCurrent();
     }
 
     sourceEl.addEventListener('change', () => { indexEl.value = 0; recomputeFiltered(); });
@@ -1058,6 +1889,7 @@
       recomputeFiltered();
       computeAndRenderUMAP();
       animate();
+      afterLayout(resizeThree);
     })();
   </script>
 </body>

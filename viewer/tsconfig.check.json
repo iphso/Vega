@@ -1,0 +1,20 @@
+// The typecheck gate, run by `npm run check`.
+//
+// Scoped to src/lib -- the modules extracted out of index.astro -- rather
+// than the whole project. index.astro's inline script is ~1400 lines of
+// pre-existing DOM code whose every `document.getElementById(...).value`
+// is a ts(2339) against HTMLElement; including it means ~66 errors that
+// are narrowing noise, not defects, and silencing them one cast at a time
+// is a rewrite of code this change never touched.
+//
+// The root tsconfig.json still covers everything, so editors type-hint the
+// whole project and `npx astro check` reports on index.astro when someone
+// wants to take that on. This file is what has to stay green.
+{
+  "extends": "./tsconfig.json",
+  // astro/client declares import.meta.env. The root config picks this up from
+  // the generated .astro/types.d.ts, which is gitignored and absent on a
+  // fresh clone, so name it directly and keep `npm run check` self-contained.
+  "compilerOptions": { "types": ["astro/client"] },
+  "include": ["src/lib/**/*.ts"]
+}

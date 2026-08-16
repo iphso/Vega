@@ -1,8 +1,18 @@
 output
 checkpoints
 __pycache__
+.pytest_cache
+.DS_Store
 .claude
 viewer/node_modules
 viewer/dist
-viewer/public/data
+# The viewer reads these four files at load; the vega_testing export of them
+# is ~130 KB and ships so a clone renders without running the exporter first.
+# The production pool export writes the SAME four names at ~100 MB -- check
+# meta.json's "n" before committing a change here.
+viewer/public/data/*
+!viewer/public/data/meta.json
+!viewer/public/data/X.bin
+!viewer/public/data/Y.bin
+!viewer/public/data/source.bin
 viewer/.astro

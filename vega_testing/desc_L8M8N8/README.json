@@ -1,0 +1,25 @@
+{
+  "run": "desc_L8M8N8",
+  "backend": "desc",
+  "vacuum": true,
+  "L": 8,
+  "M": 8,
+  "N": 8,
+  "n": 308,
+  "n_ok": 308,
+  "n_batches": 308,
+  "cluster_job": "62951210",
+  "median_time_s": 81.3,
+  "sane_abs_iota": 306,
+  "boundary": "physics_bundle.desc_surface_from_vmec (check_orientation=False)",
+  "filename": "eq_i{test_row:04d}_fr{file_row:06d}.h5",
+  "contents": {
+    "equilibria": "equilibria/",
+    "results": "results.npz",
+    "shards": "shards/"
+  },
+  "note": "DESC vacuum L=M=N=8 via desc_surface_from_vmec + _solve_desc. Per-row NFP. Handedness vs VMEC++ flips \u03b9 sign \u2014 compare |\u03b9|, do not flip the boundary. Same 308 high-fi VMEC successes.",
+  "n_eq_files": 308,
+  "filter": "kept rows where vmecpp_highfi/results.npz vmecpp_ok==True",
+  "kept_old_indices": "see results.npz / root kept_old_indices.npy"
+}
