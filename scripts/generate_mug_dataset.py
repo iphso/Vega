@@ -1,11 +1,9 @@
 """Bootstraps a training dataset for the mug/thermos thermal-design domain --
-v2 (EXPERIMENT_LOG §48), sampling the 8-dim richer parameterization (named
-materials + 2-band wall profile + handle) instead of v1's 3-dim one. Same
-role as generate_airfoil_dataset.py/generate_torax_dataset.py; direct range
-sampling is still sufficient here (no archetypal seeds needed) since
-near-random values of every one of these 8 parameters are physically
-sensible on their own -- confirmed by §47/§48's own smoke tests (100%
-hit rate both times).
+v3 (EXPERIMENT_LOG §50), sampling the 14-dim parameterization (variable
+body shape + lid, on top of v2's materials/wall-profile/handle) instead of
+v2's 8-dim one. Same role as generate_airfoil_dataset.py/
+generate_torax_dataset.py; direct range sampling is still sufficient here
+(no archetypal seeds needed) -- confirmed by v3's own 40/40 smoke test.
 
 Runs entirely on host, no Docker -- mug_oracle.py's only dependency is
 numpy/scipy.
@@ -22,11 +20,13 @@ from oracle_harness import run_batch_with_timeout
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "output"
 
-# Continuous material-index ranges span the full named-material table in each
-# slot (see thermal_mug_spike.py's STRUCTURAL_MATERIALS/INSULATION_MATERIALS/
-# HANDLE_MATERIALS) -- table lengths are 4/4/5 respectively, so valid index
-# ranges are [0, 3]/[0, 3]/[0, 4].
+# Radius ranges: 15-60mm spans a small espresso cup (30mm dia) to a large
+# tumbler (120mm dia) -- r_mid free to be smaller (taper), larger (belly), or
+# equal to base/rim (straight cylinder) within that same range.
 DEFAULT_RANGES = dict(
+    r_base_mm=(15.0, 60.0),
+    r_mid_mm=(15.0, 60.0),
+    r_rim_mm=(15.0, 60.0),
     t_wall_rim_mm=(0.3, 5.0),
     t_wall_base_mm=(0.3, 5.0),
     struct_material_idx=(0.0, 3.0),
@@ -35,6 +35,9 @@ DEFAULT_RANGES = dict(
     handle_length_mm=(10.0, 80.0),
     handle_diameter_mm=(3.0, 20.0),
     handle_material_idx=(0.0, 4.0),
+    lid_coverage_frac=(0.0, 1.0),
+    t_lid_mm=(0.5, 10.0),
+    lid_material_idx=(0.0, 3.0),
 )
 
 

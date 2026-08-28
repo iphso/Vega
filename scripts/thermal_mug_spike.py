@@ -384,6 +384,207 @@ def simulate_v2(t_wall_rim_mm, t_wall_base_mm, struct_material_idx,
     )
 
 
+# ---------------------------------------------------------------------------
+# v3 (EXPERIMENT_LOG §50): user asked to "uplevel" the domain further, picked
+# two of four proposed directions -- a lid/top-loss model (the single
+# biggest correctness gap in v1/v2: the top of the mug lost ZERO heat,
+# which is backwards -- an open liquid surface is typically the FASTEST
+# loss pathway on a real mug, not a negligible one) and a variable body
+# shape (radius profile instead of a fixed-radius cylinder). v2's
+# simulate_v2() is left untouched for reference/regression.
+#
+# Body shape: radius at 3 heights (base/mid/rim) instead of one constant --
+# a taper (narrower base), a flare (wider rim), or a belly (wider middle)
+# are all expressible, not just a straight cylinder. Total height stays
+# fixed (HEIGHT=0.10m) -- varying it too is a real further idea, not done
+# here (kept the parameter count from ballooning in one pass). Each
+# half-height "band" is now a frustum (truncated cone), not a plain
+# cylinder shell -- lateral area and volume both computed from the real
+# frustum formulas, not the fixed-cylinder constants v1/v2 used.
+#
+# Lid: a single continuous `lid_coverage_frac` in [0,1] interpolates
+# between a fully open cup (0) and a fully sealed lid (1) -- avoids a
+# discrete open/lidded branch, consistent with this project's
+# continuous-parameterization style everywhere else. The open fraction of
+# the top loses heat directly to ambient via a temperature-DEPENDENT
+# effective coefficient (h rises with liquid temperature, approximating
+# evaporation's own dependence on vapor pressure, which rises with
+# temperature -- a real, load-bearing simplification instead of a full
+# Antoine-equation vapor-pressure model, chosen because the ballpark
+# magnitude -- open coffee cools much faster than lidded, common
+# experience -- matters more here than the exact curve shape). The
+# covered fraction conducts through a lid (its own thickness + a material
+# index, reusing STRUCTURAL_MATERIALS -- a lid is a similar kind of
+# component to the wall shell, not worth a 4th materials table) to
+# ambient at the plain (non-evaporative) side-wall convection coefficient.
+# ---------------------------------------------------------------------------
+
+H_AIR_TOP_OPEN = 15.0   # W/(m2 K), open-liquid-surface convection baseline --
+                        # somewhat higher than the side wall's H_AIR=10 (an
+                        # unobstructed buoyant plume above a hot liquid convects
+                        # more freely than air along a vertical wall)
+EVAP_COEFF = 60.0       # W/(m2 K)-equivalent, evaporation's contribution at
+                        # full temperature difference -- an order-of-magnitude
+                        # stand-in for "open coffee cools much faster than
+                        # lidded," not a real vapor-pressure/Antoine-equation
+                        # model; scales linearly with (T_liq-T_amb)/(T0-T_amb)
+                        # so it fades as the liquid approaches ambient, same
+                        # direction real evaporation rate does (falling vapor
+                        # pressure difference), just not the same curve shape
+
+N_LID = 15
+
+PARAM_DIM_V3 = 14
+PARAM_NAMES_V3 = [
+    "r_base_mm", "r_mid_mm", "r_rim_mm",
+    "t_wall_rim_mm", "t_wall_base_mm", "struct_material_idx",
+    "t_gap_mm", "insulation_material_idx",
+    "handle_length_mm", "handle_diameter_mm", "handle_material_idx",
+    "lid_coverage_frac", "t_lid_mm", "lid_material_idx",
+]
+
+
+def frustum_lateral_area(r1, r2, h):
+    return math.pi * (r1 + r2) * math.sqrt((r2 - r1) ** 2 + h ** 2)
+
+
+def frustum_volume(r1, r2, h):
+    return (math.pi * h / 3.0) * (r1 ** 2 + r1 * r2 + r2 ** 2)
+
+
+def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
+                 t_wall_rim_mm, t_wall_base_mm, struct_material_idx,
+                 t_gap_mm, insulation_material_idx,
+                 handle_length_mm, handle_diameter_mm, handle_material_idx,
+                 lid_coverage_frac, t_lid_mm, lid_material_idx,
+                 dt=5.0, t_max=2 * 3600.0, record_at=60.0):
+    if min(r_base_mm, r_mid_mm, r_rim_mm, t_wall_rim_mm, t_wall_base_mm,
+           t_gap_mm, handle_length_mm, handle_diameter_mm, t_lid_mm) <= 0:
+        return dict(valid=False)
+    lid_coverage_frac = float(np.clip(lid_coverage_frac, 0.0, 1.0))
+
+    k_struct, rho_struct, cp_struct = material_props(struct_material_idx, STRUCTURAL_MATERIALS)
+    k_ins, rho_ins, cp_ins = material_props(insulation_material_idx, INSULATION_MATERIALS)
+    k_handle, rho_handle, cp_handle = material_props(handle_material_idx, HANDLE_MATERIALS)
+    k_lid, rho_lid, cp_lid = material_props(lid_material_idx, STRUCTURAL_MATERIALS)
+
+    r_base, r_mid, r_rim = r_base_mm / 1000.0, r_mid_mm / 1000.0, r_rim_mm / 1000.0
+    h_band = HEIGHT / 2.0
+    area_base_band = frustum_lateral_area(r_base, r_mid, h_band)
+    area_rim_band = frustum_lateral_area(r_mid, r_rim, h_band)
+    vol_liq = frustum_volume(r_base, r_mid, h_band) + frustum_volume(r_mid, r_rim, h_band)
+    c_liq = RHO_LIQUID * vol_liq * CP_LIQUID
+    a_top = math.pi * r_rim ** 2
+    open_area = a_top * (1.0 - lid_coverage_frac)
+    lid_area = a_top * lid_coverage_frac
+
+    def build_band(t_wall_mm):
+        t_wall, t_gap = t_wall_mm / 1000.0, t_gap_mm / 1000.0
+        dx = np.concatenate([np.full(N_WALL, t_wall / N_WALL), np.full(N_GAP, t_gap / N_GAP)])
+        k = np.concatenate([np.full(N_WALL, k_struct), np.full(N_GAP, k_ins)])
+        rho = np.concatenate([np.full(N_WALL, rho_struct), np.full(N_GAP, rho_ins)])
+        cp = np.concatenate([np.full(N_WALL, cp_struct), np.full(N_GAP, cp_ins)])
+        return dx, k, rho, cp
+
+    dx_rim, k_rim, rho_rim, cp_rim = build_band(t_wall_rim_mm)
+    dx_base, k_base, rho_base, cp_base = build_band(t_wall_base_mm)
+    n_band = N_WALL + N_GAP
+    T_rim = np.full(n_band, T0_LIQUID)
+    T_base = np.full(n_band, T0_LIQUID)
+    T_liq = T0_LIQUID
+
+    L_h = handle_length_mm / 1000.0
+    d_h = handle_diameter_mm / 1000.0
+    A_h = math.pi * (d_h / 2) ** 2
+    P_h = math.pi * d_h
+    dx_h = np.full(N_HANDLE, L_h / N_HANDLE)
+    k_h = np.full(N_HANDLE, k_handle)
+    rho_h = np.full(N_HANDLE, rho_handle)
+    cp_h = np.full(N_HANDLE, cp_handle)
+    T_handle = np.full(N_HANDLE, T_AMB)
+
+    has_lid = lid_area > 1e-9
+    if has_lid:
+        t_lid = t_lid_mm / 1000.0
+        dx_lid = np.full(N_LID, t_lid / N_LID)
+        k_lid_arr = np.full(N_LID, k_lid)
+        rho_lid_arr = np.full(N_LID, rho_lid)
+        cp_lid_arr = np.full(N_LID, cp_lid)
+        # Starts at ambient, not fill temperature -- like the handle (T_handle
+        # above) and unlike the wall bands: a lid isn't liquid-wetted at t=0
+        # the way a submerged wall shell is, it only heats via conduction
+        # from the liquid/vapor below. A real bug caught by the coverage
+        # sweep below before trusting it: initializing at T0_LIQUID left
+        # touch_temp_at_C pinned near 90C at every coverage level >0 for the
+        # full 60s window, since a thick/insulating lid can't cool down
+        # (OR heat up) that fast either direction -- the lid's own frozen
+        # initial condition was masquerading as "the lid got hot."
+        T_lid = np.full(N_LID, T_AMB)
+    else:
+        T_lid = None
+
+    n_steps = int(t_max / dt)
+    touch_temp_at = None
+    handle_temp_at = None
+    recorded = False
+
+    for step in range(n_steps):
+        t_now = step * dt
+        h_open = H_AIR_TOP_OPEN + EVAP_COEFF * max(0.0, T_liq - T_AMB) / (T0_LIQUID - T_AMB)
+        flux_rim = H_LIQ * area_rim_band * (T_liq - T_rim[0])
+        flux_base = H_LIQ * area_base_band * (T_liq - T_base[0])
+        flux_open = h_open * open_area * (T_liq - T_AMB)
+        flux_lid = H_LIQ * lid_area * (T_liq - T_lid[0]) if has_lid else 0.0
+        T_liq_new = T_liq - dt / c_liq * (flux_rim + flux_base + flux_open + flux_lid)
+
+        T_rim_new = _step_chain(T_rim, dx_rim, k_rim, rho_rim, cp_rim, area_rim_band, dt,
+                                 T_amb_right=T_AMB, h_right=H_AIR, T_left_conv=T_liq, h_left=H_LIQ)
+        T_base_new = _step_chain(T_base, dx_base, k_base, rho_base, cp_base, area_base_band, dt,
+                                  T_amb_right=T_AMB, h_right=H_AIR, T_left_conv=T_liq, h_left=H_LIQ)
+        body_temp = 0.5 * (T_rim[-1] + T_base[-1])
+        T_handle_new = _step_chain(T_handle, dx_h, k_h, rho_h, cp_h, A_h, dt,
+                                    T_amb_right=T_AMB, h_right=0.0, T_left_dirichlet=body_temp,
+                                    lateral_hP=H_AIR * P_h, T_lateral=T_AMB)
+        if has_lid:
+            T_lid_new = _step_chain(T_lid, dx_lid, k_lid_arr, rho_lid_arr, cp_lid_arr, lid_area, dt,
+                                     T_amb_right=T_AMB, h_right=H_AIR, T_left_conv=T_liq, h_left=H_LIQ)
+        else:
+            T_lid_new = None
+
+        finite = (np.isfinite(T_liq_new) and np.all(np.isfinite(T_rim_new))
+                  and np.all(np.isfinite(T_base_new)) and np.all(np.isfinite(T_handle_new))
+                  and (T_lid_new is None or np.all(np.isfinite(T_lid_new))))
+        if not finite:
+            return dict(valid=False)
+
+        T_liq, T_rim, T_base, T_handle = T_liq_new, T_rim_new, T_base_new, T_handle_new
+        if has_lid:
+            T_lid = T_lid_new
+
+        if not recorded and (t_now + dt) >= record_at:
+            surfaces = [T_rim[-1], T_base[-1]]
+            if has_lid:
+                surfaces.append(T_lid[-1])
+            touch_temp_at = float(max(surfaces))
+            handle_temp_at = float(T_handle[-1])
+            recorded = True
+
+    mass_struct = area_rim_band * (t_wall_rim_mm / 1000.0) * rho_struct + area_base_band * (t_wall_base_mm / 1000.0) * rho_struct
+    mass_ins = (area_rim_band + area_base_band) * (t_gap_mm / 1000.0) * rho_ins
+    mass_handle = A_h * L_h * rho_handle
+    mass_lid = lid_area * (t_lid_mm / 1000.0) * rho_lid if has_lid else 0.0
+    mass_kg = mass_struct + mass_ins + mass_handle + mass_lid
+
+    return dict(
+        valid=True,
+        final_liq_temp_C=float(T_liq),
+        mass_kg=float(mass_kg),
+        touch_temp_at_C=touch_temp_at,
+        handle_temp_at_C=handle_temp_at,
+        liquid_volume_L=float(vol_liq * 1000.0),
+    )
+
+
 if __name__ == "__main__":
     print("=== Verification: near-massless wall/gap vs. analytic RC limit ===")
     for (tw, tg, kg) in [(1.0, 5.0, 0.03), (2.0, 10.0, 0.01)]:
@@ -476,4 +677,33 @@ if __name__ == "__main__":
     t0 = time.time()
     for _ in range(50):
         simulate_v2(1.0, 1.5, 2.0, 8.0, 1.5, 40.0, 8.0, 2.0, t_max=7200.0)
+    print(f"  {(time.time()-t0)/50*1000:.2f} ms/candidate")
+
+    R_MM = R_INNER * 1000.0  # 35.0 -- v1/v2's fixed cylinder radius, for regression comparisons
+
+    print("\n=== v3 vs. v2: a fully-sealed, well-insulated lid should APPROACH (not exactly match) v2's zero-top-loss idealization ===")
+    v2r = simulate_v2(1.0, 1.0, 3.0, 5.0, 3.0, 30.0, 6.0, 4.0, t_max=7200.0)
+    v3r = simulate_v3(R_MM, R_MM, R_MM, 1.0, 1.0, 3.0, 5.0, 3.0, 30.0, 6.0, 4.0,
+                       1.0, 5.0, 0.0, t_max=7200.0)  # lid_coverage=1, t_lid=5mm, plastic (lowest k available)
+    print(f"  v2 (zero top loss, unphysical idealization)  final_liq_temp_C={v2r['final_liq_temp_C']:.2f}  touch_temp_at_C={v2r['touch_temp_at_C']:.2f}")
+    print(f"  v3 (realistic sealed plastic lid)             final_liq_temp_C={v3r['final_liq_temp_C']:.2f}  touch_temp_at_C={v3r['touch_temp_at_C']:.2f}  "
+          f"(v3 should run a bit COOLER than v2 -- a real lid still conducts some heat, v2 assumes none)")
+
+    print("\n=== v3 lid sanity: coverage sweep (straight cylinder, same wall/gap as above) ===")
+    for cov in [0.0, 0.25, 0.5, 0.75, 1.0]:
+        r = simulate_v3(R_MM, R_MM, R_MM, 1.0, 1.0, 3.0, 5.0, 3.0, 30.0, 6.0, 4.0,
+                         cov, 3.0, 3.0, t_max=7200.0)  # t_lid=3mm steel lid when present
+        print(f"  coverage={cov:.2f}  temp_at_2h_C={r['final_liq_temp_C']:.2f}  touch_temp_at_C={r['touch_temp_at_C']:.2f}")
+
+    print("\n=== v3 body-shape sanity: belly sweep (r_base=r_rim=35mm fixed, r_mid varies) ===")
+    for r_mid in [25.0, 35.0, 45.0, 60.0]:
+        r = simulate_v3(35.0, r_mid, 35.0, 1.0, 1.0, 3.0, 5.0, 3.0, 30.0, 6.0, 4.0,
+                         0.5, 3.0, 3.0, t_max=7200.0)
+        print(f"  r_mid={r_mid:>5.1f}mm  liquid_volume_L={r['liquid_volume_L']:.3f}  "
+              f"mass_kg={r['mass_kg']:.4f}  temp_at_2h_C={r['final_liq_temp_C']:.2f}")
+
+    print("\n=== v3 speed ===")
+    t0 = time.time()
+    for _ in range(50):
+        simulate_v3(30.0, 35.0, 40.0, 1.0, 1.5, 2.0, 8.0, 1.5, 40.0, 8.0, 2.0, 0.6, 3.0, 2.0, t_max=7200.0)
     print(f"  {(time.time()-t0)/50*1000:.2f} ms/candidate")
