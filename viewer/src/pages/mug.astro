@@ -132,6 +132,14 @@
     .mug-caption { font-size: 11px; color: var(--text-faint); margin-top: 8px; }
     .mug-materials { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
     .mug-materials .pill { font-size: 10.5px; }
+    .mode-toggle { display: flex; border: 1px solid var(--border); border-radius: 20px; overflow: hidden; }
+    .mode-btn {
+      background: var(--card-2); color: var(--text-dim); border: none; border-radius: 0;
+      padding: 4px 12px; font-size: 11px; cursor: pointer;
+    }
+    .mode-btn:hover { color: var(--text); }
+    .mode-btn.active { background: var(--accent-dim); color: var(--accent); }
+    .mug-legend.dim { opacity: 0.55; }
     .mug-legend { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--text-faint); flex-wrap: wrap; }
     .mug-legend .bar { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #3a6fd8, #d8c93a, #d8483a); }
     .mug-legend .swatch { display: inline-flex; align-items: center; gap: 4px; }
@@ -198,13 +206,20 @@
 
     <div id="centerPane">
       <div class="card viz-card">
-        <div class="viz-title"><span>3D mug</span><span class="status" id="shapeStatus"></span></div>
+        <div class="viz-title">
+          <span>3D mug</span>
+          <span style="display:flex; gap:10px; align-items:center;">
+            <span class="mode-toggle">
+              <button class="mode-btn active" id="modeMaterialBtn" type="button">Material</button>
+              <button class="mode-btn" id="modeThermalBtn" type="button">Thermal</button>
+            </span>
+            <span class="status" id="shapeStatus"></span>
+          </span>
+        </div>
         <div id="mug3dWrap"></div>
         <div class="mug-caption" id="mugCaption"></div>
         <div class="mug-materials" id="mugMaterials"></div>
-        <div class="mug-legend">
-          <span class="swatch"><span>cool</span></span><span class="bar"></span><span>hot (surface temp at the current time)</span>
-        </div>
+        <div class="mug-legend" id="mugLegend"></div>
       </div>
       <div class="card viz-card" style="flex:1">
         <div class="viz-title"><span>Temperature over time (live simulation)</span><span class="status" id="profileStatus"></span></div>
@@ -279,6 +294,39 @@
       return `${names[lo]}/${names[hi]}`; // a genuine blend between two named materials, not rounded to one
     }
 
+    // §54 user feedback: "Material" view -- rough real-world reference
+    // colors [r,g,b,opacity] per named material, same order/interpolation
+    // convention as materialLabel() above, so a continuous material_idx
+    // blends color smoothly between neighbors exactly the way it blends
+    // physical properties. Glass gets real partial opacity (the one
+    // physically honest place transparency belongs -- everything else
+    // stays opaque, unlike the pre-§54 "see-through cutaway" version).
+    const STRUCTURAL_COLORS = [
+      [230, 220, 190, 1.0],  // plastic
+      [205, 227, 232, 0.55], // glass
+      [245, 242, 235, 1.0],  // ceramic
+      [180, 185, 190, 1.0],  // steel
+    ];
+    const HANDLE_COLORS = [
+      [45, 45, 48, 1.0],     // silicone_rubber
+      [150, 105, 65, 1.0],   // wood
+      [205, 145, 95, 1.0],   // plastic_grip
+      [245, 242, 235, 1.0],  // ceramic
+      [180, 185, 190, 1.0],  // steel
+    ];
+    const LIQUID_COLOR = [110, 72, 40, 1.0]; // a generic hot-beverage brown -- not a "material," so not indexed
+
+    function materialColorRGBA(idx, table) {
+      const i = Math.max(0, Math.min(table.length - 1, idx));
+      const lo = Math.floor(i), hi = Math.min(table.length - 1, lo + 1);
+      const t = i - lo;
+      const a = table[lo], b = table[hi];
+      return [0, 1, 2, 3].map((k) => a[k] + (b[k] - a[k]) * t);
+    }
+    function rgbaToThree(rgba) {
+      return { color: new THREE.Color(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255), opacity: rgba[3] };
+    }
+
     const subtitleEl = document.getElementById('subtitle');
     const sourceEl = document.getElementById('source');
     const indexEl = document.getElementById('index');
@@ -314,6 +362,9 @@
     const mug3dWrap = document.getElementById('mug3dWrap');
     const mugCaptionEl = document.getElementById('mugCaption');
     const mugMaterialsEl = document.getElementById('mugMaterials');
+    const mugLegendEl = document.getElementById('mugLegend');
+    const modeMaterialBtn = document.getElementById('modeMaterialBtn');
+    const modeThermalBtn = document.getElementById('modeThermalBtn');
     const shapeStatusEl = document.getElementById('shapeStatus');
     const profileStatusEl = document.getElementById('profileStatus');
     const tempChartCanvas = document.getElementById('tempChartCanvas');
@@ -687,9 +738,20 @@
 
     let m3dGroup = new THREE.Group();
     m3dScene.add(m3dGroup);
-    let m3dParts = {}; // { bodyMesh, liquidMesh, lidMesh, handleMesh, bottomMesh, rimRing }
+    let m3dParts = {}; // { bodyMesh, liquidMat, lidMesh, handleMesh, bottomMesh, rimRing }
     let m3dInitialized = false;
     let lastGeom = null;
+    let currentParams = null;
+    // §54 user feedback: two purposes want two different renderings at
+    // once -- "make it look like a real mug" (material, time-invariant)
+    // vs. "play the temperature forward" (thermal, animated). Rather than
+    // compromise on one rendering, this is a real mode toggle: 'material'
+    // shows realistic per-material colors (a real lid is basically on/off,
+    // not a weird partial disc, so it renders full-size here); 'thermal'
+    // switches the wall to WIREFRAME (an explicit "this is a schematic,
+    // not the real object" cue) colored by the live simulated temperature,
+    // with the lid back to its literal coverage-area size.
+    let vizMode = 'material';
 
     // Cold-blue -> warm-yellow -> hot-red -- deliberately NOT the
     // plasma/viridis palette the stellarator/airfoil/TORAX viewers use.
@@ -739,6 +801,7 @@
     }
 
     function buildMugShape(p) {
+      currentParams = p;
       m3dScene.remove(m3dGroup);
       m3dGroup = new THREE.Group();
       m3dParts = {};
@@ -816,12 +879,15 @@
       m3dGroup.add(liquidGroup);
       m3dParts.liquidMat = liquidMat; // shared by all 3 sub-meshes -- one color update recolors the whole liquid
 
-      // Lid -- a disc at z=height, sized so its AREA is proportional to
-      // lid_coverage_frac of the rim opening (a simplification: doesn't
-      // represent WHICH part of the opening is covered, just how much).
+      // Lid -- §54 user feedback: a partial-area disc doesn't look like a
+      // real lid (real lids are basically on or off, not oddly-sized
+      // pancakes). In Material view, any meaningful coverage renders as a
+      // full rim-sized lid -- a real, binary product choice. In Thermal
+      // view, the disc is still sized by the literal lid_coverage_frac
+      // area, matching what's actually being simulated in that schematic.
       const lidCoverage = Math.max(0, Math.min(1, p.lid_coverage_frac));
       if (lidCoverage > 0.01) {
-        const lidR = rRim * Math.sqrt(lidCoverage);
+        const lidR = vizMode === 'material' ? rRim : rRim * Math.sqrt(lidCoverage);
         const lidGeom = new THREE.CircleGeometry(lidR, 32);
         const lidMat = new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.DoubleSide });
         const lidMesh = new THREE.Mesh(lidGeom, lidMat);
@@ -857,6 +923,7 @@
 
       m3dScene.add(m3dGroup);
       lastGeom = { rBase, rMid, rRim, height };
+      applyVizMode();
 
       if (!m3dInitialized) {
         // Elevated enough to look down INTO the open top by default (so the
@@ -889,6 +956,62 @@
         m3dParts.lidMesh.material.color.copy(colorForTemp(tLid));
       }
       m3dParts.handleMesh.material.color.copy(colorForTemp(tHandle));
+    }
+
+    // Applies the current vizMode's look to whatever's currently built --
+    // called once right after buildMugShape() (so a freshly-built shape is
+    // never left in its gray placeholder state) and again whenever the
+    // mode toggle is clicked. In 'material' mode this is the only place
+    // colors get set (time-invariant, no series needed). In 'thermal'
+    // mode this just puts the wall in wireframe and defers to
+    // updateMugColors() for the actual per-frame coloring, since that
+    // depends on the time slider position, not just the candidate.
+    function applyVizMode() {
+      if (!currentParams || !m3dParts.bodyMesh) return;
+      const p = currentParams;
+      const bodyMat = m3dParts.bodyMesh.material;
+      if (vizMode === 'material') {
+        bodyMat.wireframe = false;
+        const struct = rgbaToThree(materialColorRGBA(p.struct_material_idx, STRUCTURAL_COLORS));
+        applyBodyColors(m3dParts.bodyMesh.geometry, m3dParts.height, struct.color, struct.color);
+        bodyMat.transparent = struct.opacity < 1;
+        bodyMat.opacity = struct.opacity;
+        [m3dParts.bottomMesh.material, m3dParts.rimRing.material].forEach((m) => {
+          m.color.copy(struct.color);
+          m.transparent = struct.opacity < 1;
+          m.opacity = struct.opacity;
+        });
+        m3dParts.liquidMat.color.setRGB(LIQUID_COLOR[0] / 255, LIQUID_COLOR[1] / 255, LIQUID_COLOR[2] / 255);
+        if (m3dParts.lidMesh) {
+          const lid = rgbaToThree(materialColorRGBA(p.lid_material_idx, STRUCTURAL_COLORS));
+          m3dParts.lidMesh.material.color.copy(lid.color);
+          m3dParts.lidMesh.material.transparent = lid.opacity < 1;
+          m3dParts.lidMesh.material.opacity = lid.opacity;
+        }
+        m3dParts.handleMesh.material.color.copy(rgbaToThree(materialColorRGBA(p.handle_material_idx, HANDLE_COLORS)).color);
+      } else {
+        bodyMat.wireframe = true;
+        bodyMat.transparent = false;
+        bodyMat.opacity = 1;
+        [m3dParts.bottomMesh.material, m3dParts.rimRing.material].forEach((m) => { m.transparent = false; m.opacity = 1; });
+        if (m3dParts.lidMesh) { m3dParts.lidMesh.material.transparent = false; m3dParts.lidMesh.material.opacity = 1; }
+        if (currentSeries) updateMugColors(currentSeries, Number(timeSlider.value));
+      }
+    }
+
+    function setVizMode(mode) {
+      vizMode = mode;
+      modeMaterialBtn.classList.toggle('active', mode === 'material');
+      modeThermalBtn.classList.toggle('active', mode === 'thermal');
+      timeSlider.disabled = mode !== 'thermal';
+      playBtn.disabled = mode !== 'thermal';
+      if (mugLegendEl) {
+        mugLegendEl.innerHTML = mode === 'material'
+          ? `<span>colored by real material — switch to Thermal to play the simulated temperature forward</span>`
+          : `<span class="swatch"><span>cool</span></span><span class="bar"></span><span>hot (wireframe wall; surface temp at the current time)</span>`;
+      }
+      if (currentParams) buildMugShape(currentParams); // rebuild -- lid size differs by mode
+      resizeMug3d();
     }
 
     function resizeMug3d() {
@@ -963,8 +1086,12 @@
       const t = currentSeries.t_s[k];
       timeVal.textContent = t < 60 ? `t=${t.toFixed(0)}s` : `t=${(t / 60).toFixed(1)}min`;
       drawTempChart(currentSeries, k);
-      updateMugColors(currentSeries, k);
+      if (vizMode === 'thermal') updateMugColors(currentSeries, k); // Material view is time-invariant, left alone
     }
+
+    modeMaterialBtn.addEventListener('click', () => setVizMode('material'));
+    modeThermalBtn.addEventListener('click', () => setVizMode('thermal'));
+    setVizMode('material'); // sets the initial legend text + disables the time controls until Thermal is picked
 
     timeSlider.addEventListener('input', () => renderSeriesAtFrame(Number(timeSlider.value)));
     playBtn.addEventListener('click', () => {
