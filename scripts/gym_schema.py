@@ -229,6 +229,22 @@ def get_conditioning(domain_name, ckpt):
             worker_aux=lambda aux: {"reynolds": aux["reynolds"], "mach": 0.0, "alpha": aux["alpha"]},
         )
 
+    if domain_name == "mug":
+        # No discrete or continuous conditioning variable, same reasoning as
+        # torax below -- mug_oracle.py's own docstring is explicit that
+        # every design variable (including the 3 continuous material-choice
+        # indices) is already part of the 8-dim param vector.
+        def cond_from_target_and_aux(target_z, aux):
+            return _torch.tensor(target_z[None, :], dtype=_torch.float32)
+
+        return Conditioning(
+            name="mug", extra_dim=0,
+            cond_from_target_and_aux=cond_from_target_and_aux,
+            aux_from_row=lambda row, param_dim: {},
+            sample_aux=lambda rng: {},
+            worker_aux=lambda aux: {},
+        )
+
     if domain_name == "torax":
         # No discrete or continuous conditioning variable at all here --
         # unlike VMEC's n_field_periods or airfoil's (reynolds, alpha),

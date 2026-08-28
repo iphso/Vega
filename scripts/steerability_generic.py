@@ -46,14 +46,14 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from gym_schema import airfoil_spec, get_conditioning, torax_spec, vmec_spec
+from gym_schema import airfoil_spec, get_conditioning, mug_spec, torax_spec, vmec_spec
 from oracle_harness import run_batch_with_timeout
 from oracle_harness_persistent import run_batch_persistent
 
 OUT_DIR = Path("/work/output")
 CKPT_DIR = Path("/work/checkpoints")
 
-SPEC_FACTORIES = {"vmec": vmec_spec, "airfoil": airfoil_spec, "torax": torax_spec}
+SPEC_FACTORIES = {"vmec": vmec_spec, "airfoil": airfoil_spec, "torax": torax_spec, "mug": mug_spec}
 
 
 def eval_space(Y, target_names, log_target_names):
