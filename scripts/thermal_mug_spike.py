@@ -247,17 +247,20 @@ def material_props(idx, table):
 
 def _step_chain(T, dx, k, rho, cp, area, dt, T_amb_right, h_right,
                  T_left_conv=None, h_left=None, T_left_dirichlet=None,
-                 lateral_hP=0.0, T_lateral=T_AMB):
+                 T_right_dirichlet=None, lateral_hP=0.0, T_lateral=T_AMB):
     """One implicit (backward-Euler) step of a 1D finite-volume conduction
     chain with fixed (not coupled-unknown) boundary values on both ends --
     either a convective left boundary (T_left_conv/h_left, what the wall
     bands use to reach the liquid) or a Dirichlet left boundary
-    (T_left_dirichlet, what the handle uses to reach the wall), a convective
-    right boundary (T_amb_right/h_right; h_right=0 means adiabatic/no-flux,
-    what the handle's tip uses), and an optional per-cell lateral convective
-    loss term (lateral_hP = h*perimeter, zero for the wall bands which only
-    lose heat at their two ends, nonzero for the handle which loses heat
-    along its whole exposed length -- the fin equation's extra term)."""
+    (T_left_dirichlet, what the handle's base end uses to reach the wall),
+    a convective right boundary (T_amb_right/h_right; h_right=0 means
+    adiabatic/no-flux, a free fin tip) OR a Dirichlet right boundary
+    (T_right_dirichlet -- §56: the handle's SECOND attached end, once the
+    loop shape got two attachment points instead of one attached end + one
+    free tip), and an optional per-cell lateral convective loss term
+    (lateral_hP = h*perimeter, zero for the wall bands which only lose heat
+    at their two ends, nonzero for the handle which loses heat along its
+    whole exposed length -- the fin equation's extra term)."""
     n = len(T)
     C = rho * cp * dx * area
     G = np.empty(n - 1)
@@ -285,11 +288,15 @@ def _step_chain(T, dx, k, rho, cp, area, dt, T_amb_right, h_right,
         diag[0] += G_left
         rhs[0] += G_left * T_left_conv
 
-    if h_right != 0.0:
+    if T_right_dirichlet is not None:
+        diag[-1] = 1.0
+        lower[-1] = 0.0
+        rhs[-1] = T_right_dirichlet
+    elif h_right != 0.0:
         G_right = 1.0 / (1.0 / (h_right * area) + dx[-1] / (2 * k[-1] * area))
         diag[-1] += G_right
         rhs[-1] += G_right * T_amb_right
-    # h_right == 0.0: adiabatic tip, no term added
+    # h_right == 0.0 and no T_right_dirichlet: adiabatic tip, no term added
 
     ab = np.zeros((3, n))
     ab[0, 1:] = upper[:-1]
@@ -433,6 +440,10 @@ EVAP_COEFF = 60.0       # W/(m2 K)-equivalent, evaporation's contribution at
                         # pressure difference), just not the same curve shape
 
 N_LID = 15
+N_AXIAL_BANDS = 6  # §56: was 2 (rim band + base band) -- see simulate_v3's
+                   # own docstring for why this, not a finer N_WALL/N_GAP,
+                   # is what actually gives the 3D view real height-wise
+                   # spatial detail to show.
 
 PARAM_DIM_V3 = 14
 PARAM_NAMES_V3 = [
@@ -452,6 +463,16 @@ def frustum_volume(r1, r2, h):
     return (math.pi * h / 3.0) * (r1 ** 2 + r1 * r2 + r2 ** 2)
 
 
+def radius_at_height(r_base, r_mid, r_rim, height, z):
+    """Same 2-segment (base->mid->rim) piecewise-linear profile the body
+    geometry itself uses, evaluated at an arbitrary height z -- lets
+    N_AXIAL_BANDS bands (or anything else) sample the real body profile at
+    any height, not just the 3 design points."""
+    if z <= height / 2:
+        return r_base + (r_mid - r_base) * (z / (height / 2))
+    return r_mid + (r_rim - r_mid) * ((z - height / 2) / (height / 2))
+
+
 def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
                  t_wall_rim_mm, t_wall_base_mm, struct_material_idx,
                  t_gap_mm, insulation_material_idx,
@@ -461,20 +482,42 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
                  record_series=False, series_dt=None):
     """record_series=True (viewer-only -- never set by the oracle/bulk-
     generation path, which only needs the two scalar snapshots): also
-    returns a time series of liquid temp + each surface's outer temp +
-    the handle's own full internal profile, for the viewer's
+    returns a time series of liquid temp + each band's outer temp + the
+    handle's own full internal profile, for the viewer's
     temperature-over-time animation.
 
     series_dt=None (default) records every native integration step (dt) --
     §55 user feedback on the original 60s downsampling: the first minute or
     two is where almost all the interesting transient behavior actually
-    happens (walls/lid racing from a uniform initial condition toward
-    their real profile), so a 60s stride made the animation's first couple
-    of frames look like a discontinuous "flip" rather than a diffusion --
-    it was literally skipping over the diffusion. At dt=5s over a 7200s
-    run that's ~1440 points, still a small payload (a handful of floats
-    per point) for a single on-demand physics call, not a bulk-generation
-    cost."""
+    happens, so a 60s stride made the animation's first couple of frames
+    look like a discontinuous "flip" rather than a diffusion.
+
+    §56: the body wall is divided into N_AXIAL_BANDS (6, up from 2 --
+    rim/base) independent radial conduction chains stacked along the
+    height, each its own frustum slice with wall thickness linearly
+    interpolated between t_wall_base_mm/t_wall_rim_mm at that height.
+    This is a real, deliberate distinction from just increasing N_WALL/
+    N_GAP: those control resolution THROUGH the wall's thickness (radial),
+    which does NOT add any new spatial detail ALONG the height, since the
+    body's own visualization only ever reads one outer-surface value per
+    band regardless of how finely that band's own radial direction is
+    resolved. Going from 2 bands to 6 is what actually gives the 3D
+    viewer real height-wise data to interpolate between, instead of a
+    single straight-line blend across the whole body no matter how "fine"
+    the mesh was inside those 2 fixed points.
+
+    The handle is now attached at BOTH ends (T_left_dirichlet AND
+    T_right_dirichlet, both driven by the same near-mid-height band) --
+    §56 user feedback: the loop shape (added in §53 for realism) has two
+    attachment points and no free tip, but the fin model still had one
+    attached end + one free end, a real, named geometric mismatch. Fixing
+    the PHYSICS to match the loop (rather than fudging the visualization
+    further) makes the loop's own farthest point (from the mug) the
+    genuine coolest point of a symmetric profile -- exactly what a
+    real two-point-attached loop handle would do -- rather than an
+    approximation of a profile that was never actually symmetric to begin
+    with. `handle_temp_at_C`/`T_handle_tip` now report the PROFILE'S
+    MIDDLE index (the new genuine coolest point), not the last index."""
     if series_dt is None:
         series_dt = dt
     if min(r_base_mm, r_mid_mm, r_rim_mm, t_wall_rim_mm, t_wall_base_mm,
@@ -488,14 +531,22 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
     k_lid, rho_lid, cp_lid = material_props(lid_material_idx, STRUCTURAL_MATERIALS)
 
     r_base, r_mid, r_rim = r_base_mm / 1000.0, r_mid_mm / 1000.0, r_rim_mm / 1000.0
-    h_band = HEIGHT / 2.0
-    area_base_band = frustum_lateral_area(r_base, r_mid, h_band)
-    area_rim_band = frustum_lateral_area(r_mid, r_rim, h_band)
-    vol_liq = frustum_volume(r_base, r_mid, h_band) + frustum_volume(r_mid, r_rim, h_band)
+    height = HEIGHT
+    band_edges = [i * height / N_AXIAL_BANDS for i in range(N_AXIAL_BANDS + 1)]
+    band_r = [radius_at_height(r_base, r_mid, r_rim, height, z) for z in band_edges]
+    band_h = height / N_AXIAL_BANDS
+    band_area = [frustum_lateral_area(band_r[i], band_r[i + 1], band_h) for i in range(N_AXIAL_BANDS)]
+    vol_liq = sum(frustum_volume(band_r[i], band_r[i + 1], band_h) for i in range(N_AXIAL_BANDS))
     c_liq = RHO_LIQUID * vol_liq * CP_LIQUID
     a_top = math.pi * r_rim ** 2
     open_area = a_top * (1.0 - lid_coverage_frac)
     lid_area = a_top * lid_coverage_frac
+
+    # wall thickness per band -- linear interpolation between the two real
+    # design parameters, evaluated at each band's own height midpoint
+    band_t_wall_mm = [t_wall_base_mm + (t_wall_rim_mm - t_wall_base_mm)
+                       * ((band_edges[i] + band_edges[i + 1]) / 2 / height)
+                       for i in range(N_AXIAL_BANDS)]
 
     def build_band(t_wall_mm):
         t_wall, t_gap = t_wall_mm / 1000.0, t_gap_mm / 1000.0
@@ -505,12 +556,11 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
         cp = np.concatenate([np.full(N_WALL, cp_struct), np.full(N_GAP, cp_ins)])
         return dx, k, rho, cp
 
-    dx_rim, k_rim, rho_rim, cp_rim = build_band(t_wall_rim_mm)
-    dx_base, k_base, rho_base, cp_base = build_band(t_wall_base_mm)
+    bands = [build_band(band_t_wall_mm[i]) for i in range(N_AXIAL_BANDS)]
     n_band = N_WALL + N_GAP
-    T_rim = np.full(n_band, T0_LIQUID)
-    T_base = np.full(n_band, T0_LIQUID)
+    T_bands = [np.full(n_band, T0_LIQUID) for _ in range(N_AXIAL_BANDS)]
     T_liq = T0_LIQUID
+    mid_band_idx = N_AXIAL_BANDS // 2  # both handle attachment points treated as near mid-height
 
     L_h = handle_length_mm / 1000.0
     d_h = handle_diameter_mm / 1000.0
@@ -521,6 +571,7 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
     rho_h = np.full(N_HANDLE, rho_handle)
     cp_h = np.full(N_HANDLE, cp_handle)
     T_handle = np.full(N_HANDLE, T_AMB)
+    handle_mid_idx = N_HANDLE // 2
 
     has_lid = lid_area > 1e-9
     if has_lid:
@@ -532,12 +583,7 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
         # Starts at ambient, not fill temperature -- like the handle (T_handle
         # above) and unlike the wall bands: a lid isn't liquid-wetted at t=0
         # the way a submerged wall shell is, it only heats via conduction
-        # from the liquid/vapor below. A real bug caught by the coverage
-        # sweep below before trusting it: initializing at T0_LIQUID left
-        # touch_temp_at_C pinned near 90C at every coverage level >0 for the
-        # full 60s window, since a thick/insulating lid can't cool down
-        # (OR heat up) that fast either direction -- the lid's own frozen
-        # initial condition was masquerading as "the lid got hot."
+        # from the liquid/vapor below.
         T_lid = np.full(N_LID, T_AMB)
     else:
         T_lid = None
@@ -548,38 +594,42 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
     recorded = False
     series = None
     if record_series:
-        series = {"t_s": [], "T_liq": [], "T_rim_outer": [], "T_base_outer": [],
+        series = {"t_s": [], "T_liq": [], "T_bands_outer": [], "T_rim_outer": [], "T_base_outer": [],
                   "T_lid_outer": [], "T_handle_tip": [], "T_handle_profile": []}
         next_sample_t = 0.0
+
+    def record_frame(t_now):
+        series["t_s"].append(t_now)
+        series["T_liq"].append(float(T_liq))
+        series["T_bands_outer"].append([float(Tb[-1]) for Tb in T_bands])
+        series["T_rim_outer"].append(float(T_bands[-1][-1]))  # convenience aliases for the 2D chart
+        series["T_base_outer"].append(float(T_bands[0][-1]))
+        series["T_lid_outer"].append(float(T_lid[-1]) if has_lid else None)
+        series["T_handle_tip"].append(float(T_handle[handle_mid_idx]))
+        series["T_handle_profile"].append(T_handle.tolist())
 
     for step in range(n_steps):
         t_now = step * dt
         if record_series and t_now >= next_sample_t:
-            series["t_s"].append(t_now)
-            series["T_liq"].append(float(T_liq))
-            series["T_rim_outer"].append(float(T_rim[-1]))
-            series["T_base_outer"].append(float(T_base[-1]))
-            series["T_lid_outer"].append(float(T_lid[-1]) if has_lid else None)
-            series["T_handle_tip"].append(float(T_handle[-1]))
-            # full internal profile (base-attachment -> free tip), not just
-            # the tip scalar -- §55: the viewer wants to show the real
-            # gradient along the handle, not one flat color.
-            series["T_handle_profile"].append(T_handle.tolist())
+            record_frame(t_now)
             next_sample_t += series_dt
+
         h_open = H_AIR_TOP_OPEN + EVAP_COEFF * max(0.0, T_liq - T_AMB) / (T0_LIQUID - T_AMB)
-        flux_rim = H_LIQ * area_rim_band * (T_liq - T_rim[0])
-        flux_base = H_LIQ * area_base_band * (T_liq - T_base[0])
+        flux_bands = sum(H_LIQ * band_area[i] * (T_liq - T_bands[i][0]) for i in range(N_AXIAL_BANDS))
         flux_open = h_open * open_area * (T_liq - T_AMB)
         flux_lid = H_LIQ * lid_area * (T_liq - T_lid[0]) if has_lid else 0.0
-        T_liq_new = T_liq - dt / c_liq * (flux_rim + flux_base + flux_open + flux_lid)
+        T_liq_new = T_liq - dt / c_liq * (flux_bands + flux_open + flux_lid)
 
-        T_rim_new = _step_chain(T_rim, dx_rim, k_rim, rho_rim, cp_rim, area_rim_band, dt,
-                                 T_amb_right=T_AMB, h_right=H_AIR, T_left_conv=T_liq, h_left=H_LIQ)
-        T_base_new = _step_chain(T_base, dx_base, k_base, rho_base, cp_base, area_base_band, dt,
-                                  T_amb_right=T_AMB, h_right=H_AIR, T_left_conv=T_liq, h_left=H_LIQ)
-        body_temp = 0.5 * (T_rim[-1] + T_base[-1])
+        T_bands_new = []
+        for i in range(N_AXIAL_BANDS):
+            dx_b, k_b, rho_b, cp_b = bands[i]
+            T_bands_new.append(_step_chain(T_bands[i], dx_b, k_b, rho_b, cp_b, band_area[i], dt,
+                                            T_amb_right=T_AMB, h_right=H_AIR, T_left_conv=T_liq, h_left=H_LIQ))
+
+        body_temp = T_bands[mid_band_idx][-1]
         T_handle_new = _step_chain(T_handle, dx_h, k_h, rho_h, cp_h, A_h, dt,
-                                    T_amb_right=T_AMB, h_right=0.0, T_left_dirichlet=body_temp,
+                                    T_amb_right=T_AMB, h_right=0.0,
+                                    T_left_dirichlet=body_temp, T_right_dirichlet=body_temp,
                                     lateral_hP=H_AIR * P_h, T_lateral=T_AMB)
         if has_lid:
             T_lid_new = _step_chain(T_lid, dx_lid, k_lid_arr, rho_lid_arr, cp_lid_arr, lid_area, dt,
@@ -587,38 +637,32 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
         else:
             T_lid_new = None
 
-        finite = (np.isfinite(T_liq_new) and np.all(np.isfinite(T_rim_new))
-                  and np.all(np.isfinite(T_base_new)) and np.all(np.isfinite(T_handle_new))
+        finite = (np.isfinite(T_liq_new) and all(np.all(np.isfinite(Tb)) for Tb in T_bands_new)
+                  and np.all(np.isfinite(T_handle_new))
                   and (T_lid_new is None or np.all(np.isfinite(T_lid_new))))
         if not finite:
             return dict(valid=False)
 
-        T_liq, T_rim, T_base, T_handle = T_liq_new, T_rim_new, T_base_new, T_handle_new
+        T_liq, T_bands, T_handle = T_liq_new, T_bands_new, T_handle_new
         if has_lid:
             T_lid = T_lid_new
 
         if not recorded and (t_now + dt) >= record_at:
-            surfaces = [T_rim[-1], T_base[-1]]
+            surfaces = [Tb[-1] for Tb in T_bands]
             if has_lid:
                 surfaces.append(T_lid[-1])
             touch_temp_at = float(max(surfaces))
-            handle_temp_at = float(T_handle[-1])
+            handle_temp_at = float(T_handle[handle_mid_idx])
             recorded = True
 
     if record_series:
         # capture the final state too, so the animation's last frame is the
         # true end state rather than whatever the last series_dt-aligned
         # sample happened to land on
-        series["t_s"].append(n_steps * dt)
-        series["T_liq"].append(float(T_liq))
-        series["T_rim_outer"].append(float(T_rim[-1]))
-        series["T_base_outer"].append(float(T_base[-1]))
-        series["T_lid_outer"].append(float(T_lid[-1]) if has_lid else None)
-        series["T_handle_tip"].append(float(T_handle[-1]))
-        series["T_handle_profile"].append(T_handle.tolist())
+        record_frame(n_steps * dt)
 
-    mass_struct = area_rim_band * (t_wall_rim_mm / 1000.0) * rho_struct + area_base_band * (t_wall_base_mm / 1000.0) * rho_struct
-    mass_ins = (area_rim_band + area_base_band) * (t_gap_mm / 1000.0) * rho_ins
+    mass_struct = sum(band_area[i] * (band_t_wall_mm[i] / 1000.0) * rho_struct for i in range(N_AXIAL_BANDS))
+    mass_ins = sum(band_area[i] * (t_gap_mm / 1000.0) * rho_ins for i in range(N_AXIAL_BANDS))
     mass_handle = A_h * L_h * rho_handle
     mass_lid = lid_area * (t_lid_mm / 1000.0) * rho_lid if has_lid else 0.0
     mass_kg = mass_struct + mass_ins + mass_handle + mass_lid

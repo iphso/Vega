@@ -781,20 +781,33 @@
       ];
       const geometry = new THREE.LatheGeometry(points, LATHE_SEGMENTS, 0, Math.PI * 2);
       // per-vertex color placeholder (grayscale until the first physics
-      // response arrives) -- height-based gradient applied properly in
-      // applyBodyColors() below once real surface temps are known.
+      // response arrives) -- real per-band gradient applied properly in
+      // applyBodyColorsBands() below once real surface temps are known.
       const count = geometry.attributes.position.count;
       geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(0.4), 3));
       return geometry;
     }
 
-    function applyBodyColors(geometry, height, colorBase, colorRim) {
+    // §56 user feedback: increasing N_WALL/N_GAP (radial mesh resolution
+    // through the wall's thickness) would never have helped this -- the
+    // body only ever had 2 real height-wise data points (rim band, base
+    // band) to show, no matter how finely either one was resolved
+    // radially. The physics itself now has N_AXIAL_BANDS=6 independent
+    // bands stacked along the height (thermal_mug_spike.py's own §56
+    // docstring), so this interpolates between 6 REAL simulated values
+    // instead of a single straight-line blend between 2.
+    function applyBodyColorsBands(geometry, height, bandTemps) {
       const pos = geometry.attributes.position;
       const colorAttr = geometry.attributes.color;
+      const n = bandTemps.length;
       for (let i = 0; i < pos.count; i++) {
-        const y = pos.getY(i);
-        const frac = Math.max(0, Math.min(1, y / height));
-        const c = colorBase.clone().lerp(colorRim, frac);
+        const frac = Math.max(0, Math.min(1, pos.getY(i) / height));
+        const bandPos = frac * n - 0.5; // band i's own outer-surface sample sits at its vertical center
+        const lo = Math.max(0, Math.min(n - 1, Math.floor(bandPos)));
+        const hi = Math.max(0, Math.min(n - 1, lo + 1));
+        const t = Math.max(0, Math.min(1, bandPos - lo));
+        const temp = bandTemps[lo] + (bandTemps[hi] - bandTemps[lo]) * t;
+        const c = colorForTemp(temp);
         colorAttr.setXYZ(i, c.r, c.g, c.b);
       }
       colorAttr.needsUpdate = true;
@@ -806,33 +819,40 @@
       colorAttr.needsUpdate = true;
     }
 
-    // §55 user feedback: the handle only ever showed ONE flat color (the
-    // far tip's temperature), so it never visibly "diffused" no matter how
-    // long the animation played -- most designs' tip barely moves from
-    // ambient for the whole 2h (§48's own floor-dominated finding), so the
-    // handle just looked permanently cold. The physics actually computes a
-    // full internal profile (`T_handle`, base-attachment -> free tip) every
-    // step; this was previously being thrown away down to one scalar.
+    // §55: the handle only ever showed ONE flat color (the far tip's
+    // temperature), so it never visibly "diffused." The physics computes a
+    // full internal profile (`T_handle`) every step; that was being thrown
+    // away down to one scalar before it ever reached here.
     //
-    // Mapping that 1D fin profile onto a LOOP is a real geometric mismatch
-    // worth being honest about: the physics has ONE attached end and ONE
-    // free tip, but the loop (built for realism in §53) has TWO attached
-    // ends and no single "tip" point. Resolved by treating the loop's
-    // FARTHEST point from the mug (opposite the gap) as the tip-equivalent,
-    // and mapping the profile symmetrically outward from both attachment
-    // points toward it -- reads as "hottest near the mug, cooling toward
-    // the far side," the same qualitative shape the real 1D fin has, using
-    // the geometry's own UV.x (0 at one open end, 1 at the other, matching
-    // TorusGeometry's own arc parametrization) rather than any hand-rolled
-    // angle math.
+    // §55 first mapped that profile onto the LOOP by treating the farthest
+    // point from the mug as a "tip" and reflecting the physics' own
+    // one-attached-end/one-free-tip profile symmetrically -- a stated
+    // approximation, since the physics didn't actually match the loop's
+    // real two-attachment-point shape. §56 fixed the mismatch at the
+    // SOURCE instead: thermal_mug_spike.py's handle model now attaches
+    // BOTH ends (two Dirichlet boundaries, both driven by the body), so
+    // the profile it returns is now GENUINELY symmetric -- hottest at both
+    // real attachment points, coolest at the true midpoint -- not an
+    // approximation of a mismatched one. This function's job is now just
+    // to place that already-correct profile onto the geometry: the
+    // geometry's own UV.x (0 at one open end of the "D," 1 at the other,
+    // exactly TorusGeometry's own arc parametrization) gives distance from
+    // the nearest attachment point with no hand-rolled angle math needed.
     function applyHandleColors(geometry, profile) {
       const pos = geometry.attributes.position;
       const uv = geometry.attributes.uv;
       const colorAttr = geometry.attributes.color;
       const n = profile.length;
+      // §56: the profile is now genuinely symmetric (both ends attached),
+      // so index 0 AND index n-1 are both the hot attachment temperature --
+      // the real coolest point is the MIDDLE index, not the last one. Map
+      // distFromAttachment across only the first half of the array
+      // (0 -> attachment, 1 -> true midpoint); the second half is the
+      // mirror image by construction, so it's redundant to sample.
+      const midIdx = (n - 1) / 2;
       for (let i = 0; i < pos.count; i++) {
-        const distFromAttachment = 1 - Math.abs(uv.getX(i) * 2 - 1); // 0 at both open ends, 1 at the midpoint
-        const idxF = distFromAttachment * (n - 1);
+        const distFromAttachment = 1 - Math.abs(uv.getX(i) * 2 - 1); // 0 at both open ends, 1 at the loop's farthest point
+        const idxF = distFromAttachment * midIdx;
         const lo = Math.floor(idxF), hi = Math.min(n - 1, lo + 1);
         const t = profile[lo] + (profile[hi] - profile[lo]) * (idxF - lo);
         const c = colorForTemp(t);
@@ -986,15 +1006,14 @@
     // sync with the 2D chart, same convention as the TORAX viewer.
     function updateMugColors(series, frameIdx) {
       if (!series || !lastGeom) return;
-      const tRim = series.T_rim_outer[frameIdx];
-      const tBase = series.T_base_outer[frameIdx];
+      const bandTemps = series.T_bands_outer[frameIdx];
       const tLid = series.T_lid_outer[frameIdx];
       const tLiq = series.T_liq[frameIdx];
 
-      applyBodyColors(m3dParts.bodyMesh.geometry, lastGeom.height, colorForTemp(tBase), colorForTemp(tRim));
+      applyBodyColorsBands(m3dParts.bodyMesh.geometry, lastGeom.height, bandTemps);
       m3dParts.liquidMat.color.copy(colorForTemp(tLiq));
-      m3dParts.bottomMesh.material.color.copy(colorForTemp(tBase));
-      m3dParts.rimRing.material.color.copy(colorForTemp(tRim));
+      m3dParts.bottomMesh.material.color.copy(colorForTemp(bandTemps[0]));
+      m3dParts.rimRing.material.color.copy(colorForTemp(bandTemps[bandTemps.length - 1]));
       if (m3dParts.lidMesh && tLid !== null && tLid !== undefined) {
         m3dParts.lidMesh.material.color.copy(colorForTemp(tLid));
       }
@@ -1016,7 +1035,7 @@
       if (vizMode === 'material') {
         bodyMat.wireframe = false;
         const struct = rgbaToThree(materialColorRGBA(p.struct_material_idx, STRUCTURAL_COLORS));
-        applyBodyColors(m3dParts.bodyMesh.geometry, m3dParts.height, struct.color, struct.color);
+        fillFlatColor(m3dParts.bodyMesh.geometry, struct.color);
         bodyMat.transparent = struct.opacity < 1;
         bodyMat.opacity = struct.opacity;
         [m3dParts.bottomMesh.material, m3dParts.rimRing.material].forEach((m) => {
@@ -1078,7 +1097,7 @@
       { key: 'T_rim_outer', label: 'rim (outer)', color: '#ffb454' },
       { key: 'T_base_outer', label: 'base (outer)', color: '#5bd88a' },
       { key: 'T_lid_outer', label: 'lid (outer)', color: '#c76bff' },
-      { key: 'T_handle_tip', label: 'handle tip', color: '#ff6b6b' },
+      { key: 'T_handle_tip', label: 'handle (farthest point)', color: '#ff6b6b' }, // §56: both ends now attach to the mug -- this is the loop's coolest, farthest point, not a free "tip" anymore
     ];
 
     function drawTempChart(series, frameIdx) {
