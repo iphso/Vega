@@ -9,6 +9,7 @@ import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
+from nn_trunks import SineLayer, SirenTrunk, HalfSirenBlock, HalfSirenTrunk, build_trunk
 from soap import SOAP
 from train_vae import VAE as CoeffVAE, nfp_one_hot as vae_nfp_one_hot
 
@@ -259,88 +260,6 @@ def contrastive_ensemble_eval_metrics(member_scores, member_log_nus, Y, eps, chu
     }
 
 
-class SineLayer(nn.Module):
-    """SIREN sinusoidal layer (Sitzmann et al. 2020), with their init scheme:
-    first layer uses a wide uniform range (high frequency content), hidden
-    layers use a narrower range scaled by 1/omega_0 to keep the pre-activation
-    distribution stable through depth.
-    """
-
-    def __init__(self, in_f, out_f, is_first=False, omega_0=30.0):
-        super().__init__()
-        self.omega_0 = omega_0
-        self.linear = nn.Linear(in_f, out_f)
-        with torch.no_grad():
-            if is_first:
-                self.linear.weight.uniform_(-1 / in_f, 1 / in_f)
-            else:
-                bound = math.sqrt(6 / in_f) / omega_0
-                self.linear.weight.uniform_(-bound, bound)
-
-    def forward(self, x):
-        return torch.sin(self.omega_0 * self.linear(x))
-
-
-class SirenTrunk(nn.Module):
-    """Pure sinusoidal-activation trunk. Final projection is a plain linear
-    layer (no sine) since we want unrestricted regression features out, not
-    a value bounded by sin's range.
-    """
-
-    def __init__(self, in_dim, hidden, latent_dim, first_omega=30.0, hidden_omega=1.0):
-        super().__init__()
-        self.net = nn.Sequential(
-            SineLayer(in_dim, hidden, is_first=True, omega_0=first_omega),
-            SineLayer(hidden, hidden, is_first=False, omega_0=hidden_omega),
-            nn.Linear(hidden, latent_dim),
-            nn.ReLU(),
-        )
-
-    def forward(self, x):
-        return self.net(x)
-
-
-class HalfSirenBlock(nn.Module):
-    """One layer, split down the middle: half the output units come from a
-    sine activation, half from ReLU. Both halves see the FULL input to the
-    block (including the other half's output from the previous block), so
-    sine-derived and ReLU-derived features actually get to interact and
-    recombine at every layer, not just once at the very end.
-    """
-
-    def __init__(self, in_dim, out_dim, is_first=False, first_omega=30.0, hidden_omega=1.0):
-        super().__init__()
-        half_out = out_dim // 2
-        self.sine = SineLayer(in_dim, half_out, is_first=is_first,
-                               omega_0=first_omega if is_first else hidden_omega)
-        self.relu = nn.Sequential(nn.Linear(in_dim, out_dim - half_out), nn.ReLU())
-
-    def forward(self, x):
-        return torch.cat([self.sine(x), self.relu(x)], dim=-1)
-
-
-class HalfSirenTrunk(nn.Module):
-    """A chain of HalfSirenBlocks, each full-width (default `hidden`), each
-    half sine / half ReLU, stacked so depth (and therefore capacity) is
-    controllable via n_blocks -- unlike a single split-once-at-the-end
-    design, this lets sine and ReLU features mix across every layer.
-    """
-
-    def __init__(self, in_dim, hidden, latent_dim, n_blocks=3, first_omega=30.0, hidden_omega=1.0):
-        super().__init__()
-        blocks = []
-        d_in = in_dim
-        for i in range(n_blocks):
-            blocks.append(HalfSirenBlock(d_in, hidden, is_first=(i == 0),
-                                          first_omega=first_omega, hidden_omega=hidden_omega))
-            d_in = hidden
-        self.blocks = nn.Sequential(*blocks)
-        self.out_proj = nn.Linear(hidden, latent_dim)
-
-    def forward(self, x):
-        return torch.relu(self.out_proj(self.blocks(x)))
-
-
 class ModeAttentionEncoder(nn.Module):
     """Treats each of the 45 (m, n) Fourier modes as a token -- its
     [r_cos, z_sin] coefficient pair -- with a learned positional embedding,
@@ -377,22 +296,12 @@ class ModeAttentionEncoder(nn.Module):
 
 
 def build_spectral_trunk(arch, in_dim, hidden, latent_dim, n_blocks=3):
-    if arch == "mlp":
-        return nn.Sequential(
-            nn.Linear(in_dim, hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, hidden),
-            nn.ReLU(),
-            nn.Linear(hidden, latent_dim),
-            nn.ReLU(),
-        )
-    if arch == "siren":
-        return SirenTrunk(in_dim, hidden, latent_dim)
-    if arch == "half_siren":
-        return HalfSirenTrunk(in_dim, hidden, latent_dim, n_blocks=n_blocks)
+    # mlp/siren/half_siren now live in nn_trunks.py (shared with the airfoil
+    # domain's own scoring-model arch search, EXPERIMENT_LOG §32); "attention"
+    # stays here since ModeAttentionEncoder is VMEC-Fourier-mode-specific.
     if arch == "attention":
         return ModeAttentionEncoder(latent_dim)
-    raise ValueError(f"unknown trunk arch: {arch}")
+    return build_trunk(arch, in_dim, hidden, latent_dim, n_blocks=n_blocks)
 
 
 class SpatialEncoderCNN(nn.Module):

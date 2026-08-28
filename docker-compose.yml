@@ -44,6 +44,16 @@ services:
       - ./tests:/work/tests
     entrypoint: ["python3"]
 
+  torax:
+    build:
+      context: .
+      dockerfile: Dockerfile.torax
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+      - ./checkpoints:/work/checkpoints
+    entrypoint: ["python3"]
+
   pytest:
     build:
       context: .
@@ -77,6 +87,61 @@ services:
       - "0.0.0.0"
       - "--port"
       - "8090"
+      - "--reload"
+      - "--reload-dir"
+      - "/work/scripts"
+
+  physics-airfoil:
+    # Airfoil viewer's backend (airfoil_physics_service.py) needs XFOIL,
+    # which only lives in Dockerfile.train (not Dockerfile.oracle, which the
+    # VMEC++/DESC `physics` service above uses) -- no GPU needed here (XFOIL
+    # and FastAPI are both CPU-only), so no runtime:nvidia/gpus: unlike the
+    # `train` service itself.
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+    ports:
+      - "8091:8091"
+    command:
+      - "-m"
+      - "uvicorn"
+      - "airfoil_physics_service:app"
+      - "--app-dir"
+      - "/work/scripts"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8091"
+      - "--reload"
+      - "--reload-dir"
+      - "/work/scripts"
+
+  physics-torax:
+    # TORAX viewer's backend (torax_physics_service.py) -- needs the torax
+    # package (only in Dockerfile.torax's Python 3.12/numpy>=2 image, per
+    # §25's conflict) plus fastapi/uvicorn (added there in §40). No GPU
+    # needed (CPU-only, matching the torax service above).
+    build:
+      context: .
+      dockerfile: Dockerfile.torax
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+    ports:
+      - "8092:8092"
+    command:
+      - "-m"
+      - "uvicorn"
+      - "torax_physics_service:app"
+      - "--app-dir"
+      - "/work/scripts"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8092"
       - "--reload"
       - "--reload-dir"
       - "/work/scripts"

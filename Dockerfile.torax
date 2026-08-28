@@ -1,0 +1,42 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+# CPU-only, deliberately: the harness runs N persistent worker PROCESSES in
+# parallel (same multiprocessing pattern as oracle_harness.py, just with a
+# long-lived worker instead of a fresh subprocess per candidate -- see
+# EXPERIMENT_LOG for the ~38x same-process-reuse speedup that motivated
+# this), not one GPU process batching candidates via jax.vmap. N processes
+# fighting over one GPU wouldn't parallelize the way N CPU workers do.
+ENV JAX_PLATFORMS=cpu
+
+# TORAX hard-requires Python>=3.12 and numpy>=2 (confirmed directly,
+# EXPERIMENT_LOG §25) -- incompatible with Dockerfile.train's numpy<2 pin
+# (needed there for torch.from_numpy against that image's torch 2.2.0
+# build) and Dockerfile.oracle's Python 3.11 base. Standalone image,
+# nothing shared with either.
+RUN pip install --no-cache-dir torax
+
+# EXPERIMENT_LOG §37: steerability_generic.py needs BOTH a trained
+# cvae/diffusion/gan checkpoint (PyTorch) AND the real oracle in the SAME
+# process/container -- neither the `train` image (has torch, not torax --
+# the numpy<2 pin above) nor this image alone (torax, no torch) could run
+# it end-to-end, a real gap only found by trying. A modern CPU-only torch
+# build supports numpy>=2 fine (unlike Dockerfile.train's older 2.2.0
+# build, which is the actual reason for that image's numpy<2 pin), so this
+# is a safe addition, not a reopening of the §25 conflict. CPU-only
+# deliberately, matching this image's own JAX_PLATFORMS=cpu choice above --
+# steerability eval only ever does inference (checkpoint forward passes),
+# never training, so no GPU need here.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# fastapi/uvicorn for torax_physics_service.py -- the TORAX viewer page's
+# backend, same reasoning as Dockerfile.train's own fastapi/uvicorn
+# addition for the airfoil viewer.
+RUN pip install --no-cache-dir fastapi uvicorn
+
+WORKDIR /work
+
+COPY scripts/ /work/scripts/
+
+ENTRYPOINT ["python3"]

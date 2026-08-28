@@ -7,7 +7,7 @@ ENV PYTHONUNBUFFERED=1
 # via CMake) from source -- the base image has cmake (via conda) but no
 # compiler toolchain at all.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential gfortran ninja-build libnetcdf-dev \
+    build-essential gfortran ninja-build libnetcdf-dev git \
     && rm -rf /var/lib/apt/lists/*
 
 # VMEC++ (fast, low/high-fidelity-configurable equilibrium solver) and the
@@ -17,6 +17,40 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # surrogate-search candidates instead of assuming the surrogate extrapolates.
 RUN pip install --no-cache-dir vmecpp constellaration && \
     pip install --no-cache-dir "numpy<2"
+
+# XFOIL (Mark Drela's panel-method airfoil solver) as a second oracle domain,
+# alongside VMEC++ -- see oracle_base.py for the shared interface and
+# airfoil_oracle.py for this domain's implementation. daniel-de-vries/
+# xfoil-python talks to a compiled Fortran extension in-memory (no disk I/O
+# per call, unlike the original XFOIL binary's file-based workflow) --
+# GPL-3.0, noted here since vmecpp/constellaration above are not. Installed
+# from GitHub with --recurse-submodules, not `pip install xfoil` -- the
+# PyPI sdist ships without the XFOIL Fortran source submodule
+# (CMakeLists.txt missing at build time), confirmed by a failed build here.
+RUN git clone --recurse-submodules --depth 1 \
+      https://github.com/daniel-de-vries/xfoil-python.git /tmp/xfoil-python && \
+    pip install --no-cache-dir /tmp/xfoil-python && \
+    rm -rf /tmp/xfoil-python
+
+# NeuralFoil (Sharpe, MIT) -- a neural-net emulator of XFOIL, trained on ~8M
+# real XFOIL runs using the same CST/Kulfan parameterization airfoil_oracle.py
+# uses. NOT a replacement oracle -- this project's standing discipline (§6/§8
+# onward) is to validate against the real solver, never trust a fitted
+# predictor as ground truth, and NeuralFoil is exactly that kind of fitted
+# predictor relative to XFOIL. Installed to benchmark it AGAINST our real
+# XFOIL oracle (does its own out-of-distribution confidence flag actually
+# track real disagreement?), not to stand in for it. Pulls in `aerosandbox`,
+# which upgrades numpy to 2.x -- re-pinned back to <2 immediately after,
+# same fix as vmecpp/constellaration's own numpy conflict (§8): numpy>=2
+# breaks torch.from_numpy against this image's torch 2.2.0 build.
+RUN pip install --no-cache-dir neuralfoil && \
+    pip install --no-cache-dir "numpy<2"
+
+# fastapi/uvicorn for airfoil_physics_service.py -- the airfoil viewer page's
+# backend needs XFOIL (only installed in this image, above) reachable over
+# HTTP, same reasoning as Dockerfile.oracle's own fastapi/uvicorn install for
+# physics_service.py's VMEC++/DESC equivalent.
+RUN pip install --no-cache-dir fastapi uvicorn
 
 WORKDIR /work
 

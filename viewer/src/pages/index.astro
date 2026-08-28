@@ -146,6 +146,33 @@ import 'katex/dist/katex.min.css';
     }
     .explain-box b { color: var(--text); display: block; margin-bottom: 4px; font-size: 12px; }
     .explain-box .detail { color: var(--text-faint); margin-top: 6px; font-size: 11px; }
+    /* "i in a bubble" hover tooltip for the metric-header -- one plain
+       sentence (METRIC_INFO[name].short), the full explanation lives on
+       the per-domain glossary page instead (see metricInfo.ts). Pure CSS,
+       no JS needed for the hover itself. */
+    .info-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 15px; height: 15px; border-radius: 50%; flex: 0 0 auto;
+      background: var(--card-2); border: 1px solid var(--border);
+      color: var(--text-faint); font-size: 10px; font-style: italic; font-family: Georgia, "Times New Roman", serif;
+      cursor: help; position: relative;
+    }
+    .info-icon:hover { color: var(--accent); border-color: var(--accent-dim); }
+    /* JS-driven, not pure-CSS ::after: .metric-card has overflow:hidden
+       (keeps the collapsed row's corners clean against the card's own
+       border-radius), which silently clips any absolutely-positioned
+       child that escapes the row's own bounds -- confirmed by trying the
+       simpler ::after approach first and watching it get clipped in every
+       direction. position:fixed + JS-computed coordinates (below) escapes
+       that ancestor's overflow cleanly instead of fighting it. */
+    .metric-tooltip {
+      position: fixed; z-index: 100; width: 210px;
+      background: #101014; border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 10px; font-size: 11px; font-weight: 400; line-height: 1.4;
+      color: var(--text-dim); pointer-events: none; box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      opacity: 0; transition: opacity .1s ease; display: none;
+    }
+    .metric-tooltip.visible { display: block; opacity: 1; }
     .radio-col { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; font-size: 12px; color: var(--text-dim); }
     .radio-col legend, .radio-label {
       font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin-bottom: 2px;
@@ -203,6 +230,14 @@ import 'katex/dist/katex.min.css';
     /* Byline rides the title's baseline and is pushed to the far edge, so it
        reads as a credit on the header rather than a second line of subtitle. */
     #titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .domain-nav { display: flex; gap: 4px; margin-top: 8px; }
+    .domain-nav a {
+      font-size: 11px; color: var(--text-dim); text-decoration: none;
+      padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
+      background: var(--card-2); transition: color .12s, border-color .12s;
+    }
+    .domain-nav a:hover { color: var(--text); border-color: #3a3a42; }
+    .domain-nav a.active { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
     #byline { font-size: 11px; color: var(--text-faint); letter-spacing: 0.02em; white-space: nowrap; }
     #subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 
@@ -225,8 +260,8 @@ import 'katex/dist/katex.min.css';
     button:hover { background: #26262e; border-color: #3a3a42; }
     button:active { background: #2c2c36; }
     button.icon { flex: 0 0 auto; width: 36px; font-weight: 600; }
-    button.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 11px; font-weight: 500; }
-    button.link:hover { background: none; text-decoration: underline; }
+    button.link, a.link { background: none; border: none; color: var(--accent); padding: 0; font-size: 11px; font-weight: 500; text-decoration: none; }
+    button.link:hover, a.link:hover { background: none; text-decoration: underline; }
 
     .candidate-meta { display: flex; gap: 8px; margin-top: 10px; font-size: 11px; color: var(--text-dim); }
     .pill { background: var(--card-2); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; }
@@ -343,6 +378,11 @@ import 'katex/dist/katex.min.css';
           <h1>Vega candidate viewer</h1>
           <span id="byline">made by IPH Labs</span>
         </div>
+        <nav class="domain-nav">
+          <a href="/" class="active">Stellarators</a>
+          <a href="/airfoil">Airfoils</a>
+          <a href="/torax">TORAX</a>
+        </nav>
         <div id="subtitle">loading…</div>
         <div class="mode-switch" id="modeSwitch">
           <button type="button" data-mode="design" class="active">Design</button>
@@ -496,7 +536,10 @@ import 'katex/dist/katex.min.css';
           <div class="card" id="matchBar">
             <div class="section-title">
               Filters
-              <button class="link" id="resetAllBtn">reset all</button>
+              <span style="display:flex; gap:10px; align-items:center;">
+                <a class="link" href="/glossary/stellarator" target="_blank" rel="noopener">metric glossary ↗</a>
+                <button class="link" id="resetAllBtn">reset all</button>
+              </span>
             </div>
             <div id="matchLabel"></div>
             <div class="track"><div class="fill" id="matchFill"></div></div>
@@ -508,6 +551,7 @@ import 'katex/dist/katex.min.css';
       </div>
     </div>
   </div>
+  <div id="metricTooltip" class="metric-tooltip"></div>
 
   <script>
     import * as THREE from 'three';
@@ -517,6 +561,7 @@ import 'katex/dist/katex.min.css';
     import { createPhysicsScene } from '../lib/physicsScene';
     import { heatmapPick } from '../lib/heatmap';
     import { tex, B_NORM } from '../lib/math';
+    import { METRIC_INFO } from '../lib/metricInfo';
     import { drawBoozerB, drawBoozerBHover } from '../lib/modes/boozerB';
     import { drawBoozerCut, interpolatedCut, EQUAL_CUTS } from '../lib/modes/boozerCut';
     import { drawPoincare } from '../lib/modes/poincare';
@@ -533,6 +578,25 @@ import 'katex/dist/katex.min.css';
     const matchLabelEl = document.getElementById('matchLabel');
     const matchFillEl = document.getElementById('matchFill');
     const filtersEl = document.getElementById('filters');
+    const metricTooltipEl = document.getElementById('metricTooltip');
+    // Delegated (filtersEl is rebuilt per buildFilterRows call, so a
+    // per-icon listener would need re-attaching every time) -- position:
+    // fixed + a rect computed here escapes .metric-card's own
+    // overflow:hidden, see that class's CSS comment for why a pure-CSS
+    // ::after tooltip didn't work.
+    filtersEl.addEventListener('mouseover', (e) => {
+      const icon = e.target.closest('.info-icon');
+      if (!icon) return;
+      metricTooltipEl.textContent = icon.dataset.tip;
+      const rect = icon.getBoundingClientRect();
+      const left = Math.min(window.innerWidth - 222, Math.max(8, rect.left - 100));
+      metricTooltipEl.style.left = `${left}px`;
+      metricTooltipEl.style.top = `${rect.bottom + 6}px`;
+      metricTooltipEl.classList.add('visible');
+    });
+    filtersEl.addEventListener('mouseout', (e) => {
+      if (e.target.closest('.info-icon')) metricTooltipEl.classList.remove('visible');
+    });
     const tsneCanvas = document.getElementById('tsneCanvas');
     const umapCanvasWrap = document.getElementById('umapCanvasWrap');
     const tsneColorByEl = document.getElementById('tsneColorBy');
@@ -671,10 +735,14 @@ import 'katex/dist/katex.min.css';
         const row = document.createElement('div');
         row.className = 'card metric-card';
 
+        const info = METRIC_INFO[name];
+        const iconHtml = info ? `<span class="info-icon" data-tip="${info.short.replace(/"/g, '&quot;')}">i</span>` : '';
+
         row.innerHTML = `
           <button class="metric-header" data-t="${t}">
             <span class="chevron">▸</span>
             <span class="metric-name">${name}</span>
+            ${iconHtml}
             <span class="metric-value-inline" id="cur-${t}">–</span>
             <span class="spacer"></span>
             <span class="metric-pct" id="pct-${t}"></span>

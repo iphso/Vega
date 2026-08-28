@@ -22,6 +22,18 @@ in the same X/Y format load_split() already expects:
              NOT same-family (16.5% of no-shared-family test rows still had
              a near-exact duplicate in train), so only a spatial split
              addresses those too.
+  target-cluster -- the same k-means-cluster-holdout idea as `cluster`, but
+             over the 11 target metrics (z-scored, with the 4 wide-dynamic-
+             range targets in LOG_TARGET_NAMES log-transformed first per
+             train.py's own convention -- raw-space euclidean clustering
+             would otherwise be dominated by a handful of max_elongation/qi
+             outliers) instead of the 90 boundary coefficients. Tests
+             generalization to unseen *regions of target space* -- the
+             relevant holdout for a target-to-design (generation/inverse)
+             model, where "cluster" tests the opposite direction. A design
+             can easily land in a cluster's-difference train/test split under
+             one mode and not the other -- input-space and target-space
+             neighborhoods are not the same thing.
 """
 import argparse
 import json
@@ -31,6 +43,15 @@ import numpy as np
 import torch
 
 OUT_DIR = Path("/work/output")
+
+# Kept in sync with train.py's own LOG_TARGET_NAMES -- these 4 targets have
+# wide enough dynamic range (e.g. max_elongation: mean 4.8, max 135) that a
+# handful of outliers would otherwise dominate any euclidean distance over
+# raw target values, including the k-means clustering below.
+LOG_TARGET_NAMES = [
+    "qi", "max_elongation", "flux_compression_in_regions_of_bad_curvature",
+    "minimum_normalized_magnetic_gradient_scale_length",
+]
 
 
 def greedy_group_assign(group_sizes, group_order, fractions=(0.8, 0.1, 0.1)):
@@ -83,7 +104,7 @@ def save_split(name, X, Y, train_idx, val_idx, test_idx):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--modes", nargs="+", default=["random", "group", "cluster"],
-                    choices=["random", "group", "cluster"])
+                    choices=["random", "group", "cluster", "target-cluster"])
     p.add_argument("--n-clusters", type=int, default=100)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
@@ -156,6 +177,49 @@ def main():
             json.dump(membership, f, indent=2)
         print(f"  saved cluster_assignments.npy ({len(assign)} rows), cluster_sizes.json, "
               f"and cluster_split_membership.json")
+
+    if "target-cluster" in args.modes:
+        target_names = json.loads((OUT_DIR / "target_names.json").read_text())
+        Yt = Y.copy()
+        for name in LOG_TARGET_NAMES:
+            idx = target_names.index(name)
+            Yt[:, idx] = np.log(np.clip(Yt[:, idx], 1e-12, None))
+        # z-score each (possibly log-transformed) target column from this
+        # data's own mean/std -- metadata.json's target_stats are computed
+        # in raw space over the full dataset, so recomputed here rather than
+        # reused, both for the log-transform and to keep this self-contained.
+        t_mean = Yt.mean(axis=0)
+        t_std = Yt.std(axis=0).clip(min=1e-6)
+        targets = torch.tensor((Yt - t_mean) / t_std, device=dev, dtype=torch.float32)
+        assign = kmeans(targets, args.n_clusters, seed=args.seed).cpu().numpy()
+
+        cluster_to_idx = {}
+        for i, c in enumerate(assign):
+            cluster_to_idx.setdefault(int(c), []).append(i)
+        cluster_sizes = {c: len(idxs) for c, idxs in cluster_to_idx.items()}
+        clusters = list(cluster_to_idx.keys())
+        rng = np.random.default_rng(args.seed)
+        rng.shuffle(clusters)
+        train_c, val_c, test_c = greedy_group_assign(cluster_sizes, clusters)
+        train_idx = np.array([i for c in train_c for i in cluster_to_idx[c]])
+        val_idx = np.array([i for c in val_c for i in cluster_to_idx[c]])
+        test_idx = np.array([i for c in test_c for i in cluster_to_idx[c]])
+        save_split("target_cluster", X, Y, train_idx, val_idx, test_idx)
+        sizes = sorted(cluster_sizes.values())
+        print(f"  ({args.n_clusters} target-space clusters, sizes range {sizes[0]}-{sizes[-1]}, "
+              f"median {sizes[len(sizes)//2]}; {len(train_c)} train / {len(val_c)} val / {len(test_c)} "
+              f"test clusters, entire regions of target space held out for val/test)")
+
+        np.save(OUT_DIR / "target_cluster_assignments.npy", assign)
+        with open(OUT_DIR / "target_cluster_sizes.json", "w") as f:
+            json.dump({str(c): n for c, n in cluster_sizes.items()}, f, indent=2)
+        membership = {str(c): "train" for c in train_c}
+        membership.update({str(c): "val" for c in val_c})
+        membership.update({str(c): "test" for c in test_c})
+        with open(OUT_DIR / "target_cluster_split_membership.json", "w") as f:
+            json.dump(membership, f, indent=2)
+        print(f"  saved target_cluster_assignments.npy ({len(assign)} rows), "
+              f"target_cluster_sizes.json, and target_cluster_split_membership.json")
 
 
 if __name__ == "__main__":

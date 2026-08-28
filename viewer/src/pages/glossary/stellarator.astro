@@ -1,0 +1,65 @@
+---
+import { METRIC_INFO, DOMAIN_METRICS } from '../../lib/metricInfo';
+const metrics = DOMAIN_METRICS.stellarator.map((name) => ({ name, ...METRIC_INFO[name] }));
+---
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Stellarator metric glossary</title>
+  <style is:global>
+    :root {
+      --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
+      --border: #2a2a30; --text: #e8e8ec; --text-dim: #8a8a94; --text-faint: #55555e;
+      --accent: #5b9dff; --accent-dim: #2a4a75; --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 40px 24px 80px; }
+    h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+    .subtitle { font-size: 13px; color: var(--text-dim); line-height: 1.5; margin-bottom: 8px; }
+    .nav-row { display: flex; gap: 6px; flex-wrap: wrap; margin: 18px 0 32px; }
+    .nav-row a {
+      font-size: 12px; color: var(--text-dim); text-decoration: none;
+      padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border);
+      background: var(--card-2); transition: color .12s, border-color .12s;
+    }
+    .nav-row a:hover { color: var(--text); border-color: #3a3a42; }
+    .nav-row a.active { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
+    .nav-row .sep { width: 1px; background: var(--border); margin: 4px 6px; }
+    .metric-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 20px; margin-top: 14px; }
+    .metric-card h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px; font-family: ui-monospace, "SF Mono", monospace; color: var(--accent); }
+    .metric-card p { font-size: 13.5px; line-height: 1.6; color: var(--text-dim); margin: 0; }
+    .metric-card .reference { font-size: 12px; line-height: 1.55; color: var(--text-faint); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+    .source-note { font-size: 11.5px; color: var(--text-faint); line-height: 1.6; margin-top: 40px; padding-top: 16px; border-top: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Stellarator metric glossary</h1>
+    <p class="subtitle">What each target metric means, why the ConStellaration benchmark tracks it, and what a real reference value looks like — for the 12 metrics shown in the stellarator viewer's filter panel.</p>
+    <nav class="nav-row">
+      <a href="/">← Stellarator viewer</a>
+      <span class="sep"></span>
+      <a href="/glossary/stellarator" class="active">Stellarator glossary</a>
+      <a href="/glossary/airfoil">Airfoil glossary</a>
+      <a href="/glossary/torax">TORAX glossary</a>
+    </nav>
+
+    {metrics.map((m) => (
+      <div class="metric-card">
+        <h2>{m.name}</h2>
+        <p set:html={m.blurb} />
+        <div class="reference" set:html={m.reference} />
+      </div>
+    ))}
+
+    <div class="source-note">
+      Definitions and "why it matters" language are paraphrased directly from <code>constellaration.problems</code>'
+      own docstrings (<code>GeometricalProblem</code>, <code>SimpleToBuildQIStellarator</code>,
+      <code>MHDStableQIStellarator</code>) — Proxima Fusion's own three published ConStellaration benchmark
+      problems, read from source rather than assumed. Numeric reference values are those problems' own real
+      constraint bounds, not rules of thumb.
+    </div>
+  </div>
+</body>
+</html>
