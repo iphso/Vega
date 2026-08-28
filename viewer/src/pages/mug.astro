@@ -131,7 +131,7 @@
     #mug3dWrap canvas { display: block; width: 100% !important; height: 100% !important; }
     .mug-caption { font-size: 11px; color: var(--text-faint); margin-top: 8px; }
     .mug-legend { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--text-faint); flex-wrap: wrap; }
-    .mug-legend .bar { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #0d0887, #cc4778, #f0f921); }
+    .mug-legend .bar { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #3a6fd8, #d8c93a, #d8483a); }
     .mug-legend .swatch { display: inline-flex; align-items: center; gap: 4px; }
     .mug-legend .dot { width: 8px; height: 8px; border-radius: 50%; }
     #tempChartCell { background: #0c0c0e; border-radius: 8px; padding: 8px; }
@@ -638,9 +638,17 @@
     // z=H/2, r_rim at z=H) -- 2 straight-line segments, matching the
     // model's own 2-band frustum structure exactly rather than a smoothed
     // curve that would imply more shape detail than is actually simulated.
-    // A wedge is left open (same ~297 degree convention as the TORAX
-    // viewer's cutaway) so the liquid core is visible inside.
-    const SHELL_PHI_SPAN = Math.PI * 1.65;
+    //
+    // §52 user feedback: a TORAX-style wedge cutaway just read as "a bite
+    // taken out of the mug," not a deliberate cross-section -- a tokamak's
+    // nested-shell cutaway is a real, recognized convention; a mug isn't
+    // usually understood that way. Fixed with a FULL 360-degree revolve
+    // (no notch) plus a solid base cap, so the shape reads unambiguously
+    // as a mug -- the liquid inside is instead revealed the way a real
+    // mug actually shows it: through the genuinely OPEN top (the drinking
+    // opening), not an artificial wall cutaway. A thin rim ring marks the
+    // opening explicitly, so "which end is the top" doesn't rely on
+    // guessing from silhouette alone.
     const LATHE_SEGMENTS = 48;
 
     const m3dScene = new THREE.Scene();
@@ -655,13 +663,28 @@
 
     let m3dGroup = new THREE.Group();
     m3dScene.add(m3dGroup);
-    let m3dParts = {}; // { bodyMesh, liquidMesh, lidMesh, handleMesh }
+    let m3dParts = {}; // { bodyMesh, liquidMesh, lidMesh, handleMesh, bottomMesh, rimRing }
     let m3dInitialized = false;
     let lastGeom = null;
 
+    // Cold-blue -> warm-yellow -> hot-red -- deliberately NOT the
+    // plasma/viridis palette the stellarator/airfoil/TORAX viewers use.
+    // §52 user feedback: plasma reads as a scientific/"alien" heatmap, not
+    // "this mug is hot" -- a mug is an everyday object, so it gets the
+    // everyday cold/hot color convention instead. Same 3 stops already
+    // used for this page's own UMAP legend gradient, kept consistent.
+    const THERMAL_STOPS = [[58, 111, 216], [216, 201, 58], [216, 72, 58]];
     function colorForTemp(t) {
       const frac = Math.max(0, Math.min(1, (t - COLOR_MIN_C) / (COLOR_MAX_C - COLOR_MIN_C)));
-      return new THREE.Color(colormapHex('plasma', frac));
+      const scaled = frac * (THERMAL_STOPS.length - 1);
+      const i = Math.min(THERMAL_STOPS.length - 2, Math.floor(scaled));
+      const tt = scaled - i;
+      const a = THERMAL_STOPS[i], b = THERMAL_STOPS[i + 1];
+      return new THREE.Color(
+        (a[0] + (b[0] - a[0]) * tt) / 255,
+        (a[1] + (b[1] - a[1]) * tt) / 255,
+        (a[2] + (b[2] - a[2]) * tt) / 255,
+      );
     }
 
     function buildBodyGeometry(rBase, rMid, rRim, height) {
@@ -670,7 +693,7 @@
         new THREE.Vector2(Math.max(0.001, rMid), height / 2),
         new THREE.Vector2(Math.max(0.001, rRim), height),
       ];
-      const geometry = new THREE.LatheGeometry(points, LATHE_SEGMENTS, 0, SHELL_PHI_SPAN);
+      const geometry = new THREE.LatheGeometry(points, LATHE_SEGMENTS, 0, Math.PI * 2);
       // per-vertex color placeholder (grayscale until the first physics
       // response arrives) -- height-based gradient applied properly in
       // applyBodyColors() below once real surface temps are known.
@@ -699,20 +722,46 @@
       const rBase = p.r_base_mm / 1000, rMid = p.r_mid_mm / 1000, rRim = p.r_rim_mm / 1000;
       const height = 0.10; // fixed HEIGHT constant, thermal_mug_spike.py
 
+      // Opaque, solid -- a real mug isn't see-through; the liquid is
+      // revealed through the genuinely open top instead (see below), not
+      // by making the wall translucent.
       const bodyGeom = buildBodyGeometry(rBase, rMid, rRim, height);
-      const bodyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.92 });
+      const bodyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide });
       const bodyMesh = new THREE.Mesh(bodyGeom, bodyMat);
       m3dGroup.add(bodyMesh);
       m3dParts.bodyMesh = bodyMesh;
       m3dParts.height = height;
 
+      // Solid base cap -- closes off the bottom so the shape doesn't read
+      // as a hollow tube open at both ends. This is what makes "top" vs.
+      // "bottom" unambiguous: the base is solid, the rim (below) is open.
+      const bottomGeom = new THREE.CircleGeometry(rBase, LATHE_SEGMENTS);
+      const bottomMat = new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.DoubleSide });
+      const bottomMesh = new THREE.Mesh(bottomGeom, bottomMat);
+      bottomMesh.rotation.x = Math.PI / 2;
+      bottomMesh.position.y = -0.0005;
+      m3dGroup.add(bottomMesh);
+      m3dParts.bottomMesh = bottomMesh;
+
+      // A thin light ring right at the rim's outer edge -- marks the
+      // opening explicitly rather than relying on silhouette alone.
+      const rimRingGeom = new THREE.TorusGeometry(rRim, Math.max(0.0006, rRim * 0.012), 8, LATHE_SEGMENTS);
+      const rimRingMat = new THREE.MeshBasicMaterial({ color: 0xe8e8ec });
+      const rimRing = new THREE.Mesh(rimRingGeom, rimRingMat);
+      rimRing.rotation.x = Math.PI / 2;
+      rimRing.position.y = height;
+      m3dGroup.add(rimRing);
+      m3dParts.rimRing = rimRing;
+
       // Liquid core -- a simple visual approximation (physics only tracks
       // total wall+gap thickness via a thin-wall approximation, not an
       // exact inner-vs-outer radius split, so this can't be more precise
       // than the model itself). ~78% of the outer radius, filled to ~92%
-      // of the height (a small headspace at the rim).
+      // of the height (a small headspace at the rim) -- visible by
+      // looking down through the mug's own open top, the same way you'd
+      // see into a real mug, no artificial cutaway needed.
       const avgR = (rBase + rMid + rRim) / 3;
-      const liquidGeom = new THREE.CylinderGeometry(avgR * 0.8, avgR * 0.75, height * 0.92, 32, 1, false, 0, SHELL_PHI_SPAN);
+      const liquidGeom = new THREE.CylinderGeometry(avgR * 0.8, avgR * 0.75, height * 0.92, 32);
       const liquidMat = new THREE.MeshBasicMaterial({ color: 0x888888 });
       const liquidMesh = new THREE.Mesh(liquidGeom, liquidMat);
       liquidMesh.position.y = height * 0.92 / 2;
@@ -744,7 +793,7 @@
       const handleMat = new THREE.MeshBasicMaterial({ color: 0x888888 });
       const handleMesh = new THREE.Mesh(handleGeom, handleMat);
       handleMesh.rotation.z = Math.PI / 2;
-      // attach on the +X side (phi=0 edge of the open wedge), sticking outward
+      // attach on the +X side, sticking straight outward from the body
       handleMesh.position.set(rMid + handleLen / 2 + handleDia / 2, height / 2, 0);
       m3dGroup.add(handleMesh);
       m3dParts.handleMesh = handleMesh;
@@ -753,9 +802,12 @@
       lastGeom = { rBase, rMid, rRim, height };
 
       if (!m3dInitialized) {
+        // Elevated enough to look down INTO the open top by default (so the
+        // liquid + rim ring read immediately, without needing to orbit) --
+        // §52 feedback wanted the top/bottom/opening obvious at a glance.
         const scale = Math.max(rRim, height);
-        m3dCamera.position.set(scale * 2.6, scale * 2.0, scale * 2.6);
-        m3dControls.target.set(0, height / 2, 0);
+        m3dCamera.position.set(scale * 2.3, scale * 3.0, scale * 2.3);
+        m3dControls.target.set(0, height * 0.6, 0);
         m3dInitialized = true;
       }
     }
@@ -774,6 +826,8 @@
 
       applyBodyColors(m3dParts.bodyMesh.geometry, lastGeom.height, colorForTemp(tBase), colorForTemp(tRim));
       m3dParts.liquidMesh.material.color.copy(colorForTemp(tLiq));
+      m3dParts.bottomMesh.material.color.copy(colorForTemp(tBase));
+      m3dParts.rimRing.material.color.copy(colorForTemp(tRim));
       if (m3dParts.lidMesh && tLid !== null && tLid !== undefined) {
         m3dParts.lidMesh.material.color.copy(colorForTemp(tLid));
       }
@@ -879,7 +933,7 @@
 
       buildMugShape(p);
       resizeMug3d();
-      mugCaptionEl.textContent = `r_base=${p.r_base_mm.toFixed(1)}mm  r_mid=${p.r_mid_mm.toFixed(1)}mm  r_rim=${p.r_rim_mm.toFixed(1)}mm  ·  lid coverage=${(p.lid_coverage_frac * 100).toFixed(0)}%  ·  wedge cut open to show the liquid core`;
+      mugCaptionEl.textContent = `r_base=${p.r_base_mm.toFixed(1)}mm  r_mid=${p.r_mid_mm.toFixed(1)}mm  r_rim=${p.r_rim_mm.toFixed(1)}mm  ·  lid coverage=${(p.lid_coverage_frac * 100).toFixed(0)}%  ·  rim ring marks the open top; base is solid`;
       shapeStatusEl.textContent = '';
 
       if (physicsAbort) physicsAbort.abort();
