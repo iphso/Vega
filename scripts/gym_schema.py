@@ -414,6 +414,33 @@ def airfoil_spec():
     )
 
 
+def mug_spec():
+    """4th real domain (EXPERIMENT_LOG §46-47) -- the first one that's
+    self-written physics rather than a wrapped external solver, and the
+    first one deliberately picked FOR being cheap/CPU-only rather than in
+    spite of it (§46: walked back §44's own GPU-first framing). validity_fn
+    is None for a genuinely different reason than VMEC++'s (mug_oracle.py
+    has NO non-convergence failure mode at all -- the FD scheme is
+    unconditionally stable -- so `ok` is only ever False on a structurally
+    invalid input, not a solver failure)."""
+    import mug_oracle as m
+    return DomainSpec(
+        name="mug_thermal",
+        target_names=m.TARGET_NAMES, log_target_names=m.LOG_TARGET_NAMES,
+        param_dim=m.PARAM_DIM, zero_indices=m.ZERO_INDICES,
+        fidelities=[
+            FidelityLevel("low", m.FIDELITY_PRESETS["low"], cost_credits=1.3,
+                           measured_from="~40ms/candidate host CPU single-threaded (§46), normalized to airfoil-low's ~30ms=1 credit"),
+        ],
+        worker_fn=m.worker_fn, params_to_worker_args=m.params_to_worker_args,
+        validity_fn=None,  # no non-convergence mode exists here -- ok=False means a structurally invalid input, not a solver failure
+        harness_fit="subprocess-per-candidate",
+        harness_fit_note="genuinely fits, same reasoning as airfoil's -- ~40ms/call, subprocess-spawn overhead isn't the bottleneck.",
+        sanity_filter=None,  # no known-bad numerical tail found yet (unlike airfoil's cd<1e-6 or TORAX's Q_fusion tail) -- not yet stress-tested at real dataset scale
+        dataset_paths=lambda out_dir: (out_dir / "mug_X.npy", out_dir / "mug_Y.npy"),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Triage of the 7 candidate domains proposed against this schema -- answers
 # "which of these are genuinely clean vs. forced into the framework"
