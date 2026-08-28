@@ -800,6 +800,47 @@
       colorAttr.needsUpdate = true;
     }
 
+    function fillFlatColor(geometry, color) {
+      const colorAttr = geometry.attributes.color;
+      for (let i = 0; i < colorAttr.count; i++) colorAttr.setXYZ(i, color.r, color.g, color.b);
+      colorAttr.needsUpdate = true;
+    }
+
+    // §55 user feedback: the handle only ever showed ONE flat color (the
+    // far tip's temperature), so it never visibly "diffused" no matter how
+    // long the animation played -- most designs' tip barely moves from
+    // ambient for the whole 2h (§48's own floor-dominated finding), so the
+    // handle just looked permanently cold. The physics actually computes a
+    // full internal profile (`T_handle`, base-attachment -> free tip) every
+    // step; this was previously being thrown away down to one scalar.
+    //
+    // Mapping that 1D fin profile onto a LOOP is a real geometric mismatch
+    // worth being honest about: the physics has ONE attached end and ONE
+    // free tip, but the loop (built for realism in §53) has TWO attached
+    // ends and no single "tip" point. Resolved by treating the loop's
+    // FARTHEST point from the mug (opposite the gap) as the tip-equivalent,
+    // and mapping the profile symmetrically outward from both attachment
+    // points toward it -- reads as "hottest near the mug, cooling toward
+    // the far side," the same qualitative shape the real 1D fin has, using
+    // the geometry's own UV.x (0 at one open end, 1 at the other, matching
+    // TorusGeometry's own arc parametrization) rather than any hand-rolled
+    // angle math.
+    function applyHandleColors(geometry, profile) {
+      const pos = geometry.attributes.position;
+      const uv = geometry.attributes.uv;
+      const colorAttr = geometry.attributes.color;
+      const n = profile.length;
+      for (let i = 0; i < pos.count; i++) {
+        const distFromAttachment = 1 - Math.abs(uv.getX(i) * 2 - 1); // 0 at both open ends, 1 at the midpoint
+        const idxF = distFromAttachment * (n - 1);
+        const lo = Math.floor(idxF), hi = Math.min(n - 1, lo + 1);
+        const t = profile[lo] + (profile[hi] - profile[lo]) * (idxF - lo);
+        const c = colorForTemp(t);
+        colorAttr.setXYZ(i, c.r, c.g, c.b);
+      }
+      colorAttr.needsUpdate = true;
+    }
+
     function buildMugShape(p) {
       currentParams = p;
       m3dScene.remove(m3dGroup);
@@ -898,23 +939,26 @@
       }
 
       // Handle -- a "D"-shaped loop (partial torus), the way a real mug
-      // handle actually attaches. §53 user feedback: a straight stick
-      // poking out sideways didn't read as a handle at all. A visual
-      // interpretation, not a literal one -- the physics models the
-      // handle as a 1D fin (length + diameter), not a 3D loop, so this
-      // shape choice doesn't change anything simulated, only how it's
-      // drawn: loop diameter maps to handle_length_mm, tube thickness to
-      // handle_diameter_mm. The gap in the "D" is centered to face the
-      // mug so both open ends land flush against the wall at mid-height,
-      // the bulge extending outward -- same uniform tip-temperature
-      // coloring as before (the physics resolves a real gradient along
-      // the fin's length, but one color reads more clearly at this scale).
+      // handle actually attaches. §53: a straight stick poking out
+      // sideways didn't read as a handle at all. A visual interpretation,
+      // not a literal one -- the physics models the handle as a 1D fin
+      // (length + diameter), not a 3D loop, so this shape choice doesn't
+      // change anything simulated, only how it's drawn: loop diameter
+      // maps to handle_length_mm, tube thickness to handle_diameter_mm.
+      // The gap in the "D" is centered to face the mug so both open ends
+      // land flush against the wall at mid-height, the bulge extending
+      // outward. §55: now vertex-colored along the loop (see
+      // applyHandleColors below) instead of one flat tip-temperature
+      // color, so the real internal gradient the physics computes is
+      // actually visible, not just its single endpoint value.
       const handleLen = p.handle_length_mm / 1000, handleDia = p.handle_diameter_mm / 1000;
       const loopR = handleLen / 2, tubeR = handleDia / 2;
       const arcSpan = Math.PI * 1.4; // ~250 degrees of a full ring
       const gapHalf = (Math.PI * 2 - arcSpan) / 2;
-      const handleGeom = new THREE.TorusGeometry(loopR, tubeR, 8, 32, arcSpan);
-      const handleMat = new THREE.MeshBasicMaterial({ color: 0x888888 });
+      const handleGeom = new THREE.TorusGeometry(loopR, tubeR, 8, 48, arcSpan);
+      const count = handleGeom.attributes.position.count;
+      handleGeom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(0.4), 3));
+      const handleMat = new THREE.MeshBasicMaterial({ vertexColors: true });
       const handleMesh = new THREE.Mesh(handleGeom, handleMat);
       handleMesh.rotation.z = Math.PI + gapHalf; // centers the gap on the -X side, facing the mug
       handleMesh.position.set(rMid + loopR * Math.cos(gapHalf), height / 2, 0);
@@ -946,7 +990,6 @@
       const tBase = series.T_base_outer[frameIdx];
       const tLid = series.T_lid_outer[frameIdx];
       const tLiq = series.T_liq[frameIdx];
-      const tHandle = series.T_handle_tip[frameIdx];
 
       applyBodyColors(m3dParts.bodyMesh.geometry, lastGeom.height, colorForTemp(tBase), colorForTemp(tRim));
       m3dParts.liquidMat.color.copy(colorForTemp(tLiq));
@@ -955,7 +998,7 @@
       if (m3dParts.lidMesh && tLid !== null && tLid !== undefined) {
         m3dParts.lidMesh.material.color.copy(colorForTemp(tLid));
       }
-      m3dParts.handleMesh.material.color.copy(colorForTemp(tHandle));
+      applyHandleColors(m3dParts.handleMesh.geometry, series.T_handle_profile[frameIdx]);
     }
 
     // Applies the current vizMode's look to whatever's currently built --
@@ -988,7 +1031,7 @@
           m3dParts.lidMesh.material.transparent = lid.opacity < 1;
           m3dParts.lidMesh.material.opacity = lid.opacity;
         }
-        m3dParts.handleMesh.material.color.copy(rgbaToThree(materialColorRGBA(p.handle_material_idx, HANDLE_COLORS)).color);
+        fillFlatColor(m3dParts.handleMesh.geometry, rgbaToThree(materialColorRGBA(p.handle_material_idx, HANDLE_COLORS)).color);
       } else {
         bodyMat.wireframe = true;
         bodyMat.transparent = false;
@@ -1100,9 +1143,16 @@
         return;
       }
       playBtn.textContent = '⏸';
+      // §55: series went from ~120 to ~1440 points (much finer time
+      // resolution) -- advancing 1 frame/tick at the old fixed interval
+      // would have stretched a full playthrough from ~15s to ~3 minutes.
+      // Scaled the per-tick step to the actual frame count instead, so a
+      // full loop still takes roughly the same ~15s regardless of how
+      // finely the series was sampled.
+      const playStep = currentSeries ? Math.max(1, Math.round(currentSeries.t_s.length / 125)) : 1;
       playTimer = setInterval(() => {
         if (!currentSeries) return;
-        let k = (Number(timeSlider.value) + 1) % currentSeries.t_s.length;
+        let k = (Number(timeSlider.value) + playStep) % currentSeries.t_s.length;
         timeSlider.value = k;
         renderSeriesAtFrame(k);
       }, 120);

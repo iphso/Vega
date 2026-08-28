@@ -458,14 +458,25 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
                  handle_length_mm, handle_diameter_mm, handle_material_idx,
                  lid_coverage_frac, t_lid_mm, lid_material_idx,
                  dt=5.0, t_max=2 * 3600.0, record_at=60.0,
-                 record_series=False, series_dt=60.0):
+                 record_series=False, series_dt=None):
     """record_series=True (viewer-only -- never set by the oracle/bulk-
     generation path, which only needs the two scalar snapshots): also
-    returns a downsampled time series (one sample every `series_dt`
-    simulated seconds, not every dt=5s step -- ~120 points over a 2h run
-    instead of ~1440, small enough to animate smoothly in a browser without
-    a large payload) of liquid temp + each surface's outer temp, for the
-    viewer's temperature-over-time animation."""
+    returns a time series of liquid temp + each surface's outer temp +
+    the handle's own full internal profile, for the viewer's
+    temperature-over-time animation.
+
+    series_dt=None (default) records every native integration step (dt) --
+    §55 user feedback on the original 60s downsampling: the first minute or
+    two is where almost all the interesting transient behavior actually
+    happens (walls/lid racing from a uniform initial condition toward
+    their real profile), so a 60s stride made the animation's first couple
+    of frames look like a discontinuous "flip" rather than a diffusion --
+    it was literally skipping over the diffusion. At dt=5s over a 7200s
+    run that's ~1440 points, still a small payload (a handful of floats
+    per point) for a single on-demand physics call, not a bulk-generation
+    cost."""
+    if series_dt is None:
+        series_dt = dt
     if min(r_base_mm, r_mid_mm, r_rim_mm, t_wall_rim_mm, t_wall_base_mm,
            t_gap_mm, handle_length_mm, handle_diameter_mm, t_lid_mm) <= 0:
         return dict(valid=False)
@@ -538,7 +549,7 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
     series = None
     if record_series:
         series = {"t_s": [], "T_liq": [], "T_rim_outer": [], "T_base_outer": [],
-                  "T_lid_outer": [], "T_handle_tip": []}
+                  "T_lid_outer": [], "T_handle_tip": [], "T_handle_profile": []}
         next_sample_t = 0.0
 
     for step in range(n_steps):
@@ -550,6 +561,10 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
             series["T_base_outer"].append(float(T_base[-1]))
             series["T_lid_outer"].append(float(T_lid[-1]) if has_lid else None)
             series["T_handle_tip"].append(float(T_handle[-1]))
+            # full internal profile (base-attachment -> free tip), not just
+            # the tip scalar -- §55: the viewer wants to show the real
+            # gradient along the handle, not one flat color.
+            series["T_handle_profile"].append(T_handle.tolist())
             next_sample_t += series_dt
         h_open = H_AIR_TOP_OPEN + EVAP_COEFF * max(0.0, T_liq - T_AMB) / (T0_LIQUID - T_AMB)
         flux_rim = H_LIQ * area_rim_band * (T_liq - T_rim[0])
@@ -600,6 +615,7 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
         series["T_base_outer"].append(float(T_base[-1]))
         series["T_lid_outer"].append(float(T_lid[-1]) if has_lid else None)
         series["T_handle_tip"].append(float(T_handle[-1]))
+        series["T_handle_profile"].append(T_handle.tolist())
 
     mass_struct = area_rim_band * (t_wall_rim_mm / 1000.0) * rho_struct + area_base_band * (t_wall_base_mm / 1000.0) * rho_struct
     mass_ins = (area_rim_band + area_base_band) * (t_gap_mm / 1000.0) * rho_ins
