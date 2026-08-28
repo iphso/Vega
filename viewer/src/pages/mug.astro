@@ -130,6 +130,8 @@
     #mug3dWrap { width: 100%; height: 380px; position: relative; background: #0c0c0e; border-radius: 8px; overflow: hidden; }
     #mug3dWrap canvas { display: block; width: 100% !important; height: 100% !important; }
     .mug-caption { font-size: 11px; color: var(--text-faint); margin-top: 8px; }
+    .mug-materials { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .mug-materials .pill { font-size: 10.5px; }
     .mug-legend { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--text-faint); flex-wrap: wrap; }
     .mug-legend .bar { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #3a6fd8, #d8c93a, #d8483a); }
     .mug-legend .swatch { display: inline-flex; align-items: center; gap: 4px; }
@@ -199,6 +201,7 @@
         <div class="viz-title"><span>3D mug</span><span class="status" id="shapeStatus"></span></div>
         <div id="mug3dWrap"></div>
         <div class="mug-caption" id="mugCaption"></div>
+        <div class="mug-materials" id="mugMaterials"></div>
         <div class="mug-legend">
           <span class="swatch"><span>cool</span></span><span class="bar"></span><span>hot (surface temp at the current time)</span>
         </div>
@@ -256,6 +259,26 @@
     // flickering) every frame.
     const COLOR_MIN_C = 20, COLOR_MAX_C = 90;
 
+    // §53 user feedback: material_idx values weren't labeled anywhere, so
+    // there was no way to tell what a design was actually made of. These
+    // are the exact same named tables (name, k) as thermal_mug_spike.py's
+    // STRUCTURAL_MATERIALS/INSULATION_MATERIALS/HANDLE_MATERIALS, in the
+    // same order (sorted by conductivity ascending) -- kept here just for
+    // display, not re-deriving any physics.
+    const STRUCTURAL_MATERIALS = ['plastic', 'glass', 'ceramic', 'steel'];
+    const INSULATION_MATERIALS = ['vacuum', 'aerogel', 'air_gap', 'foam'];
+    const HANDLE_MATERIALS = ['silicone_rubber', 'wood', 'plastic_grip', 'ceramic', 'steel'];
+    // lid_material_idx reuses STRUCTURAL_MATERIALS too (mug_oracle.py)
+
+    function materialLabel(idx, names) {
+      const i = Math.max(0, Math.min(names.length - 1, idx));
+      const lo = Math.floor(i), hi = Math.min(names.length - 1, lo + 1);
+      const frac = i - lo;
+      if (lo === hi || frac < 0.15) return names[lo];
+      if (frac > 0.85) return names[hi];
+      return `${names[lo]}/${names[hi]}`; // a genuine blend between two named materials, not rounded to one
+    }
+
     const subtitleEl = document.getElementById('subtitle');
     const sourceEl = document.getElementById('source');
     const indexEl = document.getElementById('index');
@@ -290,6 +313,7 @@
     const sourceCardsEl = document.getElementById('sourceCards');
     const mug3dWrap = document.getElementById('mug3dWrap');
     const mugCaptionEl = document.getElementById('mugCaption');
+    const mugMaterialsEl = document.getElementById('mugMaterials');
     const shapeStatusEl = document.getElementById('shapeStatus');
     const profileStatusEl = document.getElementById('profileStatus');
     const tempChartCanvas = document.getElementById('tempChartCanvas');
@@ -753,20 +777,44 @@
       m3dGroup.add(rimRing);
       m3dParts.rimRing = rimRing;
 
-      // Liquid core -- a simple visual approximation (physics only tracks
-      // total wall+gap thickness via a thin-wall approximation, not an
-      // exact inner-vs-outer radius split, so this can't be more precise
-      // than the model itself). ~78% of the outer radius, filled to ~92%
-      // of the height (a small headspace at the rim) -- visible by
-      // looking down through the mug's own open top, the same way you'd
-      // see into a real mug, no artificial cutaway needed.
-      const avgR = (rBase + rMid + rRim) / 3;
-      const liquidGeom = new THREE.CylinderGeometry(avgR * 0.8, avgR * 0.75, height * 0.92, 32);
-      const liquidMat = new THREE.MeshBasicMaterial({ color: 0x888888 });
-      const liquidMesh = new THREE.Mesh(liquidGeom, liquidMat);
-      liquidMesh.position.y = height * 0.92 / 2;
-      m3dGroup.add(liquidMesh);
-      m3dParts.liquidMesh = liquidMesh;
+      // Liquid core -- §53 user feedback: a plain cylinder cut through the
+      // body on any non-straight (tapered/bulging) shape, since its radius
+      // didn't track the actual wall profile. Fixed by using the SAME
+      // 3-point lathe profile as the body, inset by the real (wall + gap)
+      // thickness at each height -- so the liquid always nests inside the
+      // body regardless of shape, AND a thicker insulation/wall genuinely
+      // shows up as a visibly thicker wall / smaller liquid volume, not
+      // just a fixed 80%-of-average-radius guess. Floors the inset at 15%
+      // of the outer radius so an extreme thick-insulation/narrow-mug
+      // combination can't invert to a negative radius. Vertically
+      // compressed to `fillFrac` of the full height (a small headspace at
+      // the rim, both a cap at the true liquid surface and a cap at the
+      // base) -- visible through the mug's own open top, no cutaway needed.
+      const fillFrac = 0.92;
+      const insetBase = (p.t_wall_base_mm + p.t_gap_mm) / 1000;
+      const insetMid = ((p.t_wall_rim_mm + p.t_wall_base_mm) / 2 + p.t_gap_mm) / 1000;
+      const insetRim = (p.t_wall_rim_mm + p.t_gap_mm) / 1000;
+      const rBaseIn = Math.max(rBase * 0.15, rBase - insetBase);
+      const rMidIn = Math.max(rMid * 0.15, rMid - insetMid);
+      const rRimIn = Math.max(rRim * 0.15, rRim - insetRim);
+      const liquidMat = new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.DoubleSide });
+      const liquidPoints = [
+        new THREE.Vector2(Math.max(0.001, rBaseIn), 0),
+        new THREE.Vector2(Math.max(0.001, rMidIn), fillFrac * height / 2),
+        new THREE.Vector2(Math.max(0.001, rRimIn), fillFrac * height),
+      ];
+      const liquidGroup = new THREE.Group();
+      liquidGroup.add(new THREE.Mesh(new THREE.LatheGeometry(liquidPoints, LATHE_SEGMENTS, 0, Math.PI * 2), liquidMat));
+      const liquidBottom = new THREE.Mesh(new THREE.CircleGeometry(Math.max(0.001, rBaseIn), LATHE_SEGMENTS), liquidMat);
+      liquidBottom.rotation.x = Math.PI / 2;
+      liquidBottom.position.y = 0.0003;
+      liquidGroup.add(liquidBottom);
+      const liquidTop = new THREE.Mesh(new THREE.CircleGeometry(Math.max(0.001, rRimIn), LATHE_SEGMENTS), liquidMat);
+      liquidTop.rotation.x = -Math.PI / 2;
+      liquidTop.position.y = fillFrac * height - 0.0003;
+      liquidGroup.add(liquidTop);
+      m3dGroup.add(liquidGroup);
+      m3dParts.liquidMat = liquidMat; // shared by all 3 sub-meshes -- one color update recolors the whole liquid
 
       // Lid -- a disc at z=height, sized so its AREA is proportional to
       // lid_coverage_frac of the rim opening (a simplification: doesn't
@@ -783,18 +831,27 @@
         m3dParts.lidMesh = lidMesh;
       }
 
-      // Handle -- a simple horizontal cylinder attached at mid-height,
-      // pointing outward from the body. Colored uniformly by the handle
-      // TIP temperature (a simplification -- the physics does resolve a
-      // real gradient along its length, but a single color reads more
-      // clearly at this small scale than a gradient would).
+      // Handle -- a "D"-shaped loop (partial torus), the way a real mug
+      // handle actually attaches. §53 user feedback: a straight stick
+      // poking out sideways didn't read as a handle at all. A visual
+      // interpretation, not a literal one -- the physics models the
+      // handle as a 1D fin (length + diameter), not a 3D loop, so this
+      // shape choice doesn't change anything simulated, only how it's
+      // drawn: loop diameter maps to handle_length_mm, tube thickness to
+      // handle_diameter_mm. The gap in the "D" is centered to face the
+      // mug so both open ends land flush against the wall at mid-height,
+      // the bulge extending outward -- same uniform tip-temperature
+      // coloring as before (the physics resolves a real gradient along
+      // the fin's length, but one color reads more clearly at this scale).
       const handleLen = p.handle_length_mm / 1000, handleDia = p.handle_diameter_mm / 1000;
-      const handleGeom = new THREE.CapsuleGeometry(handleDia / 2, handleLen, 4, 8);
+      const loopR = handleLen / 2, tubeR = handleDia / 2;
+      const arcSpan = Math.PI * 1.4; // ~250 degrees of a full ring
+      const gapHalf = (Math.PI * 2 - arcSpan) / 2;
+      const handleGeom = new THREE.TorusGeometry(loopR, tubeR, 8, 32, arcSpan);
       const handleMat = new THREE.MeshBasicMaterial({ color: 0x888888 });
       const handleMesh = new THREE.Mesh(handleGeom, handleMat);
-      handleMesh.rotation.z = Math.PI / 2;
-      // attach on the +X side, sticking straight outward from the body
-      handleMesh.position.set(rMid + handleLen / 2 + handleDia / 2, height / 2, 0);
+      handleMesh.rotation.z = Math.PI + gapHalf; // centers the gap on the -X side, facing the mug
+      handleMesh.position.set(rMid + loopR * Math.cos(gapHalf), height / 2, 0);
       m3dGroup.add(handleMesh);
       m3dParts.handleMesh = handleMesh;
 
@@ -825,7 +882,7 @@
       const tHandle = series.T_handle_tip[frameIdx];
 
       applyBodyColors(m3dParts.bodyMesh.geometry, lastGeom.height, colorForTemp(tBase), colorForTemp(tRim));
-      m3dParts.liquidMesh.material.color.copy(colorForTemp(tLiq));
+      m3dParts.liquidMat.color.copy(colorForTemp(tLiq));
       m3dParts.bottomMesh.material.color.copy(colorForTemp(tBase));
       m3dParts.rimRing.material.color.copy(colorForTemp(tRim));
       if (m3dParts.lidMesh && tLid !== null && tLid !== undefined) {
@@ -934,6 +991,12 @@
       buildMugShape(p);
       resizeMug3d();
       mugCaptionEl.textContent = `r_base=${p.r_base_mm.toFixed(1)}mm  r_mid=${p.r_mid_mm.toFixed(1)}mm  r_rim=${p.r_rim_mm.toFixed(1)}mm  ·  lid coverage=${(p.lid_coverage_frac * 100).toFixed(0)}%  ·  rim ring marks the open top; base is solid`;
+      mugMaterialsEl.innerHTML = [
+        `<span class="pill">wall <b>${materialLabel(p.struct_material_idx, STRUCTURAL_MATERIALS)}</b></span>`,
+        `<span class="pill">insulation <b>${materialLabel(p.insulation_material_idx, INSULATION_MATERIALS)}</b></span>`,
+        `<span class="pill">handle <b>${materialLabel(p.handle_material_idx, HANDLE_MATERIALS)}</b></span>`,
+        p.lid_coverage_frac > 0.01 ? `<span class="pill">lid <b>${materialLabel(p.lid_material_idx, STRUCTURAL_MATERIALS)}</b></span>` : '',
+      ].join('');
       shapeStatusEl.textContent = '';
 
       if (physicsAbort) physicsAbort.abort();
