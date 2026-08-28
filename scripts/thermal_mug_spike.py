@@ -457,7 +457,15 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
                  t_gap_mm, insulation_material_idx,
                  handle_length_mm, handle_diameter_mm, handle_material_idx,
                  lid_coverage_frac, t_lid_mm, lid_material_idx,
-                 dt=5.0, t_max=2 * 3600.0, record_at=60.0):
+                 dt=5.0, t_max=2 * 3600.0, record_at=60.0,
+                 record_series=False, series_dt=60.0):
+    """record_series=True (viewer-only -- never set by the oracle/bulk-
+    generation path, which only needs the two scalar snapshots): also
+    returns a downsampled time series (one sample every `series_dt`
+    simulated seconds, not every dt=5s step -- ~120 points over a 2h run
+    instead of ~1440, small enough to animate smoothly in a browser without
+    a large payload) of liquid temp + each surface's outer temp, for the
+    viewer's temperature-over-time animation."""
     if min(r_base_mm, r_mid_mm, r_rim_mm, t_wall_rim_mm, t_wall_base_mm,
            t_gap_mm, handle_length_mm, handle_diameter_mm, t_lid_mm) <= 0:
         return dict(valid=False)
@@ -527,9 +535,22 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
     touch_temp_at = None
     handle_temp_at = None
     recorded = False
+    series = None
+    if record_series:
+        series = {"t_s": [], "T_liq": [], "T_rim_outer": [], "T_base_outer": [],
+                  "T_lid_outer": [], "T_handle_tip": []}
+        next_sample_t = 0.0
 
     for step in range(n_steps):
         t_now = step * dt
+        if record_series and t_now >= next_sample_t:
+            series["t_s"].append(t_now)
+            series["T_liq"].append(float(T_liq))
+            series["T_rim_outer"].append(float(T_rim[-1]))
+            series["T_base_outer"].append(float(T_base[-1]))
+            series["T_lid_outer"].append(float(T_lid[-1]) if has_lid else None)
+            series["T_handle_tip"].append(float(T_handle[-1]))
+            next_sample_t += series_dt
         h_open = H_AIR_TOP_OPEN + EVAP_COEFF * max(0.0, T_liq - T_AMB) / (T0_LIQUID - T_AMB)
         flux_rim = H_LIQ * area_rim_band * (T_liq - T_rim[0])
         flux_base = H_LIQ * area_base_band * (T_liq - T_base[0])
@@ -569,6 +590,17 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
             handle_temp_at = float(T_handle[-1])
             recorded = True
 
+    if record_series:
+        # capture the final state too, so the animation's last frame is the
+        # true end state rather than whatever the last series_dt-aligned
+        # sample happened to land on
+        series["t_s"].append(n_steps * dt)
+        series["T_liq"].append(float(T_liq))
+        series["T_rim_outer"].append(float(T_rim[-1]))
+        series["T_base_outer"].append(float(T_base[-1]))
+        series["T_lid_outer"].append(float(T_lid[-1]) if has_lid else None)
+        series["T_handle_tip"].append(float(T_handle[-1]))
+
     mass_struct = area_rim_band * (t_wall_rim_mm / 1000.0) * rho_struct + area_base_band * (t_wall_base_mm / 1000.0) * rho_struct
     mass_ins = (area_rim_band + area_base_band) * (t_gap_mm / 1000.0) * rho_ins
     mass_handle = A_h * L_h * rho_handle
@@ -582,6 +614,10 @@ def simulate_v3(r_base_mm, r_mid_mm, r_rim_mm,
         touch_temp_at_C=touch_temp_at,
         handle_temp_at_C=handle_temp_at,
         liquid_volume_L=float(vol_liq * 1000.0),
+        series=series,
+        geometry=dict(r_base_m=r_base, r_mid_m=r_mid, r_rim_m=r_rim, height_m=HEIGHT,
+                       has_lid=has_lid, lid_coverage_frac=lid_coverage_frac,
+                       handle_length_m=L_h, handle_diameter_m=d_h),
     )
 
 

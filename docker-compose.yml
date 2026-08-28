@@ -146,6 +146,33 @@ services:
       - "--reload-dir"
       - "/work/scripts"
 
+  physics-mug:
+    # Mug viewer's backend (mug_physics_service.py) -- unlike every other
+    # physics-* service, needs nothing exotic (pure numpy/scipy, same
+    # reason this whole domain was picked in §46/§48 as deliberately
+    # CPU-only/no-GPU/no-license-risk), so it reuses the plain base image
+    # (`build: .`, same as `preprocess`) rather than a dedicated Dockerfile
+    # -- just needed scipy/fastapi/uvicorn added there.
+    build: .
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+    ports:
+      - "8093:8093"
+    command:
+      - "-m"
+      - "uvicorn"
+      - "mug_physics_service:app"
+      - "--app-dir"
+      - "/work/scripts"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8093"
+      - "--reload"
+      - "--reload-dir"
+      - "/work/scripts"
+
   viewer:
     build:
       context: .

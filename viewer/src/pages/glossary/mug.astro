@@ -1,11 +1,11 @@
 ---
 import { METRIC_INFO, DOMAIN_METRICS } from '../../lib/metricInfo';
-const metrics = DOMAIN_METRICS.torax.map((name) => ({ name, ...METRIC_INFO[name] }));
+const metrics = DOMAIN_METRICS.mug.map((name) => ({ name, ...METRIC_INFO[name] }));
 ---
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>TORAX metric glossary</title>
+  <title>Mug metric glossary</title>
   <style is:global>
     :root {
       --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
@@ -35,15 +35,15 @@ const metrics = DOMAIN_METRICS.torax.map((name) => ({ name, ...METRIC_INFO[name]
 </head>
 <body>
   <div class="wrap">
-    <h1>TORAX metric glossary</h1>
-    <p class="subtitle">What each target metric means, why it matters for a fusion reactor concept, and what a real reference value looks like — for the 4 metrics shown in the TORAX viewer's filter panel.</p>
+    <h1>Mug metric glossary</h1>
+    <p class="subtitle">What each target metric means, why it matters for a mug/thermos design, and what a real reference value looks like — for the 4 metrics shown in the mug viewer's filter panel.</p>
     <nav class="nav-row">
-      <a href="/torax">← TORAX viewer</a>
+      <a href="/mug">← Mug viewer</a>
       <span class="sep"></span>
       <a href="/glossary/stellarator">Stellarator glossary</a>
       <a href="/glossary/airfoil">Airfoil glossary</a>
-      <a href="/glossary/torax" class="active">TORAX glossary</a>
-      <a href="/glossary/mug">Mug glossary</a>
+      <a href="/glossary/torax">TORAX glossary</a>
+      <a href="/glossary/mug" class="active">Mug glossary</a>
     </nav>
 
     {metrics.map((m) => (
@@ -55,11 +55,11 @@ const metrics = DOMAIN_METRICS.torax.map((name) => ({ name, ...METRIC_INFO[name]
     ))}
 
     <div class="source-note">
-      Reference values are this project's own real TORAX runs on named real devices (ITER baseline,
-      ITER hybrid flattop, SPARC, JET geometry — see EXPERIMENT_LOG §36/§40), alongside well-known
-      public facts about those real machines (ITER's Q≈10 target, JET's 1997 Q≈0.67 record). This
-      project's own runs use generic, non-device-tuned transport/heating settings, not each real
-      device's own predicted performance — noted inline wherever that distinction matters.
+      This domain's physics is self-written (transient heat conduction, no wrapped external solver) rather
+      than a real measured product line, so reference numbers here are this project's own simulated sweeps
+      and dataset statistics (EXPERIMENT_LOG §46-50), not measurements of a real, named mug — unlike the
+      airfoil/TORAX glossaries, which cite real devices/shapes. No real-reference mugs are wired into the
+      viewer yet (an open item).
     </div>
   </div>
 </body>

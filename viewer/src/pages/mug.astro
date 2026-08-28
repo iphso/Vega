@@ -1,10 +1,9 @@
 ---
-import 'katex/dist/katex.min.css';
 ---
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Vega TORAX viewer</title>
+  <title>Vega Mug viewer</title>
   <style is:global>
     :root {
       --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
@@ -26,7 +25,7 @@ import 'katex/dist/katex.min.css';
     #titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
     #byline { font-size: 11px; color: var(--text-faint); letter-spacing: 0.02em; white-space: nowrap; }
     #subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
-    .domain-nav { display: flex; gap: 4px; margin-top: 8px; }
+    .domain-nav { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
     .domain-nav a {
       font-size: 11px; color: var(--text-dim); text-decoration: none;
       padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
@@ -62,10 +61,6 @@ import 'katex/dist/katex.min.css';
       cursor: help; position: relative;
     }
     .info-icon:hover { color: var(--accent); border-color: var(--accent-dim); }
-    /* JS-driven, not pure-CSS ::after -- .metric-card's own overflow:hidden
-       clips an absolutely-positioned child in either direction; see
-       index.astro's matching comment. position:fixed + JS-computed
-       coordinates (below) escapes it instead of fighting it. */
     .metric-tooltip {
       position: fixed; z-index: 100; width: 210px;
       background: #101014; border: 1px solid var(--border); border-radius: 6px;
@@ -132,28 +127,22 @@ import 'katex/dist/katex.min.css';
     .viz-card { flex: 0 0 auto; }
     .viz-title { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; display: flex; justify-content: space-between; }
     .viz-title .status { color: var(--text-faint); font-size: 11px; }
-    #tokamak3dWrap { width: 100%; height: 380px; position: relative; background: #0c0c0e; border-radius: 8px; overflow: hidden; }
-    #tokamak3dWrap canvas { display: block; width: 100% !important; height: 100% !important; }
-    .tokamak-caption { font-size: 11px; color: var(--text-faint); margin-top: 8px; }
-    .tokamak-legend { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 10px; color: var(--text-faint); }
-    .tokamak-legend .bar { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #0d0887, #cc4778, #f0f921); }
-    .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .profile-cell { background: #0c0c0e; border-radius: 8px; padding: 6px; }
-    .profile-cell canvas { width: 100%; height: 130px; display: block; }
-    .profile-label { font-size: 10px; color: var(--text-faint); padding: 2px 4px; }
+    #mug3dWrap { width: 100%; height: 380px; position: relative; background: #0c0c0e; border-radius: 8px; overflow: hidden; }
+    #mug3dWrap canvas { display: block; width: 100% !important; height: 100% !important; }
+    .mug-caption { font-size: 11px; color: var(--text-faint); margin-top: 8px; }
+    .mug-legend { display: flex; align-items: center; gap: 10px; margin-top: 6px; font-size: 10px; color: var(--text-faint); flex-wrap: wrap; }
+    .mug-legend .bar { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #0d0887, #cc4778, #f0f921); }
+    .mug-legend .swatch { display: inline-flex; align-items: center; gap: 4px; }
+    .mug-legend .dot { width: 8px; height: 8px; border-radius: 50%; }
+    #tempChartCell { background: #0c0c0e; border-radius: 8px; padding: 8px; }
+    #tempChartCanvas { width: 100%; height: 190px; display: block; }
     .time-row { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
     .time-row input[type=range] { flex: 1; accent-color: var(--handle); }
-    .time-row .t-val { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; width: 60px; text-align: right; }
+    .time-row .t-val { font-size: 11px; color: var(--text-dim); font-variant-numeric: tabular-nums; width: 70px; text-align: right; }
     .polar-row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
     .polar-stat { background: var(--card-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 90px; }
     .polar-stat .k { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
     .polar-stat .v { font-size: 15px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
-    .explain-box {
-      font-size: 12px; color: var(--text-dim); line-height: 1.45;
-      background: var(--card-2); border-radius: 8px; padding: 10px 12px; margin-top: 8px;
-    }
-    .explain-box b { color: var(--text); display: block; margin-bottom: 4px; font-size: 12px; }
-    .explain-box .detail { color: var(--text-faint); margin-top: 6px; font-size: 11px; }
   </style>
 </head>
 <body>
@@ -161,14 +150,14 @@ import 'katex/dist/katex.min.css';
     <div id="leftPane" class="side-pane">
       <div class="pane-content">
         <div id="titleRow">
-          <h1>Vega TORAX viewer</h1>
+          <h1>Vega Mug viewer</h1>
           <span id="byline">made by IPH Labs</span>
         </div>
         <nav class="domain-nav">
           <a href="/">Stellarators</a>
           <a href="/airfoil">Airfoils</a>
-          <a href="/torax" class="active">TORAX</a>
-          <a href="/mug">Mug</a>
+          <a href="/torax">TORAX</a>
+          <a href="/mug" class="active">Mug</a>
         </nav>
         <div id="subtitle">loading…</div>
 
@@ -179,7 +168,7 @@ import 'katex/dist/katex.min.css';
           <div class="btn-row"><button id="umapRecomputeBtn">recompute</button></div>
           <div id="umapStatus"></div>
           <div id="umapLegend"><span id="umapLegendMin"></span><span class="bar"></span><span id="umapLegendMax"></span></div>
-          <div id="hint">Points are up to 800 randomly sampled from the current filtered set, positioned by similarity across Q_fusion/tau_E/H98/T_e. Hover a source card to highlight it; click a point to inspect it.</div>
+          <div id="hint">Points are up to 800 randomly sampled from the current filtered set, positioned by similarity across the 4 target metrics. Click a point to inspect it.</div>
         </div>
         <div id="umapCanvasWrap">
           <canvas id="umapCanvas"></canvas>
@@ -197,10 +186,9 @@ import 'katex/dist/katex.min.css';
           </div>
           <div class="candidate-meta">
             <span class="pill">row <b id="globalRow">–</b></span>
-            <span class="pill">R₀ <b id="rMajorVal">–</b> m</span>
-            <span class="pill">B₀ <b id="bVal">–</b> T</span>
-            <span class="pill">Ip <b id="ipVal">–</b> MA</span>
-            <span class="pill" id="srcPill">source <b id="srcVal">–</b></span>
+            <span class="pill">r_rim <b id="rRimVal">–</b> mm</span>
+            <span class="pill">lid <b id="lidVal">–</b>%</span>
+            <span class="pill">mass <b id="massVal">–</b> kg</span>
           </div>
         </div>
       </div>
@@ -208,29 +196,27 @@ import 'katex/dist/katex.min.css';
 
     <div id="centerPane">
       <div class="card viz-card">
-        <div class="viz-title"><span>3D tokamak</span><span class="status" id="shapeStatus"></span></div>
-        <div id="tokamak3dWrap"></div>
-        <div class="tokamak-caption" id="tokamakCaption"></div>
-        <div class="tokamak-legend"><span>cool</span><span class="bar"></span><span>hot (T_e at the current timestep)</span></div>
+        <div class="viz-title"><span>3D mug</span><span class="status" id="shapeStatus"></span></div>
+        <div id="mug3dWrap"></div>
+        <div class="mug-caption" id="mugCaption"></div>
+        <div class="mug-legend">
+          <span class="swatch"><span>cool</span></span><span class="bar"></span><span>hot (surface temp at the current time)</span>
+        </div>
       </div>
       <div class="card viz-card" style="flex:1">
-        <div class="viz-title"><span>Radial profiles (TORAX, live)</span><span class="status" id="profileStatus"></span></div>
-        <div class="profile-grid">
-          <div class="profile-cell"><div class="profile-label">T_e / T_i (keV)</div><canvas id="teTiCanvas"></canvas></div>
-          <div class="profile-cell"><div class="profile-label">n_e (m⁻³)</div><canvas id="neCanvas"></canvas></div>
-          <div class="profile-cell"><div class="profile-label">q (safety factor)</div><canvas id="qCanvas"></canvas></div>
-          <div class="profile-cell"><div class="profile-label">j_total (A/m²)</div><canvas id="jCanvas"></canvas></div>
-        </div>
+        <div class="viz-title"><span>Temperature over time (live simulation)</span><span class="status" id="profileStatus"></span></div>
+        <div id="tempChartCell"><canvas id="tempChartCanvas"></canvas></div>
+        <div class="mug-legend" id="chartLegend"></div>
         <div class="time-row">
           <button class="icon" id="playBtn">▶</button>
-          <input id="timeSlider" type="range" min="0" max="21" step="1" value="21" />
+          <input id="timeSlider" type="range" min="0" max="120" step="1" value="120" />
           <span class="t-val" id="timeVal">t=–</span>
         </div>
         <div class="polar-row">
-          <div class="polar-stat"><div class="k">Q_fusion</div><div class="v" id="polarQ">–</div></div>
-          <div class="polar-stat"><div class="k">tau_E (s)</div><div class="v" id="polarTauE">–</div></div>
-          <div class="polar-stat"><div class="k">H98</div><div class="v" id="polarH98">–</div></div>
-          <div class="polar-stat"><div class="k">T_e_avg (keV)</div><div class="v" id="polarTe">–</div></div>
+          <div class="polar-stat"><div class="k">temp @ 2h</div><div class="v" id="polarTemp2h">–</div></div>
+          <div class="polar-stat"><div class="k">mass (kg)</div><div class="v" id="polarMass">–</div></div>
+          <div class="polar-stat"><div class="k">touch @ 60s</div><div class="v" id="polarTouch">–</div></div>
+          <div class="polar-stat"><div class="k">handle @ 60s</div><div class="v" id="polarHandle">–</div></div>
         </div>
       </div>
     </div>
@@ -238,7 +224,7 @@ import 'katex/dist/katex.min.css';
     <div id="rightPane" class="side-pane">
       <div class="pane-content">
         <div class="card" id="matchBar">
-          <div class="section-title">Filters<span style="display:flex; gap:10px; align-items:center;"><a class="link" href="/glossary/torax" target="_blank" rel="noopener">metric glossary ↗</a><button class="link" id="resetAllBtn">reset all</button></span></div>
+          <div class="section-title">Filters<span style="display:flex; gap:10px; align-items:center;"><a class="link" href="/glossary/mug" target="_blank" rel="noopener">metric glossary ↗</a><button class="link" id="resetAllBtn">reset all</button></span></div>
           <div id="matchLabel"></div>
           <div class="track"><div class="fill" id="matchFill"></div></div>
           <div id="hint">Drag the amber handles to set a range. Click a handle's number to type one. Drag on open space to jump the nearest handle there.</div>
@@ -256,18 +242,27 @@ import 'katex/dist/katex.min.css';
     import { colormapHex } from '../lib/colormap';
     import { METRIC_INFO } from '../lib/metricInfo';
 
-    const PHYSICS_URL = import.meta.env.PUBLIC_TORAX_PHYSICS_URL || 'http://localhost:8092';
-    const PARAM_NAMES = ['Ip', 'nbar', 'chi_i', 'chi_e', 'P_total', 'I_generic', 'R_major', 'a_minor', 'B_0', 'elongation_LCFS'];
+    const PHYSICS_URL = import.meta.env.PUBLIC_MUG_PHYSICS_URL || 'http://localhost:8093';
+    const PARAM_NAMES = [
+      'r_base_mm', 'r_mid_mm', 'r_rim_mm',
+      't_wall_rim_mm', 't_wall_base_mm', 'struct_material_idx',
+      't_gap_mm', 'insulation_material_idx',
+      'handle_length_mm', 'handle_diameter_mm', 'handle_material_idx',
+      'lid_coverage_frac', 't_lid_mm', 'lid_material_idx',
+    ];
+    // Fixed absolute color scale (ambient .. fill temperature) rather than a
+    // per-frame min/max -- keeps the 3D shape's colors directly comparable
+    // across the whole time slider instead of re-normalizing (and visually
+    // flickering) every frame.
+    const COLOR_MIN_C = 20, COLOR_MAX_C = 90;
 
     const subtitleEl = document.getElementById('subtitle');
     const sourceEl = document.getElementById('source');
     const indexEl = document.getElementById('index');
     const globalRowEl = document.getElementById('globalRow');
-    const rMajorValEl = document.getElementById('rMajorVal');
-    const bValEl = document.getElementById('bVal');
-    const ipValEl = document.getElementById('ipVal');
-    const srcValEl = document.getElementById('srcVal');
-    const srcPillEl = document.getElementById('srcPill');
+    const rRimValEl = document.getElementById('rRimVal');
+    const lidValEl = document.getElementById('lidVal');
+    const massValEl = document.getElementById('massVal');
     const matchLabelEl = document.getElementById('matchLabel');
     const matchFillEl = document.getElementById('matchFill');
     const filtersEl = document.getElementById('filters');
@@ -293,23 +288,21 @@ import 'katex/dist/katex.min.css';
     const umapLegendMaxEl = document.getElementById('umapLegendMax');
     const umapLegendEl = document.getElementById('umapLegend');
     const sourceCardsEl = document.getElementById('sourceCards');
-    const tokamak3dWrap = document.getElementById('tokamak3dWrap');
-    const tokamakCaptionEl = document.getElementById('tokamakCaption');
+    const mug3dWrap = document.getElementById('mug3dWrap');
+    const mugCaptionEl = document.getElementById('mugCaption');
     const shapeStatusEl = document.getElementById('shapeStatus');
     const profileStatusEl = document.getElementById('profileStatus');
-    const teTiCanvas = document.getElementById('teTiCanvas');
-    const neCanvas = document.getElementById('neCanvas');
-    const qCanvas = document.getElementById('qCanvas');
-    const jCanvas = document.getElementById('jCanvas');
+    const tempChartCanvas = document.getElementById('tempChartCanvas');
+    const chartLegendEl = document.getElementById('chartLegend');
     const timeSlider = document.getElementById('timeSlider');
     const timeVal = document.getElementById('timeVal');
     const playBtn = document.getElementById('playBtn');
-    const polarQEl = document.getElementById('polarQ');
-    const polarTauEEl = document.getElementById('polarTauE');
-    const polarH98El = document.getElementById('polarH98');
-    const polarTeEl = document.getElementById('polarTe');
+    const polarTemp2hEl = document.getElementById('polarTemp2h');
+    const polarMassEl = document.getElementById('polarMass');
+    const polarTouchEl = document.getElementById('polarTouch');
+    const polarHandleEl = document.getElementById('polarHandle');
 
-    const SOURCE_COLORS = { bootstrap: '#5b9dff', real_devices: '#5bd88a' };
+    const SOURCE_COLORS = { bootstrap: '#5b9dff' };
     let sourceCardEls = {};
 
     let meta, X, Y;
@@ -325,16 +318,16 @@ import 'katex/dist/katex.min.css';
     let lastCounts = [];
     let umapPoints = null;
     let hoveredSourceCode = null;
-    let currentProfiles = null; // last-fetched profile bundle for the active candidate
+    let currentSeries = null; // last-fetched temperature series for the active candidate
     let playTimer = null;
 
     const N_BINS = 30;
 
     async function loadData() {
       const [metaRes, xRes, yRes] = await Promise.all([
-        fetch('/data/torax/meta.json'),
-        fetch('/data/torax/X.bin'),
-        fetch('/data/torax/Y.bin'),
+        fetch('/data/mug/meta.json'),
+        fetch('/data/mug/X.bin'),
+        fetch('/data/mug/Y.bin'),
       ]);
       meta = await metaRes.json();
       X = new Float32Array(await xRes.arrayBuffer());
@@ -634,196 +627,235 @@ import 'katex/dist/katex.min.css';
       }
     }
 
-    // --- TORAX-specific: 3D tokamak (nested flux-surface shells, colored by
-    // T_e at the current timestep) + radial profiles ---
+    // --- Mug-specific: 3D shape of revolution (frustum-based body per
+    // thermal_mug_spike.py's simulate_v3, EXPERIMENT_LOG §50) + a liquid
+    // core + an optional lid disc + a handle, all colored by real surface
+    // temperature at the current point in the time slider -- plus a
+    // temperature-vs-time chart driven by the same series data.
     //
-    // This project's TORAX parameterization is a fixed circular/elongated
-    // axisymmetric geometry (§31) -- no free-boundary shape the way VMEC's
-    // stellarator boundary is, so there's no equivalent of index.astro's
-    // Fourier-coefficient surface synthesis needed. Flux surfaces are
-    // modeled as concentric, self-similar ellipses shrinking linearly with
-    // rho (a real simplification of TORAX's own circular-geometry ansatz,
-    // not claiming this matches a shaped-plasma equilibrium's true flux
-    // surfaces) -- reasonable specifically because "circular" geometry IS
-    // this project's actual TORAX config (torax_oracle.py's own
-    // `geometry_type: "circular"`), not an approximation of something more
-    // complex. A toroidal wedge is left open (SHELL_PHI_SPAN < 2*pi) so
-    // inner, hotter shells are visible through the outer ones -- the
-    // standard tokamak-cutaway convention.
-    const N_THETA = 28;
-    const N_PHI = 56;
-    const SHELL_PHI_SPAN = Math.PI * 1.65; // ~297 degrees -- leaves a wedge open
-    const SHELL_RHO_STRIDE = 3; // every 3rd of the 25 rho_cell_norm points -- dense enough, not 25 overlapping transparent meshes
+    // Body geometry uses THREE.LatheGeometry over exactly the 3 profile
+    // points the physics model itself uses (r_base at z=0, r_mid at
+    // z=H/2, r_rim at z=H) -- 2 straight-line segments, matching the
+    // model's own 2-band frustum structure exactly rather than a smoothed
+    // curve that would imply more shape detail than is actually simulated.
+    // A wedge is left open (same ~297 degree convention as the TORAX
+    // viewer's cutaway) so the liquid core is visible inside.
+    const SHELL_PHI_SPAN = Math.PI * 1.65;
+    const LATHE_SEGMENTS = 48;
 
-    const t3dScene = new THREE.Scene();
-    t3dScene.background = new THREE.Color(0x0c0c0e);
-    const t3dCamera = new THREE.PerspectiveCamera(50, 1, 0.01, 100);
-    const t3dRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    tokamak3dWrap.appendChild(t3dRenderer.domElement);
-    const t3dControls = new OrbitControls(t3dCamera, t3dRenderer.domElement);
-    t3dControls.enableDamping = true;
-    t3dScene.add(new THREE.AmbientLight(0xffffff, 0.9));
+    const m3dScene = new THREE.Scene();
+    m3dScene.background = new THREE.Color(0x0c0c0e);
+    const m3dCamera = new THREE.PerspectiveCamera(50, 1, 0.001, 10);
+    const m3dRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    mug3dWrap.appendChild(m3dRenderer.domElement);
+    const m3dControls = new OrbitControls(m3dCamera, m3dRenderer.domElement);
+    m3dControls.enableDamping = true;
+    m3dScene.add(new THREE.AmbientLight(0xffffff, 1.0));
+    m3dScene.add(new THREE.DirectionalLight(0xffffff, 0.4));
 
-    let t3dShellGroup = new THREE.Group();
-    t3dScene.add(t3dShellGroup);
-    let t3dShellMeshes = []; // { mesh, rhoIdx }
-    let t3dInitialized = false;
+    let m3dGroup = new THREE.Group();
+    m3dScene.add(m3dGroup);
+    let m3dParts = {}; // { bodyMesh, liquidMesh, lidMesh, handleMesh }
+    let m3dInitialized = false;
+    let lastGeom = null;
 
-    function shellPoint(theta, phi, rhoFrac, overrides) {
-      const { R_major, a_minor, elongation_LCFS } = overrides;
-      const r = R_major + rhoFrac * a_minor * Math.cos(theta);
-      const z = rhoFrac * a_minor * elongation_LCFS * Math.sin(theta);
-      return [r * Math.cos(phi), r * Math.sin(phi), z];
+    function colorForTemp(t) {
+      const frac = Math.max(0, Math.min(1, (t - COLOR_MIN_C) / (COLOR_MAX_C - COLOR_MIN_C)));
+      return new THREE.Color(colormapHex('plasma', frac));
     }
 
-    function buildShellGeometry(rhoFrac, overrides) {
-      const positions = new Float32Array(N_THETA * N_PHI * 3);
-      let idx = 0;
-      for (let it = 0; it < N_THETA; it++) {
-        const theta = (it / (N_THETA - 1)) * 2 * Math.PI;
-        for (let ip = 0; ip < N_PHI; ip++) {
-          const phi = (ip / (N_PHI - 1)) * SHELL_PHI_SPAN;
-          const [x, y, z] = shellPoint(theta, phi, rhoFrac, overrides);
-          positions[idx++] = x; positions[idx++] = y; positions[idx++] = z;
-        }
-      }
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      const indices = [];
-      for (let it = 0; it < N_THETA - 1; it++) {
-        for (let ip = 0; ip < N_PHI - 1; ip++) {
-          const a = it * N_PHI + ip, b = (it + 1) * N_PHI + ip;
-          const c = (it + 1) * N_PHI + ip + 1, d = it * N_PHI + ip + 1;
-          indices.push(a, b, c, a, c, d);
-        }
-      }
-      geometry.setIndex(indices);
-      geometry.computeVertexNormals();
+    function buildBodyGeometry(rBase, rMid, rRim, height) {
+      const points = [
+        new THREE.Vector2(Math.max(0.001, rBase), 0),
+        new THREE.Vector2(Math.max(0.001, rMid), height / 2),
+        new THREE.Vector2(Math.max(0.001, rRim), height),
+      ];
+      const geometry = new THREE.LatheGeometry(points, LATHE_SEGMENTS, 0, SHELL_PHI_SPAN);
+      // per-vertex color placeholder (grayscale until the first physics
+      // response arrives) -- height-based gradient applied properly in
+      // applyBodyColors() below once real surface temps are known.
+      const count = geometry.attributes.position.count;
+      geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 3).fill(0.4), 3));
       return geometry;
     }
 
-    function buildTokamakShells(overrides) {
-      t3dScene.remove(t3dShellGroup);
-      t3dShellGroup = new THREE.Group();
-      t3dShellMeshes = [];
+    function applyBodyColors(geometry, height, colorBase, colorRim) {
+      const pos = geometry.attributes.position;
+      const colorAttr = geometry.attributes.color;
+      for (let i = 0; i < pos.count; i++) {
+        const y = pos.getY(i);
+        const frac = Math.max(0, Math.min(1, y / height));
+        const c = colorBase.clone().lerp(colorRim, frac);
+        colorAttr.setXYZ(i, c.r, c.g, c.b);
+      }
+      colorAttr.needsUpdate = true;
+    }
 
-      const rhoAll = Array.from({ length: 25 }, (_, i) => i / 24);
-      const rhoShells = rhoAll.filter((_, i) => i % SHELL_RHO_STRIDE === 0 || i === 24);
+    function buildMugShape(p) {
+      m3dScene.remove(m3dGroup);
+      m3dGroup = new THREE.Group();
+      m3dParts = {};
 
-      rhoShells.forEach((rhoFrac, shellIdx) => {
-        const geometry = buildShellGeometry(rhoFrac, overrides);
-        const isLCFS = rhoFrac >= 0.999;
-        const material = new THREE.MeshBasicMaterial({
-          color: 0x888888, transparent: true, opacity: isLCFS ? 0.18 : 0.55,
-          side: THREE.DoubleSide, depthWrite: false,
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-        // Render innermost (hottest, most interesting) shells last so they
-        // composite on top of the outer, more-transparent ones.
-        mesh.renderOrder = rhoShells.length - shellIdx;
-        t3dShellGroup.add(mesh);
-        t3dShellMeshes.push({ mesh, rhoFrac });
+      const rBase = p.r_base_mm / 1000, rMid = p.r_mid_mm / 1000, rRim = p.r_rim_mm / 1000;
+      const height = 0.10; // fixed HEIGHT constant, thermal_mug_spike.py
 
-        if (isLCFS) {
-          const wire = new THREE.LineSegments(
-            new THREE.WireframeGeometry(geometry),
-            new THREE.LineBasicMaterial({ color: 0x5b9dff, transparent: true, opacity: 0.35 }),
-          );
-          t3dShellGroup.add(wire);
-        }
-      });
+      const bodyGeom = buildBodyGeometry(rBase, rMid, rRim, height);
+      const bodyMat = new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, transparent: true, opacity: 0.92 });
+      const bodyMesh = new THREE.Mesh(bodyGeom, bodyMat);
+      m3dGroup.add(bodyMesh);
+      m3dParts.bodyMesh = bodyMesh;
+      m3dParts.height = height;
 
-      t3dScene.add(t3dShellGroup);
+      // Liquid core -- a simple visual approximation (physics only tracks
+      // total wall+gap thickness via a thin-wall approximation, not an
+      // exact inner-vs-outer radius split, so this can't be more precise
+      // than the model itself). ~78% of the outer radius, filled to ~92%
+      // of the height (a small headspace at the rim).
+      const avgR = (rBase + rMid + rRim) / 3;
+      const liquidGeom = new THREE.CylinderGeometry(avgR * 0.8, avgR * 0.75, height * 0.92, 32, 1, false, 0, SHELL_PHI_SPAN);
+      const liquidMat = new THREE.MeshBasicMaterial({ color: 0x888888 });
+      const liquidMesh = new THREE.Mesh(liquidGeom, liquidMat);
+      liquidMesh.position.y = height * 0.92 / 2;
+      m3dGroup.add(liquidMesh);
+      m3dParts.liquidMesh = liquidMesh;
 
-      if (!t3dInitialized) {
-        const { R_major, a_minor } = overrides;
-        t3dCamera.position.set(R_major * 1.4, R_major * 0.9, a_minor * 3.2);
-        t3dControls.target.set(0, 0, 0);
-        t3dInitialized = true;
+      // Lid -- a disc at z=height, sized so its AREA is proportional to
+      // lid_coverage_frac of the rim opening (a simplification: doesn't
+      // represent WHICH part of the opening is covered, just how much).
+      const lidCoverage = Math.max(0, Math.min(1, p.lid_coverage_frac));
+      if (lidCoverage > 0.01) {
+        const lidR = rRim * Math.sqrt(lidCoverage);
+        const lidGeom = new THREE.CircleGeometry(lidR, 32);
+        const lidMat = new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.DoubleSide });
+        const lidMesh = new THREE.Mesh(lidGeom, lidMat);
+        lidMesh.rotation.x = -Math.PI / 2;
+        lidMesh.position.y = height + 0.0005;
+        m3dGroup.add(lidMesh);
+        m3dParts.lidMesh = lidMesh;
+      }
+
+      // Handle -- a simple horizontal cylinder attached at mid-height,
+      // pointing outward from the body. Colored uniformly by the handle
+      // TIP temperature (a simplification -- the physics does resolve a
+      // real gradient along its length, but a single color reads more
+      // clearly at this small scale than a gradient would).
+      const handleLen = p.handle_length_mm / 1000, handleDia = p.handle_diameter_mm / 1000;
+      const handleGeom = new THREE.CapsuleGeometry(handleDia / 2, handleLen, 4, 8);
+      const handleMat = new THREE.MeshBasicMaterial({ color: 0x888888 });
+      const handleMesh = new THREE.Mesh(handleGeom, handleMat);
+      handleMesh.rotation.z = Math.PI / 2;
+      // attach on the +X side (phi=0 edge of the open wedge), sticking outward
+      handleMesh.position.set(rMid + handleLen / 2 + handleDia / 2, height / 2, 0);
+      m3dGroup.add(handleMesh);
+      m3dParts.handleMesh = handleMesh;
+
+      m3dScene.add(m3dGroup);
+      lastGeom = { rBase, rMid, rRim, height };
+
+      if (!m3dInitialized) {
+        const scale = Math.max(rRim, height);
+        m3dCamera.position.set(scale * 2.6, scale * 2.0, scale * 2.6);
+        m3dControls.target.set(0, height / 2, 0);
+        m3dInitialized = true;
       }
     }
 
-    // Colors each shell mesh by the actual T_e value at that rho, from
-    // profiles.T_e[frameIdx] -- called on every candidate change AND every
-    // timestep change, so scrubbing/playing the time slider visibly reheats
-    // /cools the 3D shells in sync with the 2D T_e/T_i chart, not just a
-    // static colored shape.
-    function updateShellColors(profiles, frameIdx) {
-      if (!profiles || !t3dShellMeshes.length) return;
-      const teFrame = profiles.T_e[frameIdx];
-      const rhoCell = profiles.rho_cell_norm;
-      const teMin = Math.min(...profiles.T_e.flat());
-      const teMax = Math.max(...profiles.T_e.flat());
-      t3dShellMeshes.forEach(({ mesh, rhoFrac }) => {
-        // nearest rho_cell_norm index to this shell's own rho fraction
-        let bestI = 0, bestD = Infinity;
-        rhoCell.forEach((r, i) => { const d = Math.abs(r - rhoFrac); if (d < bestD) { bestD = d; bestI = i; } });
-        const te = teFrame[bestI];
-        const frac = teMax > teMin ? (te - teMin) / (teMax - teMin) : 0.5;
-        const [r, g, b] = hexToRgb(colormapHex('plasma', frac));
-        mesh.material.color.setRGB(r / 255, g / 255, b / 255);
-      });
+    // Colors every part by the real surface temps at the current time-slider
+    // frame -- called on every candidate change AND every timestep change,
+    // so scrubbing/playing the slider visibly reheats/cools the shape in
+    // sync with the 2D chart, same convention as the TORAX viewer.
+    function updateMugColors(series, frameIdx) {
+      if (!series || !lastGeom) return;
+      const tRim = series.T_rim_outer[frameIdx];
+      const tBase = series.T_base_outer[frameIdx];
+      const tLid = series.T_lid_outer[frameIdx];
+      const tLiq = series.T_liq[frameIdx];
+      const tHandle = series.T_handle_tip[frameIdx];
+
+      applyBodyColors(m3dParts.bodyMesh.geometry, lastGeom.height, colorForTemp(tBase), colorForTemp(tRim));
+      m3dParts.liquidMesh.material.color.copy(colorForTemp(tLiq));
+      if (m3dParts.lidMesh && tLid !== null && tLid !== undefined) {
+        m3dParts.lidMesh.material.color.copy(colorForTemp(tLid));
+      }
+      m3dParts.handleMesh.material.color.copy(colorForTemp(tHandle));
     }
 
-    function hexToRgb(hex) {
-      const n = parseInt(hex.slice(1), 16);
-      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-    }
-
-    function resizeTokamak3d() {
-      const w = tokamak3dWrap.clientWidth, h = tokamak3dWrap.clientHeight;
+    function resizeMug3d() {
+      const w = mug3dWrap.clientWidth, h = mug3dWrap.clientHeight;
       if (!w || !h) return;
-      t3dRenderer.setSize(w, h, false);
-      t3dRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-      t3dCamera.aspect = w / h;
-      t3dCamera.updateProjectionMatrix();
+      m3dRenderer.setSize(w, h, false);
+      m3dRenderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      m3dCamera.aspect = w / h;
+      m3dCamera.updateProjectionMatrix();
     }
-    (function t3dAnimate() {
-      requestAnimationFrame(t3dAnimate);
-      t3dControls.update();
-      t3dRenderer.render(t3dScene, t3dCamera);
+    (function m3dAnimate() {
+      requestAnimationFrame(m3dAnimate);
+      m3dControls.update();
+      m3dRenderer.render(m3dScene, m3dCamera);
     })();
-    window.addEventListener('resize', resizeTokamak3d);
-    resizeTokamak3d();
+    window.addEventListener('resize', resizeMug3d);
+    resizeMug3d();
 
-    function drawProfileFrame(canvas, series, rho, opts = {}) {
+    const CHART_SERIES = [
+      { key: 'T_liq', label: 'liquid', color: '#5b9dff' },
+      { key: 'T_rim_outer', label: 'rim (outer)', color: '#ffb454' },
+      { key: 'T_base_outer', label: 'base (outer)', color: '#5bd88a' },
+      { key: 'T_lid_outer', label: 'lid (outer)', color: '#c76bff' },
+      { key: 'T_handle_tip', label: 'handle tip', color: '#ff6b6b' },
+    ];
+
+    function drawTempChart(series, frameIdx) {
+      const canvas = tempChartCanvas;
       const ctx = canvas.getContext('2d');
       const w = canvas.width = canvas.clientWidth * devicePixelRatio;
       const h = canvas.height = canvas.clientHeight * devicePixelRatio;
       ctx.clearRect(0, 0, w, h);
-      if (!series || !series.length) return;
-      const pad = 6 * devicePixelRatio;
-      const allVals = opts.globalRange || series.flatMap((s) => s.values);
-      const minV = Math.min(0, ...allVals), maxV = Math.max(...allVals) || 1;
-      const px = (r) => pad + r * (w - 2 * pad);
+      if (!series) return;
+      const pad = 10 * devicePixelRatio;
+      const tMax = series.t_s[series.t_s.length - 1] || 1;
+      const allVals = CHART_SERIES.flatMap((s) => (series[s.key] || []).filter((v) => v !== null && v !== undefined));
+      const minV = Math.min(15, ...allVals), maxV = Math.max(95, ...allVals);
+      const px = (t) => pad + (t / tMax) * (w - 2 * pad);
       const py = (v) => h - pad - ((v - minV) / ((maxV - minV) || 1)) * (h - 2 * pad);
-      series.forEach(({ values, color }) => {
+
+      CHART_SERIES.forEach(({ key, color }) => {
+        const values = series[key];
+        if (!values) return;
         ctx.strokeStyle = color; ctx.lineWidth = 2 * devicePixelRatio;
         ctx.beginPath();
-        values.forEach((v, i) => { const fn = i === 0 ? 'moveTo' : 'lineTo'; ctx[fn](px(rho[i]), py(v)); });
+        let started = false;
+        values.forEach((v, i) => {
+          if (v === null || v === undefined) return;
+          const fn = started ? 'lineTo' : 'moveTo';
+          ctx[fn](px(series.t_s[i]), py(v));
+          started = true;
+        });
         ctx.stroke();
       });
+
+      // current-time marker
+      const curT = series.t_s[frameIdx];
+      if (curT !== undefined) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 1.5 * devicePixelRatio;
+        ctx.beginPath(); ctx.moveTo(px(curT), pad); ctx.lineTo(px(curT), h - pad); ctx.stroke();
+      }
     }
 
-    function renderProfilesAtFrame(k) {
-      if (!currentProfiles) return;
-      const p = currentProfiles;
-      timeVal.textContent = `t=${p.times[k].toFixed(2)}s`;
-      const globalTeTi = [...p.T_e.flat(), ...p.T_i.flat()];
-      const globalNe = p.n_e.flat();
-      const globalQ = p.q_face.flat();
-      const globalJ = p.j_total.flat();
-      drawProfileFrame(teTiCanvas, [
-        { values: p.T_e[k], color: '#5b9dff' },
-        { values: p.T_i[k], color: '#ffb454' },
-      ], p.rho_cell_norm, { globalRange: globalTeTi });
-      drawProfileFrame(neCanvas, [{ values: p.n_e[k], color: '#5bd88a' }], p.rho_cell_norm, { globalRange: globalNe });
-      drawProfileFrame(qCanvas, [{ values: p.q_face[k], color: '#c76bff' }], p.rho_face_norm, { globalRange: globalQ });
-      drawProfileFrame(jCanvas, [{ values: p.j_total[k], color: '#ff6b6b' }], p.rho_cell_norm, { globalRange: globalJ });
-      updateShellColors(p, k);
+    function buildChartLegend() {
+      chartLegendEl.innerHTML = CHART_SERIES.map((s) =>
+        `<span class="swatch"><span class="dot" style="background:${s.color}"></span>${s.label}</span>`).join('');
+    }
+    buildChartLegend();
+
+    function renderSeriesAtFrame(k) {
+      if (!currentSeries) return;
+      const t = currentSeries.t_s[k];
+      timeVal.textContent = t < 60 ? `t=${t.toFixed(0)}s` : `t=${(t / 60).toFixed(1)}min`;
+      drawTempChart(currentSeries, k);
+      updateMugColors(currentSeries, k);
     }
 
-    timeSlider.addEventListener('input', () => renderProfilesAtFrame(Number(timeSlider.value)));
+    timeSlider.addEventListener('input', () => renderSeriesAtFrame(Number(timeSlider.value)));
     playBtn.addEventListener('click', () => {
       if (playTimer) {
         clearInterval(playTimer); playTimer = null; playBtn.textContent = '▶';
@@ -831,54 +863,52 @@ import 'katex/dist/katex.min.css';
       }
       playBtn.textContent = '⏸';
       playTimer = setInterval(() => {
-        if (!currentProfiles) return;
-        let k = (Number(timeSlider.value) + 1) % currentProfiles.times.length;
+        if (!currentSeries) return;
+        let k = (Number(timeSlider.value) + 1) % currentSeries.t_s.length;
         timeSlider.value = k;
-        renderProfilesAtFrame(k);
-      }, 180);
+        renderSeriesAtFrame(k);
+      }, 120);
     });
 
     let physicsAbort = null;
     async function updatePhysics(gi) {
       const rowStart = gi * meta.x_cols;
-      const overrides = {};
-      PARAM_NAMES.forEach((name, i) => { overrides[name] = X[rowStart + i]; });
+      const params = PARAM_NAMES.map((_, i) => X[rowStart + i]);
+      const p = {};
+      PARAM_NAMES.forEach((name, i) => { p[name] = params[i]; });
 
-      buildTokamakShells(overrides);
-      resizeTokamak3d();
-      tokamakCaptionEl.textContent = `R₀=${overrides.R_major.toFixed(2)}m  a=${overrides.a_minor.toFixed(2)}m  κ=${overrides.elongation_LCFS.toFixed(2)}  ·  ${SHELL_RHO_STRIDE ? Math.ceil(25 / SHELL_RHO_STRIDE) : 9} nested flux surfaces, wedge cut open`;
+      buildMugShape(p);
+      resizeMug3d();
+      mugCaptionEl.textContent = `r_base=${p.r_base_mm.toFixed(1)}mm  r_mid=${p.r_mid_mm.toFixed(1)}mm  r_rim=${p.r_rim_mm.toFixed(1)}mm  ·  lid coverage=${(p.lid_coverage_frac * 100).toFixed(0)}%  ·  wedge cut open to show the liquid core`;
       shapeStatusEl.textContent = '';
 
       if (physicsAbort) physicsAbort.abort();
       physicsAbort = new AbortController();
-      profileStatusEl.textContent = 'loading… (first request can take ~5s while TORAX JIT-compiles)';
+      profileStatusEl.textContent = 'loading…';
       try {
         const res = await fetch(`${PHYSICS_URL}/physics`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ overrides }),
+          body: JSON.stringify({ params }),
           signal: physicsAbort.signal,
         });
         if (!res.ok) throw new Error(`physics ${res.status}`);
         const bundle = await res.json();
         profileStatusEl.textContent = bundle.cached ? 'cached' : 'ready';
-        if (bundle.ok) {
-          currentProfiles = bundle.profiles;
-          timeSlider.max = currentProfiles.times.length - 1;
-          timeSlider.value = currentProfiles.times.length - 1;
-          renderProfilesAtFrame(currentProfiles.times.length - 1);
-          polarQEl.textContent = round5(bundle.targets.Q_fusion);
-          polarTauEEl.textContent = round5(bundle.targets.tau_E);
-          polarH98El.textContent = round5(bundle.targets.H98);
-          polarTeEl.textContent = round5(bundle.targets.T_e_volume_avg);
-        } else {
-          currentProfiles = null;
-          profileStatusEl.textContent = `did not converge (${bundle.error || 'unknown'})`;
-          polarQEl.textContent = polarTauEEl.textContent = polarH98El.textContent = polarTeEl.textContent = 'n/c';
-          [teTiCanvas, neCanvas, qCanvas, jCanvas].forEach((c) => { const ctx = c.getContext('2d'); ctx.clearRect(0, 0, c.width, c.height); });
-        }
+        currentSeries = bundle.series;
+        timeSlider.max = currentSeries.t_s.length - 1;
+        timeSlider.value = currentSeries.t_s.length - 1;
+        renderSeriesAtFrame(currentSeries.t_s.length - 1);
+        polarTemp2hEl.textContent = round5(bundle.targets.temp_at_2h_C);
+        polarMassEl.textContent = round5(bundle.targets.mass_kg);
+        polarTouchEl.textContent = round5(bundle.targets.touch_temp_60s_C);
+        polarHandleEl.textContent = round5(bundle.targets.handle_temp_60s_C);
       } catch (e) {
-        if (e.name !== 'AbortError') profileStatusEl.textContent = `error: ${e.message}`;
+        if (e.name !== 'AbortError') {
+          profileStatusEl.textContent = `error: ${e.message}`;
+          currentSeries = null;
+          polarTemp2hEl.textContent = polarMassEl.textContent = polarTouchEl.textContent = polarHandleEl.textContent = 'n/c';
+        }
       }
     }
 
@@ -905,13 +935,9 @@ import 'katex/dist/katex.min.css';
 
       const rowStart = gi * meta.x_cols;
       globalRowEl.textContent = gi.toLocaleString();
-      rMajorValEl.textContent = X[rowStart + PARAM_NAMES.indexOf('R_major')].toFixed(2);
-      bValEl.textContent = X[rowStart + PARAM_NAMES.indexOf('B_0')].toFixed(2);
-      ipValEl.textContent = (X[rowStart + PARAM_NAMES.indexOf('Ip')] / 1e6).toFixed(2);
-      const code = sourceCodeOf(gi);
-      const srcName = offsets[code] ? offsets[code].name : '?';
-      srcValEl.textContent = srcName;
-      srcPillEl.classList.toggle('src-real', srcName === 'real_devices');
+      rRimValEl.textContent = X[rowStart + PARAM_NAMES.indexOf('r_rim_mm')].toFixed(1);
+      lidValEl.textContent = (X[rowStart + PARAM_NAMES.indexOf('lid_coverage_frac')] * 100).toFixed(0);
+      massValEl.textContent = Y[yBase + meta.target_names.indexOf('mass_kg')].toFixed(3);
 
       updatePhysics(gi);
     }
@@ -980,7 +1006,6 @@ import 'katex/dist/katex.min.css';
 
       umapPoints.globalIndices.forEach((gi, i) => {
         const code = sourceCodeOf(gi);
-        const isReal = offsets[code] && offsets[code].name === 'real_devices';
         let color;
         if (colorBy === 'source') color = SOURCE_COLORS[offsets[code] ? offsets[code].name : ''] || '#c76bff';
         else {
@@ -990,12 +1015,11 @@ import 'katex/dist/katex.min.css';
           color = colormapHex('viridis', frac);
         }
         const dim = hoveredSourceCode !== null && code !== hoveredSourceCode;
-        ctx.globalAlpha = dim ? 0.15 : (isReal ? 1.0 : 0.75);
+        ctx.globalAlpha = dim ? 0.15 : 0.75;
         ctx.fillStyle = color;
         ctx.beginPath();
-        ctx.arc(sx(xs[i]), sy(ys[i]), (isReal ? 5 : 2.5) * devicePixelRatio, 0, 2 * Math.PI);
+        ctx.arc(sx(xs[i]), sy(ys[i]), 2.5 * devicePixelRatio, 0, 2 * Math.PI);
         ctx.fill();
-        if (isReal) { ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.stroke(); }
       });
       ctx.globalAlpha = 1;
     }
@@ -1025,7 +1049,7 @@ import 'katex/dist/katex.min.css';
 
     document.getElementById('umapRecomputeBtn').addEventListener('click', computeUMAP);
     umapColorByEl.addEventListener('change', () => { if (umapPoints) drawUMAP(); });
-    window.addEventListener('resize', () => { if (umapPoints) drawUMAP(); if (currentProfiles) renderProfilesAtFrame(Number(timeSlider.value)); });
+    window.addEventListener('resize', () => { if (umapPoints) drawUMAP(); if (currentSeries) renderSeriesAtFrame(Number(timeSlider.value)); });
 
     (async () => {
       await loadData();
