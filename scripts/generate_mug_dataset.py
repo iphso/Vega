@@ -1,15 +1,14 @@
-"""Bootstraps a training dataset for the mug/thermos thermal-design domain
-(EXPERIMENT_LOG §46-47) -- same role as generate_airfoil_dataset.py/
-generate_torax_dataset.py, but simpler in one real way: unlike CST airfoil
-coefficients or VMEC's 90-dim Fourier spectrum, near-random values of this
-domain's 3 continuous parameters are physically sensible on their own (any
-positive thickness/conductivity is a legitimate wall) -- no archetypal
-seeds + noise needed, direct range sampling is sufficient. Confirmed by
-§47's own hit-rate check: 40/40 smoke-test candidates valid.
+"""Bootstraps a training dataset for the mug/thermos thermal-design domain --
+v2 (EXPERIMENT_LOG §48), sampling the 8-dim richer parameterization (named
+materials + 2-band wall profile + handle) instead of v1's 3-dim one. Same
+role as generate_airfoil_dataset.py/generate_torax_dataset.py; direct range
+sampling is still sufficient here (no archetypal seeds needed) since
+near-random values of every one of these 8 parameters are physically
+sensible on their own -- confirmed by §47/§48's own smoke tests (100%
+hit rate both times).
 
 Runs entirely on host, no Docker -- mug_oracle.py's only dependency is
-numpy/scipy (see EXPERIMENT_LOG §46 on why this domain was deliberately
-picked to not need GPU/exotic pins at all).
+numpy/scipy.
 """
 import argparse
 import json
@@ -23,13 +22,25 @@ from oracle_harness import run_batch_with_timeout
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "output"
 
+# Continuous material-index ranges span the full named-material table in each
+# slot (see thermal_mug_spike.py's STRUCTURAL_MATERIALS/INSULATION_MATERIALS/
+# HANDLE_MATERIALS) -- table lengths are 4/4/5 respectively, so valid index
+# ranges are [0, 3]/[0, 3]/[0, 4].
+DEFAULT_RANGES = dict(
+    t_wall_rim_mm=(0.3, 5.0),
+    t_wall_base_mm=(0.3, 5.0),
+    struct_material_idx=(0.0, 3.0),
+    t_gap_mm=(0.05, 25.0),
+    insulation_material_idx=(0.0, 3.0),
+    handle_length_mm=(10.0, 80.0),
+    handle_diameter_mm=(3.0, 20.0),
+    handle_material_idx=(0.0, 4.0),
+)
+
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--target-count", type=int, default=20_000)
-    p.add_argument("--t-wall-mm-range", type=float, nargs=2, default=(0.3, 5.0))
-    p.add_argument("--t-gap-mm-range", type=float, nargs=2, default=(0.05, 25.0))
-    p.add_argument("--k-gap-range", type=float, nargs=2, default=(0.004, 0.06))  # vacuum-like .. poor insulator
     p.add_argument("--n-workers", type=int, default=28)
     p.add_argument("--batch-size", type=int, default=280)
     p.add_argument("--timeout-seconds", type=float, default=15.0)
@@ -45,19 +56,16 @@ def main():
     t_start = time.perf_counter()
 
     def sample_batch(n):
-        candidates = []  # (tag, t_wall_mm, t_gap_mm, k_gap, params)
+        candidates = []  # (tag, *worker_args, params)
         for i in range(n):
-            t_wall = float(rng.uniform(*args.t_wall_mm_range))
-            t_gap = float(rng.uniform(*args.t_gap_mm_range))
-            k_gap = float(np.exp(rng.uniform(np.log(args.k_gap_range[0]), np.log(args.k_gap_range[1]))))
-            params = np.array([t_wall, t_gap, k_gap], dtype=np.float64)
+            params = np.array([rng.uniform(*DEFAULT_RANGES[name]) for name in oracle.PARAM_NAMES], dtype=np.float64)
             candidates.append((i, *oracle.params_to_worker_args(params, {}, "low"), params))
         return candidates
 
     while n_accepted < args.target_count:
         raw = sample_batch(args.batch_size)
-        jobs = [(tag, tw, tg, kg) for tag, tw, tg, kg, _params in raw]
-        lookup = {tag: params for tag, _tw, _tg, _kg, params in raw}
+        jobs = [c[:-1] for c in raw]
+        lookup = {c[0]: c[-1] for c in raw}
 
         n_attempted += len(jobs)
         for tag, ok, payload in run_batch_with_timeout(jobs, oracle.worker_fn, args.n_workers, args.timeout_seconds):

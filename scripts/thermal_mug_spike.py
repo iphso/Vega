@@ -154,6 +154,236 @@ def analytic_time_constant_s(t_wall_mm, t_gap_mm, k_gap):
     return -tau * math.log((T_THRESHOLD - T_AMB) / (T0_LIQUID - T_AMB))
 
 
+# ---------------------------------------------------------------------------
+# v2 (EXPERIMENT_LOG §48): user asked for a richer parameterization -- named
+# materials instead of one free-floating conductivity, a wall PROFILE instead
+# of a constant thickness, and a real handle (weight + a "does the handle get
+# hot" safety target). v1's `simulate()` is left untouched above for
+# reference/regression-checking; v2 is a genuinely different design vector
+# and gets its own function.
+#
+# Wall profile: kept to 2 axial bands (rim, base) rather than a fully
+# height-resolved field -- a real generalization beyond v1's constant
+# thickness (mugs often ARE thinner at the rim for a comfortable drinking
+# edge and thicker at the base for stability/drop resistance) without a full
+# 2D solve. Each band gets an equal half-share of the cylindrical side-wall
+# area and is its own independent 1D radial+gap conduction chain, both
+# drawing from the same liquid.
+#
+# Coupling scheme: v1 solved liquid+wall as ONE fully-implicit system (liquid
+# is an unknown in the same tridiagonal solve). With 3 independent chains now
+# (rim, base, handle) all touching the liquid/body, that would require a
+# star-shaped (non-tridiagonal) matrix. Used explicit-implicit splitting
+# instead: the liquid's own energy balance is updated EXPLICITLY each step
+# from the previous step's band fluxes, and each chain (rim, base, handle) is
+# solved fully implicitly using the previous step's liquid/body temperature
+# as its own boundary value. Verified below that this still matches v1
+# closely in the reducible case (same materials/thickness on both bands, no
+# handle contribution to the liquid) -- not assumed equivalent.
+#
+# Handle: a genuine transient fin-conduction problem, not a quasi-steady
+# shortcut -- checked first and rejected: a quasi-steady estimate (using the
+# steady-state fin formula at each instant) implicitly assumes the handle's
+# own thermal diffusion time is short vs. the 60s reporting window. Direct
+# check: tau ~ L^2/alpha for a ~5cm steel handle is ~667s, for a low-k
+# handle (precisely the "safe" designs we care about) it's even less settled
+# within 60s -- neither case clears the 60s window, so the transient must be
+# solved for real. Modeled as a 1D fin: implicit backward-Euler chain along
+# the handle's length, WITH a lateral convective-loss term at every cell
+# (h_air * perimeter * dx * (T-T_amb), the standard extended-surface/fin
+# term v1's wall chains didn't need since they only lose heat at their two
+# ends), Dirichlet-coupled at the base to the (previous-step) average of the
+# two wall bands' outer surface temperatures, adiabatic (zero-flux) tip --
+# the standard assumption for a fin whose tip area is small vs. its lateral
+# area. Starts at ambient temperature, not fill temperature -- unlike the
+# wall (which is assumed to instantly wet-contact the liquid at t=0), the
+# handle is physically remote and only heats via conduction from the body.
+# ---------------------------------------------------------------------------
+
+# (name, k [W/(m K)], rho [kg/m3], cp [J/(kg K)]) -- sorted by k ascending in
+# each table so a continuous index interpolates through real named materials,
+# not just an arbitrary number range. Order-of-magnitude real values, not
+# fit to any specific product.
+STRUCTURAL_MATERIALS = [
+    ("plastic", 0.2, 950.0, 1900.0),
+    ("glass", 1.0, 2500.0, 840.0),
+    ("ceramic", 1.5, 2300.0, 1050.0),
+    ("steel", 15.0, 8000.0, 500.0),
+]
+INSULATION_MATERIALS = [
+    ("vacuum", 0.005, 5.0, 500.0),
+    ("aerogel", 0.015, 150.0, 1000.0),
+    ("air_gap", 0.026, 1.2, 1005.0),
+    ("foam", 0.03, 40.0, 1400.0),
+]
+HANDLE_MATERIALS = [
+    ("silicone_rubber", 0.15, 1100.0, 1600.0),
+    ("wood", 0.17, 600.0, 1700.0),
+    ("plastic_grip", 0.2, 950.0, 1900.0),
+    ("ceramic", 1.5, 2300.0, 1050.0),
+    ("steel", 15.0, 8000.0, 500.0),
+]
+
+N_HANDLE = 20
+
+PARAM_DIM_V2 = 8
+PARAM_NAMES_V2 = [
+    "t_wall_rim_mm", "t_wall_base_mm", "struct_material_idx",
+    "t_gap_mm", "insulation_material_idx",
+    "handle_length_mm", "handle_diameter_mm", "handle_material_idx",
+]
+
+
+def material_props(idx, table):
+    """idx: continuous, clamped to [0, len(table)-1] -- interpolates (k, rho,
+    cp) between adjacent named reference materials sorted by k ascending."""
+    idx = float(np.clip(idx, 0, len(table) - 1))
+    xs = np.arange(len(table), dtype=float)
+    ks = np.array([t[1] for t in table])
+    rhos = np.array([t[2] for t in table])
+    cps = np.array([t[3] for t in table])
+    return float(np.interp(idx, xs, ks)), float(np.interp(idx, xs, rhos)), float(np.interp(idx, xs, cps))
+
+
+def _step_chain(T, dx, k, rho, cp, area, dt, T_amb_right, h_right,
+                 T_left_conv=None, h_left=None, T_left_dirichlet=None,
+                 lateral_hP=0.0, T_lateral=T_AMB):
+    """One implicit (backward-Euler) step of a 1D finite-volume conduction
+    chain with fixed (not coupled-unknown) boundary values on both ends --
+    either a convective left boundary (T_left_conv/h_left, what the wall
+    bands use to reach the liquid) or a Dirichlet left boundary
+    (T_left_dirichlet, what the handle uses to reach the wall), a convective
+    right boundary (T_amb_right/h_right; h_right=0 means adiabatic/no-flux,
+    what the handle's tip uses), and an optional per-cell lateral convective
+    loss term (lateral_hP = h*perimeter, zero for the wall bands which only
+    lose heat at their two ends, nonzero for the handle which loses heat
+    along its whole exposed length -- the fin equation's extra term)."""
+    n = len(T)
+    C = rho * cp * dx * area
+    G = np.empty(n - 1)
+    for i in range(n - 1):
+        R = dx[i] / (2 * k[i] * area) + dx[i + 1] / (2 * k[i + 1] * area)
+        G[i] = 1.0 / R
+
+    diag = C / dt + lateral_hP * dx
+    lower = np.zeros(n)
+    upper = np.zeros(n)
+    rhs = C / dt * T + lateral_hP * dx * T_lateral
+
+    for i in range(n - 1):
+        diag[i] += G[i]
+        diag[i + 1] += G[i]
+        upper[i] = -G[i]
+        lower[i + 1] = -G[i]
+
+    if T_left_dirichlet is not None:
+        diag[0] = 1.0
+        upper[0] = 0.0
+        rhs[0] = T_left_dirichlet
+    else:
+        G_left = 1.0 / (1.0 / (h_left * area) + dx[0] / (2 * k[0] * area))
+        diag[0] += G_left
+        rhs[0] += G_left * T_left_conv
+
+    if h_right != 0.0:
+        G_right = 1.0 / (1.0 / (h_right * area) + dx[-1] / (2 * k[-1] * area))
+        diag[-1] += G_right
+        rhs[-1] += G_right * T_amb_right
+    # h_right == 0.0: adiabatic tip, no term added
+
+    ab = np.zeros((3, n))
+    ab[0, 1:] = upper[:-1]
+    ab[1, :] = diag
+    ab[2, :-1] = lower[1:]
+    return solve_banded((1, 1), ab, rhs)
+
+
+def simulate_v2(t_wall_rim_mm, t_wall_base_mm, struct_material_idx,
+                 t_gap_mm, insulation_material_idx,
+                 handle_length_mm, handle_diameter_mm, handle_material_idx,
+                 dt=5.0, t_max=2 * 3600.0, record_at=60.0):
+    if min(t_wall_rim_mm, t_wall_base_mm, t_gap_mm, handle_length_mm, handle_diameter_mm) <= 0:
+        return dict(valid=False)
+
+    k_struct, rho_struct, cp_struct = material_props(struct_material_idx, STRUCTURAL_MATERIALS)
+    k_ins, rho_ins, cp_ins = material_props(insulation_material_idx, INSULATION_MATERIALS)
+    k_handle, rho_handle, cp_handle = material_props(handle_material_idx, HANDLE_MATERIALS)
+
+    area_band = A_INNER / 2.0  # rim band + base band split the cylindrical side wall evenly
+
+    def build_band(t_wall_mm):
+        t_wall, t_gap = t_wall_mm / 1000.0, t_gap_mm / 1000.0
+        dx = np.concatenate([np.full(N_WALL, t_wall / N_WALL), np.full(N_GAP, t_gap / N_GAP)])
+        k = np.concatenate([np.full(N_WALL, k_struct), np.full(N_GAP, k_ins)])
+        rho = np.concatenate([np.full(N_WALL, rho_struct), np.full(N_GAP, rho_ins)])
+        cp = np.concatenate([np.full(N_WALL, cp_struct), np.full(N_GAP, cp_ins)])
+        return dx, k, rho, cp
+
+    dx_rim, k_rim, rho_rim, cp_rim = build_band(t_wall_rim_mm)
+    dx_base, k_base, rho_base, cp_base = build_band(t_wall_base_mm)
+
+    n_band = N_WALL + N_GAP
+    T_rim = np.full(n_band, T0_LIQUID)
+    T_base = np.full(n_band, T0_LIQUID)
+    T_liq = T0_LIQUID
+
+    L_h = handle_length_mm / 1000.0
+    d_h = handle_diameter_mm / 1000.0
+    A_h = math.pi * (d_h / 2) ** 2
+    P_h = math.pi * d_h
+    dx_h = np.full(N_HANDLE, L_h / N_HANDLE)
+    k_h = np.full(N_HANDLE, k_handle)
+    rho_h = np.full(N_HANDLE, rho_handle)
+    cp_h = np.full(N_HANDLE, cp_handle)
+    T_handle = np.full(N_HANDLE, T_AMB)  # handle starts at room temp, not fill temp
+
+    n_steps = int(t_max / dt)
+    touch_temp_at = None
+    handle_temp_at = None
+    recorded = False
+
+    for step in range(n_steps):
+        t_now = step * dt
+        flux_rim = H_LIQ * area_band * (T_liq - T_rim[0])
+        flux_base = H_LIQ * area_band * (T_liq - T_base[0])
+        T_liq_new = T_liq - dt / C_LIQ * (flux_rim + flux_base)
+
+        T_rim_new = _step_chain(T_rim, dx_rim, k_rim, rho_rim, cp_rim, area_band, dt,
+                                 T_amb_right=T_AMB, h_right=H_AIR, T_left_conv=T_liq, h_left=H_LIQ)
+        T_base_new = _step_chain(T_base, dx_base, k_base, rho_base, cp_base, area_band, dt,
+                                  T_amb_right=T_AMB, h_right=H_AIR, T_left_conv=T_liq, h_left=H_LIQ)
+
+        body_temp = 0.5 * (T_rim[-1] + T_base[-1])
+        T_handle_new = _step_chain(T_handle, dx_h, k_h, rho_h, cp_h, A_h, dt,
+                                    T_amb_right=T_AMB, h_right=0.0, T_left_dirichlet=body_temp,
+                                    lateral_hP=H_AIR * P_h, T_lateral=T_AMB)
+
+        ok = (np.isfinite(T_liq_new) and np.all(np.isfinite(T_rim_new))
+              and np.all(np.isfinite(T_base_new)) and np.all(np.isfinite(T_handle_new)))
+        if not ok:
+            return dict(valid=False)
+
+        T_liq, T_rim, T_base, T_handle = T_liq_new, T_rim_new, T_base_new, T_handle_new
+
+        if not recorded and (t_now + dt) >= record_at:
+            touch_temp_at = float(max(T_rim[-1], T_base[-1]))
+            handle_temp_at = float(T_handle[-1])
+            recorded = True
+
+    mass_struct = area_band * ((t_wall_rim_mm + t_wall_base_mm) / 1000.0) * rho_struct
+    mass_ins = area_band * 2 * (t_gap_mm / 1000.0) * rho_ins
+    mass_handle = A_h * L_h * rho_handle
+    mass_kg = mass_struct + mass_ins + mass_handle
+
+    return dict(
+        valid=True,
+        final_liq_temp_C=float(T_liq),
+        mass_kg=float(mass_kg),
+        touch_temp_at_C=touch_temp_at,
+        handle_temp_at_C=handle_temp_at,
+    )
+
+
 if __name__ == "__main__":
     print("=== Verification: near-massless wall/gap vs. analytic RC limit ===")
     for (tw, tg, kg) in [(1.0, 5.0, 0.03), (2.0, 10.0, 0.01)]:
@@ -218,3 +448,32 @@ if __name__ == "__main__":
         simulate(tw[i], tg[i], kg[i])
     dt_batch = time.time() - t0
     print(f"\n=== Speed: {dt_batch/50*1000:.2f} ms/candidate (host CPU, single-threaded, N=30 cells) ===")
+
+    print("\n=== v2 regression check: reduced to v1's case (equal bands, steel/foam, no handle feedback) ===")
+    v1r = simulate(1.0, 5.0, 0.03, t_max=7200.0)
+    v2r = simulate_v2(1.0, 1.0, 3.0, 5.0, 3.0, 30.0, 6.0, 4.0, t_max=7200.0)
+    print(f"  v1 final_liq_temp_C={v1r['final_liq_temp_C']:.2f}  v2 final_liq_temp_C={v2r['final_liq_temp_C']:.2f}  "
+          f"(explicit-liquid-coupling scheme, close-but-not-identical expected)")
+    print(f"  v1 touch_temp_60s_C={v1r['touch_temp_60s_C']:.2f}  v2 touch_temp_at_C={v2r['touch_temp_at_C']:.2f}")
+
+    print("\n=== v2 handle sanity: length sweep (steel handle, diameter=6mm -- worst case material) ===")
+    for L in [5.0, 20.0, 50.0, 100.0]:
+        r = simulate_v2(1.0, 1.0, 3.0, 5.0, 3.0, L, 6.0, 4.0, t_max=7200.0)
+        print(f"  length={L:>6.1f}mm  handle_temp_60s={r['handle_temp_at_C']:.2f}C")
+
+    print("\n=== v2 handle sanity: material sweep (length=50mm, diameter=6mm) ===")
+    for name, k, rho, cp in HANDLE_MATERIALS:
+        idx = [i for i, t in enumerate(HANDLE_MATERIALS) if t[0] == name][0]
+        r = simulate_v2(1.0, 1.0, 3.0, 5.0, 3.0, 50.0, 6.0, float(idx), t_max=7200.0)
+        print(f"  {name:>16} (k={k:>5.2f})  handle_temp_60s={r['handle_temp_at_C']:.2f}C")
+
+    print("\n=== v2 handle sanity: diameter sweep (length=50mm, steel) ===")
+    for d in [2.0, 6.0, 12.0, 20.0]:
+        r = simulate_v2(1.0, 1.0, 3.0, 5.0, 3.0, 50.0, d, 4.0, t_max=7200.0)
+        print(f"  diameter={d:>5.1f}mm  handle_temp_60s={r['handle_temp_at_C']:.2f}C  mass_kg={r['mass_kg']:.4f}")
+
+    print("\n=== v2 speed ===")
+    t0 = time.time()
+    for _ in range(50):
+        simulate_v2(1.0, 1.5, 2.0, 8.0, 1.5, 40.0, 8.0, 2.0, t_max=7200.0)
+    print(f"  {(time.time()-t0)/50*1000:.2f} ms/candidate")

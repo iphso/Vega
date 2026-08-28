@@ -1,71 +1,66 @@
-"""oracle_base.py implementation for the mug/thermos thermal-design domain
-(EXPERIMENT_LOG §46) -- the 4th real domain module plugged into this
-project's generic harness (after vmec_oracle.py, airfoil_oracle.py,
-torax_oracle.py), and the first one whose underlying physics is
-self-written rather than a wrapped external solver, so there's no license
-question at all (§46's own reason for picking this domain).
+"""oracle_base.py implementation for the mug/thermos thermal-design domain --
+v2 (EXPERIMENT_LOG §48), wrapping `thermal_mug_spike.simulate_v2()` instead
+of v1's `simulate()`. Superseded v1's PARAM_DIM=3 (t_wall_mm, t_gap_mm,
+k_gap) after direct user request for a richer parameterization: named
+materials instead of one free-floating conductivity, a 2-band wall profile
+(rim vs. base thickness) instead of a constant thickness, and a real handle
+(weight + a genuine "does the handle get hot" safety target) -- see
+thermal_mug_spike.py's own v2 docstring for the physics.
 
-Oracle: scripts/thermal_mug_spike.py's 1D thin-wall transient-conduction
-FD model (implicit backward-Euler, verified against a closed-form
-massless-wall limit and resolution-swept, see §46). This module is a thin
-wrapper adding the oracle_base.py contract (worker_fn/params_to_worker_args/
-TARGET_NAMES/etc.) on top of that already-verified simulate() function --
-no new physics here.
+Design vector x (PARAM_DIM=8): [t_wall_rim_mm, t_wall_base_mm,
+struct_material_idx, t_gap_mm, insulation_material_idx, handle_length_mm,
+handle_diameter_mm, handle_material_idx]. The three `*_material_idx` params
+are continuous, interpolating through STRUCTURAL_MATERIALS/
+INSULATION_MATERIALS/HANDLE_MATERIALS (named real materials, sorted by
+conductivity) rather than a single free-floating conductivity per v1 --
+see thermal_mug_spike.material_props().
 
-Design vector x = [t_wall_mm, t_gap_mm, k_gap] (PARAM_DIM=3) -- flagged in
-§46 as thin relative to every other domain here (VMEC 90+, airfoil 16,
-TORAX 10); kept as-is for this first real dataset rather than expanded
-preemptively, same "spike -> dataset -> THEN decide if richer" order every
-other domain in this project followed.
+Targets: temp_at_2h_C, mass_kg (now includes wall+insulation+handle),
+touch_temp_60s_C (body, worst of the two bands), handle_temp_60s_C (new --
+grip-point safety). §48 found the last one is heavily floor-dominated
+(most non-metal handle materials sit at ~ambient at 60s for realistic
+lengths) -- a real physical finding (that's WHY those materials are used
+for grips), not a data bug, but worth knowing before training on it.
 
-No discrete or continuous aux conditioning (unlike VMEC's n_field_periods
-or airfoil's (reynolds, alpha)) -- everything that varies is already in
-params, same situation torax_oracle.py's own docstring describes.
-
-Validity: unlike every wrapped-solver domain here, there's no external
-"did not converge" flag -- the FD scheme is unconditionally stable
-(backward Euler) for any positive thickness/conductivity, so a naive
-`ok=False` on "time to reach 60C" not occurring within a fixed simulated
-window would conflate two very different things: a broken candidate vs. a
-GENUINELY EXCELLENT thermos that's still hot at the cutoff. Caught exactly
-this way, not by inspection: an initial 20-candidate smoke test with
-t_max=6h gave only a 20% hit rate, and every rejection was "still above
-60C at 6h," not an actual instability -- i.e. the rejection was silently
-biasing the dataset toward mediocre designs only, throwing away the best
-part of the design space. Fixed by switching the primary target from a
-threshold-crossing TIME (open-ended, needs an arbitrary cutoff) to the
-LIQUID TEMPERATURE AT A FIXED TIME (2h) -- `simulate()`'s own
-`final_liq_temp_C` already computes exactly this when `t_max=7200`,
-always well-defined for any stable input, no rejection branch needed.
-`ok=False` here now means only a genuinely invalid input (non-positive
-thickness/conductivity) -- this domain's "hit rate" is expected to sit
-near 100% by construction, a real and worth-noting contrast with every
-wrapped-solver domain in this project (VMEC++/XFOIL/TORAX all have a
-non-convergence failure mode that this one structurally doesn't).
+Validity: same situation as v1 -- the FD scheme is unconditionally stable,
+so `ok=False` only means a structurally invalid input.
 """
-from thermal_mug_spike import PARAM_DIM, PARAM_NAMES, simulate  # noqa: F401
+from thermal_mug_spike import (  # noqa: F401
+    HANDLE_MATERIALS,
+    INSULATION_MATERIALS,
+    PARAM_DIM_V2 as PARAM_DIM,
+    PARAM_NAMES_V2 as PARAM_NAMES,
+    STRUCTURAL_MATERIALS,
+    simulate_v2,
+)
 
-TARGET_NAMES = ["temp_at_2h_C", "mass_kg", "touch_temp_60s_C"]
-LOG_TARGET_NAMES = []  # not yet examined for dynamic-range skew -- open item, see §46/§47
-ZERO_INDICES = []  # no structurally-fixed coefficients for this parameterization
-FIDELITY_PRESETS = {"low": "default"}  # single fixed grid resolution (N_WALL=20/N_GAP=40) -- no fidelity ladder yet
-T_HORIZON_S = 2 * 3600.0  # the fixed evaluation time temp_at_2h_C is read at
+TARGET_NAMES = ["temp_at_2h_C", "mass_kg", "touch_temp_60s_C", "handle_temp_60s_C"]
+LOG_TARGET_NAMES = []  # not yet examined for dynamic-range skew
+ZERO_INDICES = []
+FIDELITY_PRESETS = {"low": "default"}
+T_HORIZON_S = 2 * 3600.0
 
 
-def worker_fn(conn, t_wall_mm, t_gap_mm, k_gap):
+def worker_fn(conn, t_wall_rim_mm, t_wall_base_mm, struct_material_idx,
+              t_gap_mm, insulation_material_idx,
+              handle_length_mm, handle_diameter_mm, handle_material_idx):
     try:
         try:
-            r = simulate(t_wall_mm, t_gap_mm, k_gap, t_max=T_HORIZON_S)
+            r = simulate_v2(t_wall_rim_mm, t_wall_base_mm, struct_material_idx,
+                             t_gap_mm, insulation_material_idx,
+                             handle_length_mm, handle_diameter_mm, handle_material_idx,
+                             t_max=T_HORIZON_S, record_at=60.0)
         except Exception as e:
             conn.send((False, f"sim error: {e}"))
             return
         if not r["valid"]:
-            conn.send((False, "invalid input (non-finite, or non-positive thickness/conductivity)"))
+            conn.send((False, "invalid input (non-finite, or non-positive thickness/length/diameter)"))
             return
         conn.send((True, {
             "temp_at_2h_C": float(r["final_liq_temp_C"]),
             "mass_kg": float(r["mass_kg"]),
-            "touch_temp_60s_C": float(r["touch_temp_60s_C"]),
+            "touch_temp_60s_C": float(r["touch_temp_at_C"]),
+            "handle_temp_60s_C": float(r["handle_temp_at_C"]),
         }))
     except Exception as e:
         conn.send((False, f"unknown: {e}"))
@@ -74,7 +69,7 @@ def worker_fn(conn, t_wall_mm, t_gap_mm, k_gap):
 
 
 def params_to_worker_args(params, aux, fidelity_name):
-    """params: (PARAM_DIM,) = [t_wall_mm, t_gap_mm, k_gap]. `aux` and
-    `fidelity_name` accepted for interface consistency (no conditioning,
-    only one fidelity tier)."""
-    return (float(params[0]), float(params[1]), float(params[2]))
+    """params: (PARAM_DIM,) = [t_wall_rim_mm, t_wall_base_mm, struct_material_idx,
+    t_gap_mm, insulation_material_idx, handle_length_mm, handle_diameter_mm,
+    handle_material_idx]."""
+    return tuple(float(v) for v in params)
