@@ -106,13 +106,17 @@ def main():
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--tag", default="cvae_coeffs")
-    p.add_argument("--source", default="split", choices=["split", "full"],
+    p.add_argument("--source", default="split", choices=["split", "full", "augmented"],
                     help="'split': output/splits/<--split>/train.npz only (for a held-out-region "
                          "generalization test, e.g. --split target_cluster). 'full': the entire real "
                          "dataset (output/X.npy, Y.npy), train_vae.py's convention -- use this when the "
                          "eval doesn't need a held-out target region (e.g. eval_cvae_steerability.py's "
-                         "capability check, as opposed to eval_cvae_generation.py's generalization check).")
+                         "capability check, as opposed to eval_cvae_generation.py's generalization check). "
+                         "'augmented': real + oracle-validated bootstrap-generated rows, see --aug-tag.")
     p.add_argument("--split", default="target_cluster", help="--source split only: output/splits/<split>/train.npz to train on")
+    p.add_argument("--aug-tag", default=None,
+                    help="--source augmented only: loads X_aug_<tag>.npy/Y_aug_<tag>.npy, built by "
+                         "merge_bootstrap_pools.py")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = p.parse_args()
 
@@ -122,6 +126,9 @@ def main():
 
     if args.source == "full":
         X, Y = np.load(OUT_DIR / "X.npy"), np.load(OUT_DIR / "Y.npy")
+    elif args.source == "augmented":
+        assert args.aug_tag, "--source augmented requires --aug-tag"
+        X, Y = np.load(OUT_DIR / f"X_aug_{args.aug_tag}.npy"), np.load(OUT_DIR / f"Y_aug_{args.aug_tag}.npy")
     else:
         train_npz = np.load(OUT_DIR / "splits" / args.split / "train.npz")
         X, Y = train_npz["X"], train_npz["Y"]

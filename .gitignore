@@ -6,6 +6,13 @@ __pycache__
 .claude
 viewer/node_modules
 viewer/dist
+# §66: compiled OpenFOAM plugin build artifacts -- Dockerfile.openfoam
+# rebuilds these from source (scripts/openfoam_libs/*/*.H, *.C, Make/) at
+# image-build time, so the .so itself isn't source and shouldn't be
+# committed, same reasoning as excluding output/checkpoints above.
+scripts/openfoam_libs/lib
+scripts/openfoam_libs/*/lnInclude
+scripts/openfoam_libs/*/Make/linux64*
 # The viewer reads these four files at load; the vega_testing export of them
 # is ~130 KB and ships so a clone renders without running the exporter first.
 # The production pool export writes the SAME four names at ~100 MB -- check
@@ -16,3 +23,7 @@ viewer/public/data/*
 !viewer/public/data/Y.bin
 !viewer/public/data/source.bin
 viewer/.astro
+# generated/downloaded artifacts, not source -- same reasoning as output/checkpoints above
+exports/
+data/
+logs_p1_latent_optimize*.log

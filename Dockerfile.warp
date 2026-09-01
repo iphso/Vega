@@ -1,0 +1,20 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# NVIDIA Warp -- GPU kernel/autodiff framework, used here for a real 3D
+# linear-elasticity FEM solve (warp.fem) with autodiff sensitivities for
+# density-based (SIMP) topology optimization, replacing the self-written
+# scipy 2D plane-stress solver removed in full (EXPERIMENT_LOG §96) after
+# it was judged not physically sound. The warp-lang pip wheel bundles its
+# own CUDA runtime (no system CUDA toolkit needed in this image) -- only
+# a compatible NVIDIA driver on the host, confirmed present (580.173.02,
+# CUDA 13.0) before this file was written.
+RUN pip install --no-cache-dir warp-lang numpy scipy scikit-image
+
+WORKDIR /work
+
+COPY scripts/ /work/scripts/
+
+ENTRYPOINT ["python3"]

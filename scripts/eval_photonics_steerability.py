@@ -1,21 +1,19 @@
-"""Validity + steerability + selectivity for the airfoil domain -- same
-methodology as eval_cvae_steerability.py (VMEC++ domain), same baseline
-discipline (mean of the anchor's own converged validity candidates, never a
-foreign-pipeline re-verification -- learned that lesson the hard way once
-already, see EXPERIMENT_LOG §17, not repeating it here even though this
-dataset is self-generated and the mistake's specific mechanism doesn't
-apply the same way). Like eval_cvae_steerability.py, --model-type dispatches
-across cvae/diffusion/gan (train_airfoil_cvae.py / train_airfoil_diffusion.py
-/ train_airfoil_gan.py) through one shared harness -- same anchors, same
-oracle, same fidelity, only the sampling mechanism differs.
+"""Validity + steerability + selectivity for the photonics domain -- same
+methodology as eval_cvae_steerability.py (VMEC++)/eval_airfoil_steerability.py,
+same baseline discipline (mean of the anchor's own converged validity
+candidates, never a foreign-pipeline re-verification). --model-type
+dispatches across cvae/diffusion/gan (train_photonics_cvae.py/
+train_photonics_diffusion.py/train_photonics_gan.py) through one shared
+harness -- same anchors, same oracle, same fidelity, only the sampling
+mechanism differs.
 
-Conditioning differs from the VMEC harness: Reynolds (log-space) and angle
-of attack are continuous aux, concatenated directly rather than one-hot
-encoded (see train_airfoil_cvae.py). Anchors are real rows from the
-generated airfoil_X.npy/Y.npy dataset, picked uniformly at random (no
-farthest-point option here -- §17/19 already found that biases the read
-toward the domain's own extremes for reasons unrelated to the model, so it
-was never worth reproducing as a default here).
+Simpler conditioning than airfoil's: photonics has NO aux at all (see
+train_photonics_cvae.py's docstring) -- `cond` is just the anchor's
+(z-scored) target vector, nothing concatenated onto it, matching TORAX's
+own no-aux shape rather than airfoil's Reynolds/alpha one. Runs inside the
+`meep` compose service (real oracle calls need MEEP; that image also has
+torch, see Dockerfile.meep). Anchors are real rows from the generated
+photonics_X.npy/Y.npy dataset, picked uniformly at random.
 """
 import argparse
 import json
@@ -24,43 +22,30 @@ from pathlib import Path
 import numpy as np
 import torch
 
-import airfoil_oracle as oracle
+import photonics_oracle as oracle
 from oracle_harness import run_batch_with_timeout
-from train_airfoil_cvae import CVAE
+from train_photonics_cvae import CVAE
 from train_diffusion import DiffusionDenoiser, ddpm_sample, make_schedule
 from train_gan import Generator as GANGenerator
 
 OUT_DIR = Path("/work/output")
 CKPT_DIR = Path("/work/checkpoints")
-LOG_TARGET_NAMES = ["cd"]
-
-
-def eval_space(Y, target_names):
-    Ye = Y.copy()
-    for name in LOG_TARGET_NAMES:
-        idx = target_names.index(name)
-        Ye[:, idx] = np.log(np.clip(Ye[:, idx], 1e-12, None))
-    return Ye
 
 
 def load_generative_model(model_type, tag, dev):
-    """Mirrors eval_cvae_steerability.py's load_generative_model, adapted
-    for airfoil checkpoints (dataset_tag, reynolds/alpha aux stats instead
-    of nfp). Returns (sample_fn, target_names, n_targets, coeff_dim,
-    coeff_mean, coeff_std, t_mean, t_std, re_mean, re_std, al_mean, al_std,
-    dataset_tag) -- sample_fn(cond, k) -> (k, coeff_dim) numpy array of
-    standardized params, regardless of model type."""
+    """Mirrors eval_airfoil_steerability.py's load_generative_model, minus
+    the aux/reynolds-alpha stats (photonics has none). Returns (sample_fn,
+    target_names, n_targets, coeff_dim, coeff_mean, coeff_std, t_mean,
+    t_std, dataset_tag)."""
     ckpt = torch.load(CKPT_DIR / f"{tag}.pt", map_location=dev, weights_only=False)
     target_names = ckpt["target_names"]
     n_targets = len(target_names)
     coeff_dim = ckpt["coeff_dim"]
     coeff_mean, coeff_std = ckpt["coeff_mean"], ckpt["coeff_std"]
     t_mean, t_std = ckpt["target_mean"], ckpt["target_std"]
-    re_mean, re_std = ckpt["reynolds_mean"], ckpt["reynolds_std"]
-    al_mean, al_std = ckpt["alpha_mean"], ckpt["alpha_std"]
 
     if model_type == "cvae":
-        model = CVAE(coeff_dim=coeff_dim, n_targets=n_targets, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"], n_nfp=2).to(dev)
+        model = CVAE(coeff_dim=coeff_dim, n_targets=n_targets, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"], n_nfp=0).to(dev)
         model.load_state_dict(ckpt["model_state_dict"])
         model.eval()
         latent_dim = ckpt["latent_dim"]
@@ -71,7 +56,7 @@ def load_generative_model(model_type, tag, dev):
                 return model.decode(z, cond.repeat(k, 1)).numpy()
     elif model_type == "diffusion":
         model = DiffusionDenoiser(coeff_dim=coeff_dim, n_targets=n_targets, hidden=ckpt["hidden"],
-                                   time_embed_dim=ckpt["time_embed_dim"], n_nfp=2).to(dev)
+                                   time_embed_dim=ckpt["time_embed_dim"], n_nfp=0).to(dev)
         model.load_state_dict(ckpt["model_state_dict"])
         model.eval()
         schedule = make_schedule(ckpt["T"], device=dev)
@@ -79,7 +64,7 @@ def load_generative_model(model_type, tag, dev):
         def sample_fn(cond, k):
             return ddpm_sample(model, cond.repeat(k, 1), schedule, coeff_dim=coeff_dim, device=dev).numpy()
     else:
-        model = GANGenerator(coeff_dim=coeff_dim, n_targets=n_targets, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"], n_nfp=2).to(dev)
+        model = GANGenerator(coeff_dim=coeff_dim, n_targets=n_targets, latent_dim=ckpt["latent_dim"], hidden=ckpt["hidden"], n_nfp=0).to(dev)
         model.load_state_dict(ckpt["generator_state_dict"])
         model.eval()
         latent_dim = ckpt["latent_dim"]
@@ -89,63 +74,63 @@ def load_generative_model(model_type, tag, dev):
                 z = torch.randn(k, latent_dim)
                 return model(z, cond.repeat(k, 1)).numpy()
 
-    return (sample_fn, target_names, n_targets, coeff_dim, coeff_mean, coeff_std, t_mean, t_std,
-            re_mean, re_std, al_mean, al_std, ckpt["dataset_tag"])
+    return sample_fn, target_names, n_targets, coeff_dim, coeff_mean, coeff_std, t_mean, t_std, ckpt["dataset_tag"]
 
 
-def build_candidates(sample_fn, cond, k, coeff_mean, coeff_std, aux_phys, fidelity_name):
+def build_candidates(sample_fn, cond, k, coeff_mean, coeff_std, fidelity_name):
     decoded = sample_fn(cond, k)
     params = decoded * coeff_std + coeff_mean
-    reynolds, alpha = aux_phys
-    return [oracle.params_to_worker_args(params[i], {"reynolds": reynolds, "mach": 0.0, "alpha": alpha}, fidelity_name)
-            for i in range(k)]
+    # Structural zero/clip enforcement a generative model can't be trusted
+    # to land on exactly -- etch_depth_um must not exceed the wg_thickness_um
+    # it decoded alongside, same defensive stance
+    # generate_photonics_dataset.py's own perturbation takes.
+    params[:, 3] = np.minimum(params[:, 3], 0.98 * params[:, 0])
+    return [oracle.params_to_worker_args(params[i], {}, fidelity_name) for i in range(k)]
 
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--model-type", default="cvae", choices=["cvae", "diffusion", "gan"])
-    p.add_argument("--tag", default="airfoil_cvae_s0", help="checkpoint tag; defaults assume --model-type cvae's naming")
+    p.add_argument("--tag", default="photonics_cvae_s0", help="checkpoint tag; defaults assume --model-type cvae's naming")
     p.add_argument("--n-anchors", type=int, default=12)
-    p.add_argument("--k-validity", type=int, default=10)
+    p.add_argument("--k-validity", type=int, default=6)
     p.add_argument("--k-steer", type=int, default=3)
     p.add_argument("--step-std", type=float, default=1.0)
     p.add_argument("--steer-mode", default="targeted", choices=["targeted", "null"])
-    p.add_argument("--n-workers", type=int, default=24)
-    p.add_argument("--timeout-seconds", type=float, default=20.0)
+    p.add_argument("--n-workers", type=int, default=16)
+    p.add_argument("--fidelity", default="low", choices=list(oracle.FIDELITY_PRESETS))
+    p.add_argument("--timeout-seconds", type=float, default=30.0)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--out-tag", default=None)
     args = p.parse_args()
 
     torch.manual_seed(args.seed)
     dev = torch.device("cpu")
-    (sample_fn, target_names, n_targets, coeff_dim, coeff_mean, coeff_std, t_mean, t_std,
-     re_mean, re_std, al_mean, al_std, dataset_tag) = load_generative_model(args.model_type, args.tag, dev)
+    sample_fn, target_names, n_targets, coeff_dim, coeff_mean, coeff_std, t_mean, t_std, dataset_tag = \
+        load_generative_model(args.model_type, args.tag, dev)
 
     X = np.load(OUT_DIR / f"{dataset_tag}_X.npy")
     Y = np.load(OUT_DIR / f"{dataset_tag}_Y.npy")
-    Ye = eval_space(Y, target_names)
-    Yz = (Ye - t_mean) / t_std
+    Yz = (Y.astype(np.float64) - t_mean) / t_std
 
     rng = np.random.default_rng(args.seed)
     anchor_idx = rng.choice(len(X), size=args.n_anchors, replace=False)
     print(f"[{args.tag}] {args.n_anchors} random anchors from {len(X)} generated rows, "
-          f"k_validity={args.k_validity}, k_steer={args.k_steer}, step_std={args.step_std}, mode={args.steer_mode}")
+          f"k_validity={args.k_validity}, k_steer={args.k_steer}, step_std={args.step_std}, "
+          f"mode={args.steer_mode}, fidelity={args.fidelity}")
 
     jobs = []
     for a_i, idx in enumerate(anchor_idx):
-        reynolds, alpha = float(X[idx, coeff_dim]), float(X[idx, coeff_dim + 1])
         anchor_z = torch.tensor(Yz[idx:idx + 1], dtype=torch.float32)
-        aux_cond = torch.tensor([[(np.log(reynolds) - re_mean) / re_std, (alpha - al_mean) / al_std]], dtype=torch.float32)
-        cond = torch.cat([anchor_z, aux_cond], dim=-1)
-        for k, cand in enumerate(build_candidates(sample_fn, cond, args.k_validity, coeff_mean, coeff_std, (reynolds, alpha), "low")):
+        cond = anchor_z
+        for k, cand in enumerate(build_candidates(sample_fn, cond, args.k_validity, coeff_mean, coeff_std, args.fidelity)):
             jobs.append((("validity", a_i, k), *cand))
 
         for d in range(n_targets):
             steer_z = anchor_z.clone()
             if args.steer_mode == "targeted":
                 steer_z[0, d] -= args.step_std
-            steer_cond = torch.cat([steer_z, aux_cond], dim=-1)
-            for k, cand in enumerate(build_candidates(sample_fn, steer_cond, args.k_steer, coeff_mean, coeff_std, (reynolds, alpha), "low")):
+            for k, cand in enumerate(build_candidates(sample_fn, steer_z, args.k_steer, coeff_mean, coeff_std, args.fidelity)):
                 jobs.append((("steer", a_i, d, k), *cand))
 
     print(f"[{args.tag}] {len(jobs)} oracle calls queued "
@@ -162,7 +147,7 @@ def main():
                 n_converged += 1
         if tag not in results:
             results[tag] = None
-        if n_done % 40 == 0 or n_done == len(jobs):
+        if n_done % 20 == 0 or n_done == len(jobs):
             print(f"[{args.tag}] oracle: {n_done}/{len(jobs)} (hit rate {n_converged / n_done:.1%})")
 
     steer_by_dim = {d: {"attempted": 0, "converged": 0, "judgeable": 0, "correct_direction": 0,
@@ -175,22 +160,20 @@ def main():
         validity_ys = [y for y in validity_ys if y is not None]
         validity_hits += len(validity_ys)
         validity_attempts += args.k_validity
-        baseline_e = eval_space(np.stack(validity_ys), target_names).mean(axis=0) if validity_ys else None
-        if baseline_e is not None:
+        baseline = np.stack(validity_ys).mean(axis=0) if validity_ys else None
+        if baseline is not None:
             n_anchors_with_valid_baseline += 1
 
         for d in range(n_targets):
-            requested_delta = -args.step_std * t_std[d]
             samples = [results.get(("steer", a_i, d, k)) for k in range(args.k_steer)]
             converged = [s for s in samples if s is not None]
             steer_by_dim[d]["attempted"] += args.k_steer
             steer_by_dim[d]["converged"] += len(converged)
-            if baseline_e is not None:
+            if baseline is not None:
                 steer_by_dim[d]["judgeable"] += len(converged)
                 for s in converged:
-                    delta_z = (eval_space(s[None, :], target_names)[0] - baseline_e) / t_std
-                    achieved_delta = delta_z[d] * t_std[d]
-                    if achieved_delta < 0:
+                    delta_z = (s - baseline) / t_std
+                    if delta_z[d] < 0:
                         steer_by_dim[d]["correct_direction"] += 1
                     steer_by_dim[d]["on_target_abs_z"].append(float(abs(delta_z[d])))
                     steer_by_dim[d]["off_target_abs_z"].append(float(np.mean(np.abs(np.delete(delta_z, d)))))
@@ -199,7 +182,7 @@ def main():
     print(f"\n=== {args.tag}: {args.n_anchors} anchors ===")
     print(f"  {n_anchors_with_valid_baseline}/{args.n_anchors} anchors have a usable baseline")
     print(f"  validity hit rate: {overall_validity_rate:.1%} ({validity_hits}/{validity_attempts})")
-    print(f"\n  {'target':12s} {'converged':>10s} {'judgeable':>10s} {'correct dir':>12s} {'selectivity':>12s}")
+    print(f"\n  {'target':24s} {'converged':>10s} {'judgeable':>10s} {'correct dir':>12s} {'selectivity':>12s}")
     all_on, all_off = [], []
     for d in range(n_targets):
         s = steer_by_dim[d]
@@ -209,13 +192,13 @@ def main():
         off_med = float(np.median(s["off_target_abs_z"])) if s["off_target_abs_z"] else float("nan")
         sel = on_med / off_med if off_med else float("nan")
         all_on.extend(s["on_target_abs_z"]); all_off.extend(s["off_target_abs_z"])
-        print(f"  {target_names[d]:12s} {conv_rate:9.1%}  {s['judgeable']:10d}  {correct_rate:11.1%}  {sel:11.2f}")
+        print(f"  {target_names[d]:24s} {conv_rate:9.1%}  {s['judgeable']:10d}  {correct_rate:11.1%}  {sel:11.2f}")
     overall_sel = (np.median(all_on) / np.median(all_off)) if all_off else float("nan")
 
     out = {
         "model_type": args.model_type,
         "tag": args.tag, "n_anchors": args.n_anchors, "k_validity": args.k_validity, "k_steer": args.k_steer,
-        "step_std": args.step_std, "steer_mode": args.steer_mode,
+        "step_std": args.step_std, "steer_mode": args.steer_mode, "fidelity": args.fidelity,
         "overall_validity_hit_rate": overall_validity_rate,
         "n_anchors_with_valid_baseline": n_anchors_with_valid_baseline,
         "overall_selectivity": float(overall_sel),
@@ -228,7 +211,7 @@ def main():
         },
         "seed": args.seed,
     }
-    out_path = OUT_DIR / f"eval_airfoil_steerability_{args.out_tag or args.tag}.json"
+    out_path = OUT_DIR / f"eval_photonics_steerability_{args.out_tag or args.tag}.json"
     out_path.write_text(json.dumps(out, indent=2))
     print(f"\nsaved {out_path}")
     return out

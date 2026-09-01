@@ -1,0 +1,31 @@
+FROM condaforge/miniforge3:24.11.3-0
+
+# Photonics domain's oracle backend (EXPERIMENT_LOG -- photonics grating
+# coupler). Real MEEP (FDTD) is NOT the "meep" PyPI package (that name is a
+# squatted/unrelated stub -- confirmed directly: it installs with no actual
+# simulation code inside). The real package is conda-forge-only
+# (`pymeep`, ships both an `nompi_*` and an `mpi_mpich_*` build), same
+# shape as TORAX's own hard version-pin forcing a standalone image
+# (Dockerfile.torax) rather than a pip add to an existing one. The nompi
+# build since the harness runs one candidate per fresh subprocess
+# (matching VMEC++/XFOIL/mug's own harness_fit="subprocess-per-candidate"
+# shape) -- no need for MPI-parallel single-candidate solves here.
+RUN mamba install -y -c conda-forge "pymeep=*=nompi_*" python=3.11 numpy scipy \
+    && mamba clean -afy
+
+# CPU-only torch, same reasoning as Dockerfile.torax's own addition --
+# eval_photonics_steerability.py needs BOTH a trained cvae/diffusion/gan
+# checkpoint (torch) AND the real oracle (meep) in the SAME process,
+# neither of which the other domains' images provide together.
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
+
+# fastapi/uvicorn for photonics_physics_service.py -- the photonics
+# viewer page's backend, same reasoning as Dockerfile.train/Dockerfile.torax's
+# own fastapi/uvicorn additions for the airfoil/TORAX viewers.
+RUN pip install --no-cache-dir fastapi uvicorn
+
+WORKDIR /work
+
+COPY scripts/ /work/scripts/
+
+ENTRYPOINT ["python3"]

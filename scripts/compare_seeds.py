@@ -29,7 +29,10 @@ def eval_standard(tag, dev):
         use_symlog_latent=ckpt["use_symlog_latent"], log_target_mask=ckpt["log_target_mask"],
         objective=ckpt["objective"],
     ).to(dev)
-    model.load_state_dict(ckpt["model_state_dict"])
+    # strict=False: tolerates checkpoints saved before norm_target_mean/std
+    # (train.py's --normalize-target-names) existed -- those buffers just
+    # keep their identity-transform __init__ defaults, an exact no-op.
+    model.load_state_dict(ckpt["model_state_dict"], strict=False)
     model.eval()
 
     data_dir = OUT_DIR / "splits" / SPLIT

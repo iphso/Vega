@@ -104,8 +104,12 @@ def main():
     p.add_argument("--lambda-gp", type=float, default=10.0)
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--tag", default="gan_targets")
-    p.add_argument("--source", default="full", choices=["split", "full"])
+    p.add_argument("--source", default="full", choices=["split", "full", "augmented"])
     p.add_argument("--split", default="target_cluster")
+    p.add_argument("--aug-tag", default=None,
+                    help="--source augmented only: loads X_aug_<tag>.npy/Y_aug_<tag>.npy (built by "
+                         "merge_bootstrap_pools.py -- real + oracle-validated bootstrap-generated rows "
+                         "concatenated), instead of the original real-only X.npy/Y.npy")
     p.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     args = p.parse_args()
 
@@ -115,6 +119,9 @@ def main():
 
     if args.source == "full":
         X, Y = np.load(OUT_DIR / "X.npy"), np.load(OUT_DIR / "Y.npy")
+    elif args.source == "augmented":
+        assert args.aug_tag, "--source augmented requires --aug-tag"
+        X, Y = np.load(OUT_DIR / f"X_aug_{args.aug_tag}.npy"), np.load(OUT_DIR / f"Y_aug_{args.aug_tag}.npy")
     else:
         train_npz = np.load(OUT_DIR / "splits" / args.split / "train.npz")
         X, Y = train_npz["X"], train_npz["Y"]

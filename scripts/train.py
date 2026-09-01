@@ -376,11 +376,26 @@ class DualPathMLP(nn.Module):
       with huge multiplicative dynamic range (e.g. min_norm_grad_scale_len
       spans ~7 orders of magnitude), asking a linear head to represent that
       directly is a much harder function to fit than its log.
+    - norm_target_mean/norm_target_std: per-target z-score stats (from TRAIN
+      only), applied to a SUBSET of targets rather than the blanket
+      --normalize-targets ablation's all-or-nothing choice. Default (None ->
+      mean=0, std=1 for every target) is an exact no-op, byte-identical to
+      never having this option -- old checkpoints load unaffected. Motivated
+      by EXPERIMENT_LOG's cluster-split finding that global normalization is
+      a wash in aggregate but specifically helps the two rotational-transform
+      targets (~45-49% better) while mildly hurting a couple of others --
+      this lets those two get normalized without touching anyone else's
+      raw-unit + learned-uncertainty-weighting treatment. Applied AFTER any
+      log-transform (so a target flagged in both would be z-scored in log
+      space -- not used by any current config, but composes correctly if it
+      ever is) and undone in the reverse order for `weighted_loss`'s
+      physical-unit reporting.
     """
 
     def __init__(self, in_dim, n_targets, latent_dim=128, hidden=256, spatial_latent=64,
                  head_hidden=64, priority_weight=None, use_spatial=True, trunk_arch="mlp",
                  trunk_blocks=3, use_symlog_latent=False, log_target_mask=None,
+                 norm_target_mean=None, norm_target_std=None,
                  objective="regression", noise_floor_eps=None):
         super().__init__()
         self.objective = objective
@@ -423,6 +438,12 @@ class DualPathMLP(nn.Module):
         if log_target_mask is None:
             log_target_mask = torch.zeros(n_targets, dtype=torch.bool)
         self.register_buffer("log_target_mask", log_target_mask)
+        if norm_target_mean is None:
+            norm_target_mean = torch.zeros(n_targets)
+        if norm_target_std is None:
+            norm_target_std = torch.ones(n_targets)
+        self.register_buffer("norm_target_mean", norm_target_mean)
+        self.register_buffer("norm_target_std", norm_target_std)
 
         m = torch.arange(N_MODES_M).float()
         n = torch.arange(N_MODES_N).float() - (N_MODES_N - 1) / 2  # centered, e.g. -4..4
@@ -480,8 +501,12 @@ class DualPathMLP(nn.Module):
             )
         else:
             target_train = target
+        # norm_target_mean/std default to 0/1 (exact no-op) for every target
+        # not selected by --normalize-target-names -- this line is always
+        # safe to run unconditionally, old checkpoints included.
+        target_train = (target_train - self.norm_target_mean) / self.norm_target_std
 
-        sq_err = (pred - target_train) ** 2  # (batch, n_targets), mixed log/physical space
+        sq_err = (pred - target_train) ** 2  # (batch, n_targets), mixed log/z-scored/physical space
         per_task_mse = sq_err.mean(dim=0)  # (n_targets,)
         precision = torch.exp(-self.log_vars)
         # priority_weight is a fixed (non-learned) multiplier on top of the
@@ -489,12 +514,14 @@ class DualPathMLP(nn.Module):
         # about more than the automatic scheme alone would reflect.
         per_task_loss = self.priority_weight * (precision * per_task_mse + self.log_vars)
 
+        # Undo in reverse order: de-normalize first, then de-log -- inverse
+        # of the forward transform above regardless of whether either mask
+        # is actually in use (both are no-ops when their mask is empty).
+        pred_phys = pred.clone()
+        pred_phys = pred_phys * self.norm_target_std + self.norm_target_mean
         if self.log_target_mask.any():
-            pred_phys = pred.clone()
-            pred_phys[:, self.log_target_mask] = torch.exp(pred[:, self.log_target_mask])
-            per_task_mse_report = ((pred_phys - target) ** 2).mean(dim=0).detach()
-        else:
-            per_task_mse_report = per_task_mse.detach()
+            pred_phys[:, self.log_target_mask] = torch.exp(pred_phys[:, self.log_target_mask])
+        per_task_mse_report = ((pred_phys - target) ** 2).mean(dim=0).detach()
 
         return per_task_loss.sum(), per_task_mse_report
 
@@ -780,6 +807,15 @@ def main():
                          "learned per-task weighting beats normalization). Regression objective only. "
                          "Reported RMSE is always un-normalized back to physical units for comparability "
                          "with every other number in EXPERIMENT_LOG.")
+    p.add_argument("--normalize-target-names", nargs="+", default=None,
+                    help="selectively z-score just these target names (per-target mean/std from the "
+                         "TRAIN split only), everyone else stays raw-unit under the usual learned "
+                         "uncertainty weighting (DualPathMLP.weighted_loss) -- unlike --normalize-targets, "
+                         "which is all-or-nothing and switches to unweighted MSE. Motivated by "
+                         "EXPERIMENT_LOG's cluster-split finding that global normalization is a wash in "
+                         "aggregate but specifically helps axis/edge_rotational_transform_over_n_field_"
+                         "periods. Composable with --log-targets (a target in both gets z-scored in log "
+                         "space). Mutually exclusive with --normalize-targets (pick one).")
     p.add_argument("--vae-latent-input", default=None,
                     help="Checkpoint tag of a pretrained VAE (scripts/train_vae.py); if set, the trunk "
                          "sees [vae.encode(coeffs).mu, n_field_periods, symmetry_flag] instead of the raw "
@@ -851,6 +887,25 @@ def main():
         for name in LOG_TARGET_NAMES:
             log_target_mask[target_names.index(name)] = True
 
+    assert not (args.normalize_targets and args.normalize_target_names), \
+        "pick one of --normalize-targets (all targets) or --normalize-target-names (a subset), not both"
+    norm_target_mean = torch.zeros(n_targets)
+    norm_target_std = torch.ones(n_targets)
+    if args.normalize_target_names:
+        for name in args.normalize_target_names:
+            idx = target_names.index(name)
+            # From TRAIN only, same discipline as every other stat in this
+            # script -- and from the pre-log-transform Y_train, since
+            # weighted_loss applies norm AFTER log (see its docstring).
+            col = Y_train[:, idx]
+            if log_target_mask[idx]:
+                col = torch.log(col.clamp_min(1e-12))
+            norm_target_mean[idx] = col.mean()
+            norm_target_std[idx] = col.std().clamp_min(1e-6)
+        print(f"[{args.tag}] normalize_target_names={args.normalize_target_names} "
+              f"mean={[round(norm_target_mean[target_names.index(n)].item(), 4) for n in args.normalize_target_names]} "
+              f"std={[round(norm_target_std[target_names.index(n)].item(), 4) for n in args.normalize_target_names]}")
+
     use_spatial = not args.no_spatial
     eps = None
     if args.objective == "contrastive":
@@ -865,6 +920,7 @@ def main():
         head_hidden=args.head_hidden, priority_weight=priority_weight,
         use_spatial=use_spatial, trunk_arch=args.trunk_arch, trunk_blocks=args.trunk_blocks,
         use_symlog_latent=args.symlog_latent, log_target_mask=log_target_mask,
+        norm_target_mean=norm_target_mean, norm_target_std=norm_target_std,
         objective=args.objective, noise_floor_eps=eps,
     ).to(dev)
     if args.optimizer == "soap":
@@ -939,6 +995,8 @@ def main():
                     "vae_latent_input": args.vae_latent_input,
                     "use_symlog_latent": args.symlog_latent,
                     "log_target_mask": log_target_mask,
+                    "norm_target_mean": norm_target_mean,
+                    "norm_target_std": norm_target_std,
                     "objective": args.objective,
                     "split": args.split,
                     "feature_mean": feature_mean,
@@ -967,6 +1025,7 @@ def main():
         head_hidden=ckpt["head_hidden"], priority_weight=ckpt["priority_weight"],
         use_spatial=ckpt["use_spatial"], trunk_arch=ckpt["trunk_arch"], trunk_blocks=ckpt["trunk_blocks"],
         use_symlog_latent=ckpt["use_symlog_latent"], log_target_mask=ckpt["log_target_mask"],
+        norm_target_mean=ckpt.get("norm_target_mean"), norm_target_std=ckpt.get("norm_target_std"),
         objective=ckpt["objective"], noise_floor_eps=test_eps,
     ).to(dev)
     test_model.load_state_dict(ckpt["model_state_dict"])

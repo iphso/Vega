@@ -144,7 +144,7 @@ def load_generative_model(model_type, tag, dev):
     eval_random_direction_steerability.py) don't reimplement the
     cVAE/diffusion/GAN loading logic. sample_fn(cond, k) -> (k, PARAM_DIM)
     numpy array of standardized params, regardless of model type."""
-    ckpt = torch.load(CKPT_DIR / f"{tag}.pt", map_location=dev)
+    ckpt = torch.load(CKPT_DIR / f"{tag}.pt", map_location=dev, weights_only=False)
     target_names = ckpt["target_names"]
     n_targets = len(target_names)
     coeff_mean, coeff_std = ckpt["coeff_mean"], ckpt["coeff_std"]

@@ -52,6 +52,21 @@ RUN pip install --no-cache-dir neuralfoil && \
 # physics_service.py's VMEC++/DESC equivalent.
 RUN pip install --no-cache-dir fastapi uvicorn
 
+# gymnasium for p1_gym_env.py's BudgetedDiscoveryTask environment (the
+# "Optimization Gym" -- see gym_schema.py's own docstring) -- a standard
+# RL-env interface (reset/step/observation_space/action_space) so any
+# gymnasium-compatible library (stable-baselines3 etc.) can train against
+# our real generators/surrogate/oracle without bespoke glue code.
+RUN pip install --no-cache-dir gymnasium
+
+# NVIDIA Warp -- same package Dockerfile.warp installs, added here too so a
+# bracket latent-steering script can do BOTH the torch-side GAN/surrogate
+# gradient work AND real-oracle (warp.fem forward FEM solve) validation in
+# one process/container -- the same "real oracle lives in the same image as
+# the surrogate it validates" pattern this file already uses for
+# vmecpp/xfoil above, not a new convention.
+RUN pip install --no-cache-dir warp-lang scikit-image
+
 WORKDIR /work
 
 COPY scripts/ /work/scripts/

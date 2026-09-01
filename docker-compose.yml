@@ -32,6 +32,21 @@ services:
       - ./tests:/work/tests
     entrypoint: ["python3"]
 
+  warp:
+    # GPU-accelerated 3D FEM (warp.fem) for the bracket topology-optimization
+    # domain rebuild -- see Dockerfile.warp's own header comment for why
+    # this replaces the fully-removed self-written scipy solver.
+    build:
+      context: .
+      dockerfile: Dockerfile.warp
+    runtime: nvidia
+    gpus: all
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+      - ./checkpoints:/work/checkpoints
+    entrypoint: ["python3"]
+
   oracle-x86:
     platform: linux/amd64
     build:
@@ -65,6 +80,20 @@ services:
     working_dir: /work
     entrypoint: ["python3", "-m", "pytest"]
     command: ["/work/tests", "-q"]
+
+  meep:
+    # Photonics domain's oracle backend -- real conda-forge MEEP (FDTD),
+    # see Dockerfile.meep's own header comment for why this needs a
+    # standalone image (same "hard version/packaging conflict" shape as
+    # torax/openfoam, just conda- instead of Docker-base-image-driven).
+    build:
+      context: .
+      dockerfile: Dockerfile.meep
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+      - ./checkpoints:/work/checkpoints
+    entrypoint: ["python3"]
 
   physics:
     build:
@@ -169,6 +198,34 @@ services:
       - "0.0.0.0"
       - "--port"
       - "8093"
+      - "--reload"
+      - "--reload-dir"
+      - "/work/scripts"
+
+  physics-photonics:
+    # Photonics viewer's backend (photonics_physics_service.py) -- needs
+    # real MEEP, only in Dockerfile.meep (see that file/photonics_oracle.py's
+    # own header comments). No GPU needed (MEEP + FastAPI are both
+    # CPU-only), matching physics-airfoil/physics-torax's own no-GPU config.
+    build:
+      context: .
+      dockerfile: Dockerfile.meep
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+    ports:
+      - "8094:8094"
+    entrypoint: ["python3"]
+    command:
+      - "-m"
+      - "uvicorn"
+      - "photonics_physics_service:app"
+      - "--app-dir"
+      - "/work/scripts"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8094"
       - "--reload"
       - "--reload-dir"
       - "/work/scripts"

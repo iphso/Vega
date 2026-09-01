@@ -169,6 +169,8 @@ import 'katex/dist/katex.min.css';
           <a href="/airfoil">Airfoils</a>
           <a href="/torax" class="active">TORAX</a>
           <a href="/mug">Mug</a>
+          <a href="/bracket">Bracket</a>
+          <a href="/photonics">Photonics</a>
         </nav>
         <div id="subtitle">loading…</div>
 
@@ -177,6 +179,10 @@ import 'katex/dist/katex.min.css';
           <label for="umapColorBy">Color by</label>
           <select id="umapColorBy"></select>
           <div class="btn-row"><button id="umapRecomputeBtn">recompute</button></div>
+          <label style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12px; color:var(--text-dim); cursor:pointer;">
+            <input type="checkbox" id="umapAuto" checked style="width:auto;" />
+            auto-recompute when filters change
+          </label>
           <div id="umapStatus"></div>
           <div id="umapLegend"><span id="umapLegendMin"></span><span class="bar"></span><span id="umapLegendMax"></span></div>
           <div id="hint">Points are up to 800 randomly sampled from the current filtered set, positioned by similarity across Q_fusion/tau_E/H98/T_e. Hover a source card to highlight it; click a point to inspect it.</div>
@@ -289,6 +295,7 @@ import 'katex/dist/katex.min.css';
     const umapCanvasWrap = document.getElementById('umapCanvasWrap');
     const umapColorByEl = document.getElementById('umapColorBy');
     const umapStatusEl = document.getElementById('umapStatus');
+    const umapAutoEl = document.getElementById('umapAuto');
     const umapLegendMinEl = document.getElementById('umapLegendMin');
     const umapLegendMaxEl = document.getElementById('umapLegendMax');
     const umapLegendEl = document.getElementById('umapLegend');
@@ -319,6 +326,17 @@ import 'katex/dist/katex.min.css';
     let viewRange = [];
     let filters = [];
     let filteredIndices = [];
+    // §61: the bootstrap source is chunked (see export_torax_viewer_
+    // data.py) -- chunk 0 loads with everything else; more chunks are
+    // fetched lazily, only when a filter narrows the working set below
+    // `meta.bootstrap_target`. `trueSourceCounts` (the REAL full-pool size
+    // per source, vs. `offsets[code].count` which is just what's currently
+    // loaded) is what makes the "N of TOTAL match" label honest from the
+    // very first paint.
+    let loadedChunks = 0;
+    let topUpInFlight = false;
+    let bootstrapCode = null;
+    let trueSourceCounts = {};
     let histCanvases = [];
     let handleLabels = [];
     let currentValues = [];
@@ -347,13 +365,28 @@ import 'katex/dist/katex.min.css';
         const count = meta.source_counts[name];
         offsets[code] = { start, count, name };
         start += count;
+        if (name === 'bootstrap') bootstrapCode = code;
       }
       offsets[-1] = { start: 0, count: meta.n, name: 'all sources' };
+
+      // §61: `offsets[code].count` is just what's currently loaded (chunk 0
+      // only, at this point); `trueSourceCounts` is the REAL full-pool size
+      // per source, known upfront from meta.json regardless of how much
+      // ends up loaded. Only `bootstrap` (the chunked source) ever differs
+      // from its own `source_counts` entry -- everything else is already
+      // complete in chunk 0.
+      trueSourceCounts = { ...meta.source_counts };
+      if (bootstrapCode !== null) {
+        const othersFixed = Object.entries(meta.source_counts)
+          .filter(([name]) => name !== 'bootstrap')
+          .reduce((sum, [, v]) => sum + v, 0);
+        trueSourceCounts.bootstrap = meta.n_total - othersFixed;
+      }
 
       sourceEl.innerHTML = '';
       const allOpt = document.createElement('option');
       allOpt.value = -1;
-      allOpt.textContent = `all sources (${meta.n.toLocaleString()})`;
+      allOpt.textContent = `all sources (${(meta.n_total ?? meta.n).toLocaleString()})`;
       sourceEl.appendChild(allOpt);
       sourceRanges = [];
       sourceCardsEl.innerHTML = '';
@@ -362,7 +395,7 @@ import 'katex/dist/katex.min.css';
         const { name, count } = offsets[code];
         const opt = document.createElement('option');
         opt.value = code;
-        opt.textContent = `${name} (${count.toLocaleString()})`;
+        opt.textContent = `${name} (${trueSourceCounts[name].toLocaleString()})`;
         sourceEl.appendChild(opt);
         sourceRanges.push({ code, name, start: offsets[code].start, count });
 
@@ -376,13 +409,19 @@ import 'katex/dist/katex.min.css';
         sourceCardEls[code] = { root: card, countEl: card.querySelector('.count') };
       }
 
+      // §61: target_range comes from the FULL pool (computed at export
+      // time), not scanned from whatever chunk happens to be loaded --
+      // stays correct and stable even before any top-up ever runs.
       for (let t = 0; t < meta.y_cols; t++) {
-        let mn = Infinity, mx = -Infinity;
-        for (let r = 0; r < meta.n; r++) {
-          const v = Y[r * meta.y_cols + t];
-          if (v < mn) mn = v;
-          if (v > mx) mx = v;
-        }
+        const [mn, mx] = meta.target_range ? meta.target_range[t] : (() => {
+          let lo = Infinity, hi = -Infinity;
+          for (let r = 0; r < meta.n; r++) {
+            const v = Y[r * meta.y_cols + t];
+            if (v < lo) lo = v;
+            if (v > hi) hi = v;
+          }
+          return [lo, hi];
+        })();
         targetRange.push({ min: mn, max: mx });
         viewRange.push({ min: mn, max: mx });
         filters.push({ min: mn, max: mx });
@@ -476,7 +515,7 @@ import 'katex/dist/katex.min.css';
       viewRange[t] = { ...targetRange[t] };
       filters[t] = { ...targetRange[t] };
       positionHandles(t);
-      recomputeFiltered();
+      onFilterChanged();
     }
 
     function makeLabelEditable(labelEl, t, which) {
@@ -506,7 +545,7 @@ import 'katex/dist/katex.min.css';
     function setFilter(t, min, max) {
       filters[t] = { min: Math.min(min, max), max: Math.max(min, max) };
       positionHandles(t);
-      recomputeFiltered();
+      onFilterChanged();
     }
 
     function setupDrag(canvas, t) {
@@ -544,7 +583,7 @@ import 'katex/dist/katex.min.css';
         filters[t] = { min: Math.min(next.min, next.max), max: Math.max(next.min, next.max) };
         viewRange[t] = { ...filters[t] };
         positionHandles(t);
-        recomputeFiltered();
+        onFilterChanged();
         dragging = null;
       }
       canvas.addEventListener('mousedown', (e) => {
@@ -566,7 +605,7 @@ import 'katex/dist/katex.min.css';
         viewRange[t] = { ...targetRange[t] };
         positionHandles(t);
       }
-      recomputeFiltered();
+      onFilterChanged();
     });
 
     function sourceScope() { return offsets[Number(sourceEl.value)]; }
@@ -593,11 +632,85 @@ import 'katex/dist/katex.min.css';
       lastCounts = hist;
       for (let t = 0; t < yCols; t++) drawHistogram(t, hist[t]);
       const frac = count ? filteredIndices.length / count : 0;
-      matchLabelEl.innerHTML = `<b>${filteredIndices.length.toLocaleString()}</b> of ${count.toLocaleString()} match`;
+      // §61: the denominator is the REAL full-pool size for the current
+      // scope (trueSourceCounts/meta.n_total), not just how much happens
+      // to be loaded -- honest from the first paint. The fill bar still
+      // reflects loaded-vs-matched (not true-total-vs-matched), so an
+      // unfiltered view reads as a full bar instead of a near-empty one
+      // before any top-up has ever run.
+      const scopeCode = Number(sourceEl.value);
+      const trueTotal = scopeCode === -1 ? meta.n_total : trueSourceCounts[offsets[scopeCode].name];
+      matchLabelEl.innerHTML = `<b>${filteredIndices.length.toLocaleString()}</b> of ${trueTotal.toLocaleString()} match`;
       matchFillEl.style.width = `${(frac * 100).toFixed(1)}%`;
       indexEl.max = Math.max(0, filteredIndices.length - 1);
       if (Number(indexEl.value) >= filteredIndices.length) indexEl.value = 0;
       renderCandidate();
+    }
+
+    // Direct user request (mug viewer, applied here too for consistency --
+    // same shared pattern): dragging/typing/resetting a filter range should
+    // also refresh the UMAP map, not just the match count/histograms. Every
+    // UI action that changes a filter calls THIS (not recomputeFiltered()
+    // directly), so top-up and the UMAP refresh both happen exactly once
+    // per user action, however many chunks top-up ends up needing
+    // internally -- recomputeFiltered() itself stays a plain, side-effect-
+    // free filter pass so topUpLoop() can call it repeatedly without
+    // compounding UMAP cost (an earlier version called computeUMAP() from
+    // inside recomputeFiltered() itself, which meant a filter needing many
+    // chunks re-ran the whole UMAP embedding that many times in a row and
+    // visibly froze the tab -- caught live, not shipped).
+    async function onFilterChanged() {
+      recomputeFiltered();
+      await topUpLoop();
+      // `umapPoints` guards the initial page-load call from double-
+      // computing; the checkbox is the "at least gives the option to" --
+      // on by default.
+      if (umapPoints && umapAutoEl.checked) computeUMAP();
+    }
+
+    // §61 direct user request: filtering down to a narrow slice should be
+    // able to "grab more to fill it in" instead of being stuck with
+    // whatever fraction of the initial sample happened to match. Loops
+    // fetching one chunk at a time (re-running the plain filter pass after
+    // each) until the target is met, the scope excludes the growable
+    // source, or the dataset is exhausted.
+    async function topUpLoop() {
+      if (bootstrapCode === null || topUpInFlight) return;
+      topUpInFlight = true;
+      try {
+        while (loadedChunks < (meta.n_chunks || 0) && filteredIndices.length < meta.bootstrap_target) {
+          const scopeCode = Number(sourceEl.value);
+          if (scopeCode !== -1 && scopeCode !== bootstrapCode) break; // scope excludes the growable source
+
+          matchLabelEl.insertAdjacentHTML('beforeend', ' <span style="color:var(--text-faint); font-size:11px;">loading more…</span>');
+          loadedChunks++;
+          const [xRes, yRes] = await Promise.all([
+            fetch(`/data/torax/X.chunk${loadedChunks}.bin`),
+            fetch(`/data/torax/Y.chunk${loadedChunks}.bin`),
+          ]);
+          const xChunk = new Float32Array(await xRes.arrayBuffer());
+          const yChunk = new Float32Array(await yRes.arrayBuffer());
+          const rows = xChunk.length / meta.x_cols;
+
+          // bootstrap is physically LAST in X/Y (export_torax_viewer_
+          // data.py puts real_devices first), so a plain append never
+          // disturbs real_devices's own contiguous range.
+          const newX = new Float32Array(X.length + xChunk.length);
+          newX.set(X); newX.set(xChunk, X.length); X = newX;
+          const newY = new Float32Array(Y.length + yChunk.length);
+          newY.set(Y); newY.set(yChunk, Y.length); Y = newY;
+
+          offsets[bootstrapCode].count += rows;
+          offsets[-1].count += rows;
+          meta.n += rows;
+          const bootstrapRange = sourceRanges.find((r) => r.code === bootstrapCode);
+          if (bootstrapRange) bootstrapRange.count += rows; // keeps sourceCodeOf() correct for the new rows
+          subtitleEl.textContent = `${meta.n.toLocaleString()} candidates loaded`;
+          recomputeFiltered(); // plain filter pass -- no UMAP trigger per iteration
+        }
+      } finally {
+        topUpInFlight = false;
+      }
     }
 
     function drawHistogram(t, counts, opts) {
@@ -916,7 +1029,7 @@ import 'katex/dist/katex.min.css';
       updatePhysics(gi);
     }
 
-    sourceEl.addEventListener('change', () => { indexEl.value = 0; recomputeFiltered(); });
+    sourceEl.addEventListener('change', () => { indexEl.value = 0; onFilterChanged(); });
     document.getElementById('prevBtn').addEventListener('click', () => { indexEl.value = Math.max(0, Number(indexEl.value) - 1); renderCandidate(); });
     document.getElementById('nextBtn').addEventListener('click', () => { indexEl.value = Math.min(filteredIndices.length - 1, Number(indexEl.value) + 1); renderCandidate(); });
     document.getElementById('randomBtn').addEventListener('click', () => { indexEl.value = Math.floor(Math.random() * filteredIndices.length); renderCandidate(); });

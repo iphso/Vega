@@ -1,0 +1,994 @@
+---
+---
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Vega bracket viewer</title>
+  <style is:global>
+    :root {
+      --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
+      --border: #2a2a30; --text: #e8e8ec; --text-dim: #8a8a94; --text-faint: #55555e;
+      --accent: #5b9dff; --accent-dim: #2a4a75; --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    #app { display: flex; height: 100%; }
+    .side-pane { flex: 0 0 340px; overflow: hidden; }
+    .side-pane .pane-content { width: 100%; height: 100%; overflow-y: auto; padding: 18px; }
+    .side-pane .pane-content::-webkit-scrollbar { width: 8px; }
+    .side-pane .pane-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    #leftPane .pane-content { background: var(--panel); border-right: 1px solid var(--border); }
+    #rightPane .pane-content { background: var(--panel); border-left: 1px solid var(--border); }
+    #centerPane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 18px; gap: 14px; overflow-y: auto; }
+
+    h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    #titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    #byline { font-size: 11px; color: var(--text-faint); white-space: nowrap; }
+    #subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+    .domain-nav { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+    .domain-nav a {
+      font-size: 11px; color: var(--text-dim); text-decoration: none;
+      padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
+      background: var(--card-2); transition: color .12s, border-color .12s;
+    }
+    .domain-nav a:hover { color: var(--text); border-color: #3a3a42; }
+    .domain-nav a.active { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 14px; }
+    .card:first-child { margin-top: 0; }
+    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+
+    select { width: 100%; background: var(--card-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 8px; font-size: 12.5px; font-family: inherit; }
+    select:focus { outline: none; border-color: var(--accent); }
+
+    .pool-row { display: flex; gap: 6px; }
+    .pool-row button { flex: 1; }
+    button {
+      background: var(--card-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+      padding: 7px 8px; cursor: pointer; font-size: 12px; font-family: inherit; transition: background .12s, border-color .12s;
+    }
+    button:hover { background: #26262e; border-color: #3a3a42; }
+    button.active { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
+    .nav-row { display: flex; gap: 6px; margin-top: 10px; }
+    .nav-row button.icon { flex: 0 0 36px; font-weight: 600; }
+    .nav-row input { flex: 1; width: 100%; background: var(--card-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px 6px; font-size: 12.5px; text-align: center; font-family: inherit; }
+    .nav-row button.wide { flex: 1.3; }
+
+    .candidate-meta { display: flex; gap: 6px; margin-top: 10px; font-size: 11px; color: var(--text-dim); flex-wrap: wrap; }
+    .pill { background: var(--card-2); border: 1px solid var(--border); border-radius: 20px; padding: 3px 9px; }
+    .pill b { color: var(--text); font-weight: 600; }
+
+    .stat-row { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--text-dim); padding: 3px 0; }
+    .stat-row b { color: var(--text); font-variant-numeric: tabular-nums; }
+    .explain-box { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+    .explain-box b { color: var(--text); display: block; margin-bottom: 4px; }
+    .legend-row { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--text-dim); margin-top: 6px; }
+    .swatch { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
+    .toggle-row { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-dim); margin-top: 9px; cursor: pointer; user-select: none; }
+    .toggle-row input { accent-color: var(--accent); }
+    .stress-legend { margin-top: 10px; }
+    .stress-legend .bar { height: 10px; border-radius: 4px; background: linear-gradient(90deg, #2166ac, #67a9cf, #d1e5f0, #fddbc7, #ef8a62, #b2182b); }
+    .stress-legend .labels { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--text-faint); margin-top: 3px; font-variant-numeric: tabular-nums; }
+
+    .viz-card { flex: 0 0 auto; }
+    .viz-title { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; display: flex; justify-content: space-between; }
+    .viz-title .status { color: var(--text-faint); font-size: 11px; }
+    #viewer3dWrap { width: 100%; height: 480px; position: relative; background: #0c0c0e; border-radius: 8px; overflow: hidden; }
+    #viewer3dWrap canvas { display: block; width: 100% !important; height: 100% !important; }
+
+    #mapWrap { width: 100%; height: 220px; position: relative; background: #0c0c0e; border-radius: 8px; overflow: hidden; margin-top: 8px; }
+    #mapCanvas { width: 100%; height: 100%; display: block; cursor: pointer; }
+    #mapStatus { font-size: 10.5px; color: var(--text-faint); margin-top: 6px; }
+    #mapLegend { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 10px; color: var(--text-faint); }
+    #mapLegend .bar { flex: 1; height: 7px; border-radius: 4px; background: linear-gradient(90deg, #3a6fd8, #d8c93a, #d8483a); }
+    .empty-note { font-size: 11.5px; color: var(--text-faint); padding: 8px 2px; }
+
+    /* Histogram-based metric filters -- matches index.astro/airfoil.astro's
+     * own filter component exactly (collapsible metric cards, draggable
+     * amber range handles on a live histogram, editable numeric labels),
+     * direct request: "make sure we have the histogram filters too...
+     * get us as close to parity with the stellarator visualizer". */
+    #matchBar .track { height: 8px; background: var(--card-2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+    #matchBar .fill { height: 100%; background: linear-gradient(90deg, var(--accent-dim), var(--accent)); border-radius: 4px; transition: width .15s ease; }
+    #matchLabel { font-size: 13px; }
+    #matchLabel b { color: var(--accent); }
+
+    .metric-card { padding: 0; overflow: hidden; }
+    .metric-card + .metric-card { margin-top: 8px; }
+    .metric-header {
+      width: 100%; display: flex; align-items: center; gap: 8px; background: none; border: none;
+      border-radius: 0; padding: 12px 14px; text-align: left; font-family: inherit;
+    }
+    .metric-header:hover { background: #222229; }
+    .metric-header:active { background: #222229; }
+    .chevron { font-size: 10px; color: var(--text-faint); transition: transform .15s ease; flex: 0 0 auto; }
+    .metric-card.expanded .chevron { transform: rotate(90deg); }
+    .metric-name { font-size: 12.5px; color: #d4d4da; font-weight: 500; }
+    .metric-value-inline { font-size: 13px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; }
+    .metric-header .spacer { flex: 1; }
+    .metric-pct { font-size: 10.5px; color: var(--accent); background: var(--accent-dim); padding: 3px 9px; border-radius: 20px; font-weight: 500; white-space: nowrap; flex: 0 0 auto; }
+    .metric-body { display: none; padding: 0 14px 14px; }
+    .metric-card.expanded .metric-body { display: block; }
+    .body-toolbar { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+    .hist-wrap { position: relative; padding-bottom: 15px; }
+    .hist-wrap canvas { width: 100%; height: 52px; display: block; border-radius: 4px; cursor: ew-resize; }
+    .handle-label {
+      position: absolute; bottom: 0; transform: translateX(-50%); font-size: 9px; color: #8a7860;
+      font-variant-numeric: tabular-nums; cursor: text; padding: 1px 3px; border-radius: 3px; white-space: nowrap;
+    }
+    .handle-label:hover { background: rgba(255, 180, 84, 0.1); color: #b39770; }
+    .handle-label input {
+      width: 64px; font-size: 9px; padding: 1px 3px; background: var(--card-2); color: #b39770;
+      border: 1px solid #6b5d47; border-radius: 3px; text-align: center;
+    }
+    .map-ctrl-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11.5px; color: var(--text-dim); }
+    .map-ctrl-row label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="leftPane" class="side-pane">
+      <div class="pane-content">
+        <div id="titleRow">
+          <h1>Vega bracket viewer</h1>
+          <span id="byline">made by IPH Labs</span>
+        </div>
+        <nav class="domain-nav">
+          <a href="/">Stellarators</a>
+          <a href="/airfoil">Airfoils</a>
+          <a href="/torax">TORAX</a>
+          <a href="/mug">Mug</a>
+          <a href="/bracket" class="active">Bracket</a>
+          <a href="/photonics">Photonics</a>
+        </nav>
+        <div id="subtitle">loading…</div>
+
+        <div class="card">
+          <div class="section-title">What this is</div>
+          <div class="explain-box">
+            <b>A real 3D topology-optimized bracket</b>
+            Solid mesh extracted (marching cubes) from a density field computed by an actual GPU finite-element solve + SIMP optimization (NVIDIA Warp's warp.fem, autodiff sensitivities) &mdash; not a placeholder, not a grid. Two fixed mount points (orange) and one load point (yellow arrow) define the problem; the gray solid is real material the optimizer decided to keep. Every candidate is post-processed to remove disconnected "floating island" material, and reported in real units: the design envelope is scaled to a 200&times;100&times;30mm Aluminum 6061 bracket, so weight and max load before yield are real, not abstract compliance numbers.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Pool</div>
+          <div class="pool-row" id="poolRow"></div>
+          <div id="sortRow" style="margin-top:10px; display:none;">
+            <select id="sortSelect">
+              <option value="strength_to_weight">sort: strength/weight</option>
+              <option value="max_load">sort: max load (strongest first)</option>
+              <option value="lightest">sort: lightest first</option>
+            </select>
+          </div>
+          <div class="nav-row">
+            <button class="icon" id="prevBtn">‹</button>
+            <input id="indexInput" type="number" min="1" value="1" />
+            <button class="icon" id="nextBtn">›</button>
+            <button class="wide" id="randomBtn">random</button>
+          </div>
+          <div class="candidate-meta" id="candidateMeta"></div>
+        </div>
+
+        <div class="card" id="mapCard" style="display:none;">
+          <div class="section-title">Map (UMAP, all metrics)</div>
+          <select id="mapColorBy">
+            <option value="mass_kg">color by weight</option>
+            <option value="max_load_kgf">color by max load</option>
+            <option value="volfrac">color by volume fraction</option>
+          </select>
+          <div id="mapWrap"><canvas id="mapCanvas"></canvas></div>
+          <div class="map-ctrl-row">
+            <button id="mapRecomputeBtn">recompute</button>
+            <label><input type="checkbox" id="mapAutoToggle" checked /> auto-recompute when filters change</label>
+          </div>
+          <div id="mapStatus"></div>
+          <div id="mapLegend"><span id="mapLegendMin"></span><span class="bar"></span><span id="mapLegendMax"></span></div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Display</div>
+          <div class="section-title" style="margin-top:0; margin-bottom:4px; text-transform:none; letter-spacing:normal; font-weight:500; color:var(--text-dim);">Shading</div>
+          <select id="shadingSelect">
+            <option value="stress" selected>Von Mises stress (color)</option>
+            <option value="material">Material (flat)</option>
+          </select>
+          <label class="toggle-row"><input type="checkbox" id="wireframeToggle" /> Wireframe overlay</label>
+          <label class="toggle-row"><input type="checkbox" id="solidToggle" checked /> Show solid surface</label>
+          <div id="stressLegend" class="stress-legend" style="display:none;"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Legend</div>
+          <div class="legend-row"><span class="swatch" style="background:#c8ccd4"></span> solid material (&rho; &ge; 0.5)</div>
+          <div class="legend-row"><span class="swatch" style="background:#e07b39"></span> fixed mount points (zero displacement)</div>
+          <div class="legend-row"><span class="swatch" style="background:#ffd23f"></span> applied load point / force vector</div>
+          <div class="legend-row"><span class="swatch" style="background:transparent; border:1px dashed #55555e"></span> design envelope (dashed box)</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="centerPane">
+      <div class="card viz-card">
+        <div class="viz-title">
+          <span id="candidateTitle">loading…</span>
+          <span class="status" id="status"></span>
+        </div>
+        <div id="viewer3dWrap"></div>
+        <div id="candidateNote" class="explain-box" style="margin-top:10px; display:none;"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Solve stats</div>
+        <div id="statsBox"></div>
+      </div>
+    </div>
+
+    <div id="rightPane" class="side-pane">
+      <div class="pane-content">
+        <div class="card" id="filterCard" style="display:none;">
+          <div class="section-title">Filters<button id="resetFiltersBtn" style="background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;">reset all</button></div>
+          <div id="matchLabel"></div>
+          <div id="matchBar"><div class="track"><div class="fill" id="matchFill"></div></div></div>
+        </div>
+        <div id="metricCards"></div>
+        <div id="curatedNote" class="empty-note" style="display:none;">Curated cases (only 2) aren't filtered/mapped — use the pool switch on the left to browse the sweep or generated pools instead.</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+    import { UMAP } from 'umap-js';
+
+    const statusEl = document.getElementById('status');
+    const statsBoxEl = document.getElementById('statsBox');
+    const candidateTitleEl = document.getElementById('candidateTitle');
+    const candidateMetaEl = document.getElementById('candidateMeta');
+    const candidateNoteEl = document.getElementById('candidateNote');
+    const shadingSelectEl = document.getElementById('shadingSelect');
+    const wireframeToggleEl = document.getElementById('wireframeToggle');
+    const solidToggleEl = document.getElementById('solidToggle');
+    const stressLegendEl = document.getElementById('stressLegend');
+    const poolRowEl = document.getElementById('poolRow');
+    const subtitleEl = document.getElementById('subtitle');
+    const indexInputEl = document.getElementById('indexInput');
+    const mapCardEl = document.getElementById('mapCard');
+    const filterCardEl = document.getElementById('filterCard');
+    const curatedNoteEl = document.getElementById('curatedNote');
+    const metricCardsEl = document.getElementById('metricCards');
+    const matchLabelEl = document.getElementById('matchLabel');
+    const matchFillEl = document.getElementById('matchFill');
+    const mapCanvas = document.getElementById('mapCanvas');
+    const mapColorByEl = document.getElementById('mapColorBy');
+    const mapStatusEl = document.getElementById('mapStatus');
+    const mapLegendMinEl = document.getElementById('mapLegendMin');
+    const mapLegendMaxEl = document.getElementById('mapLegendMax');
+    const mapAutoToggleEl = document.getElementById('mapAutoToggle');
+
+    function updateSubtitle() {
+      const total = POOLS.curated.items.length + POOLS.sweep.items.length + POOLS.generated.items.length;
+      subtitleEl.textContent = `${total.toLocaleString()} candidates loaded (${POOLS.curated.items.length} curated, ${POOLS.sweep.items.length} sweep, ${POOLS.generated.items.length} generated)`;
+    }
+
+    // Direct request: "make sure we have the histogram filters too...
+    // I don't want... the list of candidates... get us as close to
+    // parity with the stellarator visualizer as possible" -- this whole
+    // block (metric cards, draggable histogram handles, match bar, UMAP
+    // map with recompute/auto-recompute) is a direct port of
+    // index.astro's/airfoil.astro's own filter+map component, adapted to
+    // this domain's 3 real metrics instead of 11 physics targets. The
+    // flat scrollable candidate list is gone entirely -- navigation is
+    // now map-click + prev/next/random only, matching how the other
+    // pages actually work (neither has a literal list either).
+    const FILTER_FIELDS = [
+      { key: 'massKg', label: 'weight (kg)' },
+      { key: 'maxLoadKgf', label: 'max load (kgf)' },
+      { key: 'volfrac', label: 'volume fraction' },
+    ];
+    const N_BINS = 20;
+    let filters = {}, viewRange = {}, targetRange = {};
+    let histCanvases = {}, handleLabels = {}, lastCounts = {};
+    let currentFiltered = [];
+    let currentValues = {};
+    let mapPoints = null;
+
+    const POOLS = {
+      curated: {
+        label: 'Curated', items: [
+          { key: 'v1', tag: 'v1 — symmetric', file: '/data/bracket/mesh.json' },
+          { key: 'v2', tag: 'v2 — asymmetric', file: '/data/bracket/mesh_v2.json' },
+        ],
+      },
+      sweep: { label: 'Sweep', items: [] },
+      generated: { label: 'Generated', items: [] },
+    };
+    let currentPool = 'curated';
+    let currentIdx = 0;
+
+    async function loadCandidateIndex() {
+      try {
+        const idx = await fetch('/data/bracket/candidates/index.json').then((r) => {
+          if (!r.ok) throw new Error(`${r.status}`);
+          return r.json();
+        });
+        POOLS.sweep.items = idx.map((c) => ({
+          key: `cand:${c.tag}`, tag: c.tag, file: `/data/bracket/candidates/${c.tag}_mesh.json`,
+          volfrac: c.volfrac, massKg: c.mass_kg, maxLoadKgf: c.max_load_kgf, safetyFactor: c.safety_factor,
+          naiveRatio: c.naive_vs_simp_ratio,
+        }));
+      } catch (e) { /* leave empty -- rendered as "none generated yet" */ }
+      renderPoolButtons();
+      if (currentPool === 'sweep') buildMetricCards();
+    }
+
+    // GAN-generated + gradient-steered candidates -- every entry scored
+    // through the REAL oracle (not just the GAN/surrogate's own opinion),
+    // ratio_vs_simp is an honest, volume-matched comparison against the
+    // real SIMP optimum for the same layout (bracket_direct_geometry.py's
+    // §102 fix).
+    async function loadGeneratedIndex() {
+      try {
+        const idx = await fetch('/data/bracket/generated/index.json').then((r) => {
+          if (!r.ok) throw new Error(`${r.status}`);
+          return r.json();
+        });
+        POOLS.generated.items = idx.map((e) => ({
+          key: `gen:${e.tag}`, tag: e.tag, file: `/data/bracket/generated/${e.tag}_mesh.json`,
+          mode: e.mode, volfrac: e.volfrac, massKg: e.mass_kg, maxLoadKgf: e.max_load_kgf,
+          ratioVsSimp: e.ratio_vs_simp,
+        }));
+        sortGeneratedItems();
+      } catch (e) { /* leave empty */ }
+      renderPoolButtons();
+      if (currentPool === 'generated') buildMetricCards();
+    }
+
+    const SORT_KEYS = {
+      strength_to_weight: { label: 'strength/weight', fn: (it) => -(it.maxLoadKgf ?? 0) / Math.max(it.massKg ?? 1e-9, 1e-9) },
+      max_load: { label: 'max load (strongest first)', fn: (it) => -(it.maxLoadKgf ?? 0) },
+      lightest: { label: 'lightest first', fn: (it) => (it.massKg ?? Infinity) },
+    };
+    let generatedSort = 'strength_to_weight';
+    function sortGeneratedItems() {
+      POOLS.generated.items.sort((a, b) => SORT_KEYS[generatedSort].fn(a) - SORT_KEYS[generatedSort].fn(b));
+    }
+
+    function renderPoolButtons() {
+      updateSubtitle();
+      poolRowEl.innerHTML = '';
+      for (const key of ['curated', 'sweep', 'generated']) {
+        const n = POOLS[key].items.length;
+        const btn = document.createElement('button');
+        btn.textContent = `${POOLS[key].label} (${n})`;
+        btn.className = key === currentPool ? 'active' : '';
+        btn.addEventListener('click', () => switchPool(key));
+        poolRowEl.appendChild(btn);
+      }
+    }
+
+    function switchPool(key) {
+      currentPool = key;
+      currentIdx = 0;
+      renderPoolButtons();
+      document.getElementById('sortRow').style.display = key === 'generated' ? '' : 'none';
+      if (key === 'curated') {
+        mapCardEl.style.display = 'none';
+        filterCardEl.style.display = 'none';
+        curatedNoteEl.style.display = '';
+        metricCardsEl.innerHTML = '';
+        currentFiltered = POOLS.curated.items;
+        mapPoints = null;
+        selectCandidate(0);
+      } else {
+        curatedNoteEl.style.display = 'none';
+        mapCardEl.style.display = '';
+        filterCardEl.style.display = '';
+        buildMetricCards();
+      }
+    }
+
+    document.getElementById('sortSelect').addEventListener('change', (e) => {
+      generatedSort = e.target.value;
+      sortGeneratedItems();
+      recomputeFiltered();
+    });
+
+    function round5(v) {
+      const a = Math.abs(v);
+      if (a !== 0 && (a < 1e-3 || a >= 1e5)) return v.toExponential(2);
+      return Number(v.toPrecision(5)).toString();
+    }
+
+    // --- Metric cards: collapsible header + draggable histogram range ---
+    function buildMetricCards() {
+      const items = POOLS[currentPool].items;
+      metricCardsEl.innerHTML = '';
+      filters = {}; viewRange = {}; targetRange = {};
+      histCanvases = {}; handleLabels = {};
+
+      FILTER_FIELDS.forEach(({ key, label }) => {
+        const vals = items.map((it) => it[key]).filter((v) => v !== undefined && v !== null);
+        if (!vals.length) return;
+        let lo = Math.min(...vals), hi = Math.max(...vals);
+        if (lo === hi) { lo -= 1; hi += 1; } // degenerate range -- keep the histogram/drag math well-defined
+        targetRange[key] = { min: lo, max: hi };
+        filters[key] = { min: lo, max: hi };
+        viewRange[key] = { min: lo, max: hi };
+
+        const row = document.createElement('div');
+        row.className = 'card metric-card';
+        row.innerHTML = `
+          <button class="metric-header" data-key="${key}">
+            <span class="chevron">▸</span>
+            <span class="metric-name">${label}</span>
+            <span class="metric-value-inline" id="cur-${key}">–</span>
+            <span class="spacer"></span>
+            <span class="metric-pct" id="pct-${key}"></span>
+          </button>
+          <div class="metric-body">
+            <div class="body-toolbar"><button class="link" id="zoom-reset-${key}">reset zoom</button></div>
+            <div class="hist-wrap">
+              <span class="handle-label" id="handle-min-${key}"></span>
+              <span class="handle-label" id="handle-max-${key}"></span>
+            </div>
+          </div>`;
+        const canvas = document.createElement('canvas');
+        canvas.width = 300; canvas.height = 52;
+        histCanvases[key] = canvas;
+        row.querySelector('.hist-wrap').insertBefore(canvas, row.querySelector('.handle-label'));
+        row.querySelector('.metric-header').addEventListener('click', () => row.classList.toggle('expanded'));
+        row.querySelector(`#zoom-reset-${key}`).addEventListener('click', () => resetZoom(key));
+        metricCardsEl.appendChild(row);
+
+        const minLabel = document.getElementById(`handle-min-${key}`);
+        const maxLabel = document.getElementById(`handle-max-${key}`);
+        handleLabels[key] = { min: minLabel, max: maxLabel };
+        makeLabelEditable(minLabel, key, 'min');
+        makeLabelEditable(maxLabel, key, 'max');
+        setupDrag(canvas, key);
+      });
+      FILTER_FIELDS.forEach(({ key }) => { if (viewRange[key]) positionHandles(key); });
+      recomputeFiltered();
+      computeAndRenderMap(); // explicit initial compute -- recomputeFiltered()'s own auto-recompute only fires on SUBSEQUENT filter changes (mapPoints starts null)
+    }
+
+    function positionHandles(key, liveOverride) {
+      const { min, max } = viewRange[key];
+      const span = (max - min) || 1;
+      const f = liveOverride || filters[key];
+      const minFrac = Math.min(1, Math.max(0, (f.min - min) / span));
+      const maxFrac = Math.min(1, Math.max(0, (f.max - min) / span));
+      const { min: minEl, max: maxEl } = handleLabels[key];
+      minEl.style.left = `${minFrac * 100}%`;
+      maxEl.style.left = `${maxFrac * 100}%`;
+      if (!minEl.querySelector('input')) minEl.textContent = round5(f.min);
+      if (!maxEl.querySelector('input')) maxEl.textContent = round5(f.max);
+    }
+
+    function resetZoom(key) {
+      viewRange[key] = { ...targetRange[key] };
+      filters[key] = { ...targetRange[key] };
+      positionHandles(key);
+      recomputeFiltered();
+    }
+
+    function makeLabelEditable(labelEl, key, which) {
+      labelEl.addEventListener('click', () => {
+        if (labelEl.querySelector('input')) return;
+        const current = filters[key][which];
+        labelEl.textContent = '';
+        const input = document.createElement('input');
+        input.type = 'number'; input.step = 'any'; input.value = current;
+        labelEl.appendChild(input);
+        input.focus(); input.select();
+        const commit = () => {
+          const v = Number(input.value);
+          if (!Number.isNaN(v)) setFilter(key, which === 'min' ? v : filters[key].min, which === 'max' ? v : filters[key].max);
+          else positionHandles(key);
+        };
+        input.addEventListener('blur', commit);
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') input.blur();
+          if (e.key === 'Escape') positionHandles(key);
+        });
+      });
+    }
+
+    function setFilter(key, min, max) {
+      filters[key] = { min: Math.min(min, max), max: Math.max(min, max) };
+      positionHandles(key);
+      recomputeFiltered();
+    }
+
+    function setupDrag(canvas, key) {
+      let dragging = null;
+      const HIT_PX = 10;
+      const fracFromEvent = (e) => { const r = canvas.getBoundingClientRect(); return Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)); };
+      const fracToValue = (frac) => { const { min, max } = viewRange[key]; return min + frac * (max - min); };
+      const fracOf = (which) => { const { min, max } = viewRange[key]; return (filters[key][which] - min) / ((max - min) || 1); };
+
+      function onMove(e) {
+        const value = fracToValue(fracFromEvent(e));
+        const live = { ...filters[key], [dragging]: value };
+        if (live.min > live.max) live[dragging] = filters[key][dragging === 'min' ? 'max' : 'min'];
+        positionHandles(key, live);
+        drawHistogram(key, lastCounts[key] || [], { liveFilter: live });
+        const label = handleLabels[key][dragging];
+        if (!label.querySelector('input')) label.textContent = round5(value);
+      }
+      function onUp(e) {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        const value = fracToValue(fracFromEvent(e));
+        const next = dragging === 'min' ? { min: value, max: filters[key].max } : { min: filters[key].min, max: value };
+        filters[key] = { min: Math.min(next.min, next.max), max: Math.max(next.min, next.max) };
+        viewRange[key] = { ...filters[key] };
+        positionHandles(key);
+        recomputeFiltered();
+        dragging = null;
+      }
+      canvas.addEventListener('mousedown', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const clickPx = e.clientX - rect.left;
+        const minPx = fracOf('min') * rect.width, maxPx = fracOf('max') * rect.width;
+        if (Math.abs(clickPx - minPx) <= HIT_PX && Math.abs(clickPx - minPx) <= Math.abs(clickPx - maxPx)) dragging = 'min';
+        else if (Math.abs(clickPx - maxPx) <= HIT_PX) dragging = 'max';
+        else dragging = Math.abs(clickPx - minPx) <= Math.abs(clickPx - maxPx) ? 'min' : 'max';
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+      });
+    }
+
+    document.getElementById('resetFiltersBtn').addEventListener('click', () => {
+      FILTER_FIELDS.forEach(({ key }) => {
+        if (!targetRange[key]) return;
+        filters[key] = { ...targetRange[key] };
+        viewRange[key] = { ...targetRange[key] };
+        positionHandles(key);
+      });
+      recomputeFiltered();
+    });
+
+    function drawHistogram(key, counts, opts) {
+      const canvas = histCanvases[key];
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const w = canvas.width, h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+      const maxCount = Math.max(1, ...counts);
+      const barW = w / N_BINS;
+      const { min, max } = viewRange[key];
+      const f = (opts && opts.liveFilter) || filters[key];
+      for (let b = 0; b < N_BINS; b++) {
+        const binLo = min + (b / N_BINS) * (max - min);
+        const binHi = min + ((b + 1) / N_BINS) * (max - min);
+        const inRange = binHi >= f.min && binLo <= f.max;
+        const barH = Math.max(1, (counts[b] / maxCount) * (h - 4));
+        ctx.fillStyle = inRange ? '#5b9dff' : '#33333a';
+        ctx.fillRect(b * barW, h - barH, Math.max(1, barW - 1), barH);
+      }
+      ['min', 'max'].forEach((which) => {
+        const span = (max - min) || 1;
+        const x = ((f[which] - min) / span) * w;
+        ctx.fillStyle = '#ffb454';
+        ctx.fillRect(x - 1, 0, 2, h);
+        ctx.beginPath(); ctx.moveTo(x - 5, 0); ctx.lineTo(x + 5, 0); ctx.lineTo(x, 7); ctx.closePath(); ctx.fill();
+      });
+      const cv = currentValues[key];
+      if (cv !== null && cv !== undefined && cv >= min && cv <= max) {
+        const x = ((cv - min) / ((max - min) || 1)) * w;
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath(); ctx.arc(x, h - 2, 3, 0, 2 * Math.PI); ctx.fill();
+      }
+    }
+
+    function percentileOf(key, value) {
+      const items = POOLS[currentPool].items;
+      const vals = items.map((it) => it[key]).filter((v) => v !== undefined && v !== null);
+      if (!vals.length || value === undefined || value === null) return null;
+      const below = vals.filter((v) => v <= value).length;
+      return Math.round((below / vals.length) * 100);
+    }
+
+    function recomputeFiltered() {
+      const items = POOLS[currentPool].items;
+      const hist = {};
+      FILTER_FIELDS.forEach(({ key }) => { hist[key] = new Array(N_BINS).fill(0); });
+
+      currentFiltered = items.filter((it) => {
+        let pass = true;
+        FILTER_FIELDS.forEach(({ key }) => {
+          const v = it[key];
+          if (!filters[key]) return;
+          if (v !== undefined && v !== null && (v < filters[key].min || v > filters[key].max)) pass = false;
+          if (v === undefined || v === null || !viewRange[key]) return;
+          const { min: vmin, max: vmax } = viewRange[key];
+          if (v < vmin || v > vmax) return;
+          const bin = Math.min(N_BINS - 1, Math.max(0, Math.floor(((v - vmin) / ((vmax - vmin) || 1)) * N_BINS)));
+          hist[key][bin]++;
+        });
+        return pass;
+      });
+      lastCounts = hist;
+      FILTER_FIELDS.forEach(({ key }) => { if (histCanvases[key]) drawHistogram(key, hist[key]); });
+
+      const frac = items.length ? currentFiltered.length / items.length : 0;
+      matchLabelEl.innerHTML = `<b>${currentFiltered.length.toLocaleString()}</b> of ${items.length.toLocaleString()} match`;
+      matchFillEl.style.width = `${(frac * 100).toFixed(1)}%`;
+
+      currentIdx = Math.min(currentIdx, Math.max(0, currentFiltered.length - 1));
+      selectCandidate(currentIdx, { skipRecompute: true });
+      if (mapPoints && mapAutoToggleEl.checked) computeAndRenderMap();
+    }
+
+    function selectCandidate(i, opts) {
+      const items = currentFiltered;
+      if (!items.length) {
+        candidateTitleEl.textContent = 'no matching candidates';
+        statsBoxEl.innerHTML = '';
+        return;
+      }
+      currentIdx = Math.max(0, Math.min(items.length - 1, i));
+      indexInputEl.value = String(currentIdx + 1);
+      indexInputEl.max = String(items.length);
+      const item = items[currentIdx];
+      FILTER_FIELDS.forEach(({ key }) => {
+        currentValues[key] = item[key];
+        const curEl = document.getElementById(`cur-${key}`);
+        const pctEl = document.getElementById(`pct-${key}`);
+        if (curEl) curEl.textContent = item[key] !== undefined && item[key] !== null ? round5(item[key]) : '–';
+        if (pctEl) {
+          const p = percentileOf(key, item[key]);
+          pctEl.textContent = p !== null ? `${p}th pct` : '';
+        }
+        if (histCanvases[key] && lastCounts[key]) drawHistogram(key, lastCounts[key]);
+      });
+      if (mapPoints) drawMap();
+      loadCase(item).catch((e) => { statusEl.textContent = 'ERROR: ' + e.message; console.error(e); });
+    }
+
+    document.getElementById('prevBtn').addEventListener('click', () => selectCandidate(currentIdx - 1));
+    document.getElementById('nextBtn').addEventListener('click', () => selectCandidate(currentIdx + 1));
+    document.getElementById('randomBtn').addEventListener('click', () => {
+      if (currentFiltered.length) selectCandidate(Math.floor(Math.random() * currentFiltered.length));
+    });
+    indexInputEl.addEventListener('change', () => selectCandidate(Number(indexInputEl.value) - 1));
+
+    // --- Map (UMAP over weight/max-load/volfrac) ---
+    function computeAndRenderMap() {
+      const items = currentFiltered;
+      const SAMPLE_CAP = 500;
+      if (!items.length) {
+        mapStatusEl.textContent = 'no candidates match the current filters';
+        mapPoints = null;
+        drawMap();
+        return;
+      }
+      const shuffled = items.slice();
+      for (let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      }
+      const sample = shuffled.slice(0, Math.min(SAMPLE_CAP, shuffled.length));
+      const keys = FILTER_FIELDS.map((f) => f.key).filter((k) => sample.every((it) => it[k] !== undefined && it[k] !== null));
+      const raw = sample.map((it) => keys.map((k) => it[k]));
+      const n = raw.length;
+      if (n < 4 || keys.length < 2) {
+        mapPoints = { items: sample, positions: sample.map(() => [0, 0]) };
+        drawMap();
+        mapStatusEl.textContent = `${n} points (too few for a real layout)`;
+        return;
+      }
+      const mean = keys.map((_, t) => raw.reduce((s, r) => s + r[t], 0) / n);
+      const std = keys.map((_, t) => Math.sqrt(raw.reduce((s, r) => s + (r[t] - mean[t]) ** 2, 0) / n) || 1);
+      const features = raw.map((r) => r.map((v, t) => (v - mean[t]) / std[t]));
+
+      mapStatusEl.textContent = `computing UMAP on ${n} points…`;
+      const nNeighbors = Math.max(2, Math.min(15, n - 1));
+      const umap = new UMAP({ nComponents: 2, nNeighbors });
+      const nEpochs = umap.initializeFit(features);
+      let epoch = 0;
+      function tick() {
+        const target = Math.min(epoch + 5, nEpochs);
+        for (; epoch < target; epoch++) umap.step();
+        mapPoints = { items: sample, positions: umap.getEmbedding() };
+        drawMap();
+        if (epoch < nEpochs) requestAnimationFrame(tick);
+        else mapStatusEl.textContent = `${n} of ${items.length} matching candidates`;
+      }
+      requestAnimationFrame(tick);
+    }
+    document.getElementById('mapRecomputeBtn').addEventListener('click', () => computeAndRenderMap());
+
+    function mapColorFor(frac) {
+      const f = Math.max(0, Math.min(1, frac));
+      const stops = [[58, 111, 216], [216, 201, 58], [216, 72, 58]];
+      const seg = f < 0.5 ? 0 : 1;
+      const local = f < 0.5 ? f * 2 : (f - 0.5) * 2;
+      const a = stops[seg], b = stops[seg + 1];
+      return `rgb(${Math.round(a[0]+(b[0]-a[0])*local)},${Math.round(a[1]+(b[1]-a[1])*local)},${Math.round(a[2]+(b[2]-a[2])*local)})`;
+    }
+
+    function drawMap() {
+      const dpr = window.devicePixelRatio || 1;
+      const wrap = document.getElementById('mapWrap');
+      mapCanvas.width = wrap.clientWidth * dpr;
+      mapCanvas.height = wrap.clientHeight * dpr;
+      const ctx = mapCanvas.getContext('2d');
+      const w = mapCanvas.width, h = mapCanvas.height;
+      ctx.fillStyle = '#0c0c0e';
+      ctx.fillRect(0, 0, w, h);
+      if (!mapPoints || !mapPoints.items.length) return;
+      const { positions, items } = mapPoints;
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+      for (const [x,y] of positions) { if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+      const pad = 20 * dpr;
+      const spanX = (maxX-minX)||1, spanY=(maxY-minY)||1;
+      const scale = Math.min((w-2*pad)/spanX, (h-2*pad)/spanY);
+      const toPx = (x,y) => [pad+(x-minX)*scale+(w-2*pad-spanX*scale)/2, pad+(y-minY)*scale+(h-2*pad-spanY*scale)/2];
+
+      const colorKey = mapColorByEl.value;
+      const cvals = items.map((it) => it[colorKey]).filter((v) => v !== undefined && v !== null);
+      const cmin = cvals.length ? Math.min(...cvals) : 0, cmax = cvals.length ? Math.max(...cvals) : 1;
+      mapLegendMinEl.textContent = cmin.toFixed(2);
+      mapLegendMaxEl.textContent = cmax.toFixed(2);
+
+      const currentTag = currentFiltered[currentIdx] ? currentFiltered[currentIdx].tag : null;
+      for (let i = 0; i < items.length; i++) {
+        const [px, py] = toPx(positions[i][0], positions[i][1]);
+        const v = items[i][colorKey];
+        const frac = v !== undefined && v !== null ? (v - cmin) / ((cmax - cmin) || 1) : 0.5;
+        const isCurrent = items[i].tag === currentTag;
+        ctx.beginPath();
+        ctx.arc(px, py, (isCurrent ? 6 : 3.5) * dpr, 0, 2 * Math.PI);
+        ctx.fillStyle = mapColorFor(frac);
+        ctx.fill();
+        if (isCurrent) { ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 * dpr; ctx.stroke(); }
+      }
+    }
+
+    mapCanvas.addEventListener('click', (e) => {
+      if (!mapPoints) return;
+      const rect = mapCanvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const clickX = (e.clientX - rect.left) * dpr, clickY = (e.clientY - rect.top) * dpr;
+      const w = mapCanvas.width, h = mapCanvas.height;
+      const { positions, items } = mapPoints;
+      let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+      for (const [x,y] of positions) { if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y; }
+      const pad = 20 * dpr;
+      const spanX=(maxX-minX)||1, spanY=(maxY-minY)||1;
+      const scale = Math.min((w-2*pad)/spanX, (h-2*pad)/spanY);
+      const toPx = (x,y) => [pad+(x-minX)*scale+(w-2*pad-spanX*scale)/2, pad+(y-minY)*scale+(h-2*pad-spanY*scale)/2];
+      let best=-1, bestDist=14*dpr;
+      for (let i=0;i<positions.length;i++) {
+        const [px,py] = toPx(positions[i][0], positions[i][1]);
+        const dd = Math.hypot(px-clickX, py-clickY);
+        if (dd<bestDist) { bestDist=dd; best=i; }
+      }
+      if (best<0) return;
+      const tag = items[best].tag;
+      const pos = currentFiltered.findIndex((it) => it.tag === tag);
+      if (pos>=0) selectCandidate(pos);
+    });
+    mapColorByEl.addEventListener('change', () => drawMap());
+
+    // Diverging blue->red colormap (cool low stress, hot high stress).
+    const STRESS_STOPS = [
+      [0.129, 0.400, 0.675], [0.404, 0.663, 0.812], [0.820, 0.898, 0.941],
+      [0.992, 0.859, 0.780], [0.937, 0.541, 0.384], [0.698, 0.094, 0.169],
+    ];
+    function stressColor(t) {
+      t = Math.min(1, Math.max(0, t));
+      const n = STRESS_STOPS.length - 1;
+      const f = t * n;
+      const i = Math.min(n - 1, Math.floor(f));
+      const frac = f - i;
+      const a = STRESS_STOPS[i], b = STRESS_STOPS[i + 1];
+      return [a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac, a[2] + (b[2] - a[2]) * frac];
+    }
+
+    let scene, camera, renderer, controls, group;
+    let solidMesh, wireframeLines;
+    let currentMesh = null;
+
+    function initScene() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0c0c0e);
+      const wrap = document.getElementById('viewer3dWrap');
+      camera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.01, 100);
+      renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+      wrap.appendChild(renderer.domElement);
+      controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dl = new THREE.DirectionalLight(0xffffff, 0.9);
+      dl.position.set(2, 3, 2);
+      scene.add(dl);
+      const dl2 = new THREE.DirectionalLight(0xffffff, 0.35);
+      dl2.position.set(-2, -1, -2);
+      scene.add(dl2);
+
+      window.addEventListener('resize', () => {
+        camera.aspect = wrap.clientWidth / wrap.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(wrap.clientWidth, wrap.clientHeight);
+      });
+
+      (function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      })();
+    }
+
+    function applyDisplayState() {
+      if (!currentMesh) return;
+      const mesh = currentMesh;
+      const shading = shadingSelectEl.value;
+      const hasStress = Array.isArray(mesh.vertex_von_mises) && mesh.vertex_von_mises.length > 0;
+
+      if (solidMesh) {
+        solidMesh.visible = solidToggleEl.checked;
+        if (shading === 'stress' && hasStress) {
+          solidMesh.material.vertexColors = true;
+          solidMesh.material.color.set(0xffffff);
+        } else {
+          solidMesh.material.vertexColors = false;
+          solidMesh.material.color.set(0xc8ccd4);
+        }
+        solidMesh.material.needsUpdate = true;
+      }
+      if (wireframeLines) wireframeLines.visible = wireframeToggleEl.checked;
+
+      if (shading === 'stress' && hasStress) {
+        const lo = mesh.von_mises_min ?? 0;
+        const hi = mesh.von_mises_max ?? 1;
+        stressLegendEl.style.display = '';
+        stressLegendEl.innerHTML = `
+          <div class="bar"></div>
+          <div class="labels"><span>${lo.toFixed(2)}</span><span>von Mises stress</span><span>${hi.toFixed(2)}</span></div>
+        `;
+      } else {
+        stressLegendEl.style.display = 'none';
+      }
+    }
+
+    async function loadCase(item) {
+      statusEl.textContent = 'loading…';
+      candidateTitleEl.textContent = item.tag;
+      const mesh = await fetch(item.file).then((r) => r.json());
+      currentMesh = mesh;
+
+      candidateMetaEl.innerHTML = [
+        mesh.mass_kg !== undefined && mesh.mass_kg !== null ? `<span class="pill">weight <b>${(mesh.mass_kg*1000).toFixed(0)}g</b></span>` : '',
+        mesh.max_load_kgf !== undefined && mesh.max_load_kgf !== null ? `<span class="pill">max load <b>${mesh.max_load_kgf.toFixed(0)}kgf</b></span>` : '',
+        item.volfrac !== undefined ? `<span class="pill">volfrac <b>${item.volfrac.toFixed(2)}</b></span>` : '',
+        item.mode ? `<span class="pill">${item.mode}</span>` : '',
+      ].join('');
+
+      if (item.key.startsWith('cand:')) {
+        candidateNoteEl.style.display = '';
+        candidateNoteEl.innerHTML = `<b>Sweep candidate</b>Randomly sampled mount/load config from the candidate sweep (biased toward asymmetric mounts and off-vertical loads — see stats below for this candidate's actual naive-baseline comparison).`;
+      } else if (item.key.startsWith('gen:')) {
+        candidateNoteEl.style.display = '';
+        const isSteered = item.key.includes('steered');
+        candidateNoteEl.innerHTML = isSteered
+          ? `<b>GAN-generated, gradient-steered</b>Produced by a WGAN-GP trained on this layout's dataset, then walked downhill in latent space using a trained scoring surrogate's gradient — every step validated against the REAL solver, volume-matched to the SIMP target so the comparison is fair. Cleaned of disconnected "floating island" material and re-scored before export. Honestly: still above the real SIMP optimum's compliance after 2 rounds of directed data augmentation — a real generative pipeline, genuinely improving, not yet a competitive one.`
+          : `<b>GAN-generated, ranked by strength-to-weight</b>One of tens of thousands of samples from a WGAN-GP trained on this layout's dataset, each cleaned of disconnected material and scored through the real solver (not the GAN's own opinion) — this is the top slice by max-load-per-kg, not a random pick. Use the sort dropdown above to re-rank by max load or lightest weight instead.`;
+      } else {
+        candidateNoteEl.style.display = 'none';
+        candidateNoteEl.innerHTML = `<b>Curated case</b>The original directly-verified SIMP run for this force layout — checked against a naive "two straight tubes" guess at the same material budget (see stats below).`;
+        candidateNoteEl.style.display = '';
+      }
+
+      const nVerts = mesh.vertices.length / 3;
+      const nFaces = mesh.faces.length / 3;
+      const [lx, ly, lz] = mesh.domain_lo;
+      const [hx, hy, hz] = mesh.domain_hi;
+      const domainVolume = (hx - lx) * (hy - ly) * (hz - lz);
+      const hist = mesh.compliance_history || [];
+      const startC = hist.length ? hist[0] : null;
+      const endC = mesh.final_compliance ?? (hist.length ? hist[hist.length - 1] : null);
+      const improvement = startC && endC ? (startC / endC) : null;
+
+      const hasReal = mesh.mass_kg !== undefined && mesh.mass_kg !== null;
+      statsBoxEl.innerHTML = `
+        ${hasReal ? `<div class="stat-row"><span>weight (Al 6061, 200&times;100&times;30mm)</span><b>${(mesh.mass_kg*1000).toFixed(0)} g</b></div>` : ''}
+        ${hasReal ? `<div class="stat-row"><span>nominal applied load</span><b>${(mesh.nominal_load_N/9.81).toFixed(0)} kgf</b></div>` : ''}
+        ${hasReal ? `<div class="stat-row"><span>safety factor (vs. yield)</span><b>${mesh.safety_factor.toFixed(2)}&times;</b></div>` : ''}
+        ${hasReal ? `<div class="stat-row"><span>max load before yield</span><b>${mesh.max_load_kgf.toFixed(0)} kgf</b></div>` : ''}
+        ${mesh.islands_removed_fraction ? `<div class="stat-row"><span>disconnected material removed</span><b>${(mesh.islands_removed_fraction*100).toFixed(2)}%</b></div>` : ''}
+        <div class="stat-row"><span>vertices</span><b>${nVerts.toLocaleString()}</b></div>
+        <div class="stat-row"><span>faces</span><b>${nFaces.toLocaleString()}</b></div>
+        <div class="stat-row"><span>design envelope</span><b>${(hx-lx).toFixed(2)} &times; ${(hy-ly).toFixed(2)} &times; ${(hz-lz).toFixed(2)}</b></div>
+        <div class="stat-row"><span>domain volume</span><b>${domainVolume.toFixed(3)}</b></div>
+        ${startC !== null ? `<div class="stat-row"><span>compliance (start &rarr; end)</span><b>${startC.toFixed(3)} &rarr; ${endC.toFixed(3)}</b></div>` : ''}
+        ${improvement ? `<div class="stat-row"><span>improvement</span><b>${improvement.toFixed(1)}&times;</b></div>` : ''}
+        ${mesh.volfrac !== undefined ? `<div class="stat-row"><span>target / final volfrac</span><b>${mesh.volfrac.toFixed(2)} / ${mesh.final_mean_rho.toFixed(3)}</b></div>` : ''}
+        ${mesh.load_vec ? `<div class="stat-row"><span>load vector</span><b>(${mesh.load_vec.map(v=>v.toFixed(2)).join(', ')})</b></div>` : ''}
+        ${mesh.naive_baseline_compliance !== undefined && mesh.naive_baseline_compliance !== null ? `<div class="stat-row"><span>vs. naive two-tube guess</span><b>${mesh.naive_vs_simp_ratio.toFixed(2)}&times; better</b></div>` : ''}
+      `;
+      statusEl.textContent = `${nVerts.toLocaleString()} verts, ${nFaces.toLocaleString()} faces`;
+
+      if (group) scene.remove(group);
+      group = new THREE.Group();
+
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(mesh.vertices, 3));
+      geom.setAttribute('normal', new THREE.Float32BufferAttribute(mesh.normals, 3));
+      geom.setIndex(mesh.faces);
+
+      if (Array.isArray(mesh.vertex_von_mises) && mesh.vertex_von_mises.length === nVerts) {
+        const lo = mesh.von_mises_min ?? 0;
+        const hi = mesh.von_mises_max ?? 1;
+        const span = Math.max(hi - lo, 1e-9);
+        const colors = new Float32Array(nVerts * 3);
+        for (let i = 0; i < nVerts; i++) {
+          const t = (mesh.vertex_von_mises[i] - lo) / span;
+          const [r, g, b] = stressColor(t);
+          colors[i * 3] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
+        }
+        geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      }
+
+      const mat = new THREE.MeshStandardMaterial({ color: 0xc8ccd4, roughness: 0.45, metalness: 0.25, side: THREE.DoubleSide });
+      solidMesh = new THREE.Mesh(geom, mat);
+      group.add(solidMesh);
+
+      const wireGeom = new THREE.WireframeGeometry(geom);
+      const wireMat = new THREE.LineBasicMaterial({ color: 0x8a8a94, transparent: true, opacity: 0.6 });
+      wireframeLines = new THREE.LineSegments(wireGeom, wireMat);
+      group.add(wireframeLines);
+
+      const boxGeom = new THREE.BoxGeometry(hx - lx, hy - ly, hz - lz);
+      const edges = new THREE.EdgesGeometry(boxGeom);
+      const dashMat = new THREE.LineDashedMaterial({ color: 0x55555e, dashSize: 0.03, gapSize: 0.02 });
+      const boxLines = new THREE.LineSegments(edges, dashMat);
+      boxLines.computeLineDistances();
+      boxLines.position.set((lx + hx) / 2, (ly + hy) / 2, (lz + hz) / 2);
+      group.add(boxLines);
+
+      const mountMat = new THREE.MeshStandardMaterial({ color: 0xe07b39 });
+      for (const m of [mesh.mount_a, mesh.mount_b]) {
+        const [mx, my, mz, mr] = m;
+        const sphere = new THREE.Mesh(new THREE.SphereGeometry(mr * 0.6, 20, 16), mountMat);
+        sphere.position.set(mx, my, mz);
+        group.add(sphere);
+      }
+
+      const [loadX, loadY, loadZ] = mesh.load;
+      const lv = mesh.load_vec || [0, -1, 0];
+      const arrowDir = new THREE.Vector3(lv[0], lv[1], lv[2]).normalize();
+      const arrowOrigin = new THREE.Vector3(loadX, loadY, loadZ).addScaledVector(arrowDir, -0.18);
+      const arrow = new THREE.ArrowHelper(arrowDir, arrowOrigin, 0.18, 0xffd23f, 0.06, 0.04);
+      group.add(arrow);
+
+      scene.add(group);
+      applyDisplayState();
+
+      const scale = Math.max(hx - lx, hy - ly, hz - lz);
+      camera.position.set((hx+lx)/2 + scale * 1.1, (hy+ly)/2 + scale * 0.9, (hz+lz)/2 + scale * 1.6);
+      controls.target.set((lx + hx) / 2, (ly + hy) / 2, (lz + hz) / 2);
+      controls.update();
+    }
+
+    shadingSelectEl.addEventListener('change', applyDisplayState);
+    wireframeToggleEl.addEventListener('change', applyDisplayState);
+    solidToggleEl.addEventListener('change', applyDisplayState);
+
+    initScene();
+    renderPoolButtons();
+    curatedNoteEl.style.display = '';
+    currentFiltered = POOLS.curated.items;
+    selectCandidate(0);
+    loadCandidateIndex();
+    loadGeneratedIndex();
+  </script>
+</body>
+</html>

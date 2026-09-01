@@ -57,7 +57,10 @@ def load_surrogate(tag):
         use_symlog_latent=ckpt["use_symlog_latent"], log_target_mask=ckpt["log_target_mask"],
         objective=ckpt["objective"],
     )
-    model.load_state_dict(ckpt["model_state_dict"])
+    # strict=False: tolerates checkpoints saved before norm_target_mean/std
+    # (train.py's --normalize-target-names) existed -- those buffers just
+    # keep their identity-transform __init__ defaults, an exact no-op.
+    model.load_state_dict(ckpt["model_state_dict"], strict=False)
     model.eval()
     assert ckpt["feature_mean"] is None and ckpt["target_mean"] is None, \
         "this script assumes an unnormalized checkpoint -- add de-normalization before using one that isn't"

@@ -42,6 +42,35 @@ round loop (bootstrap_loop.py's own generation structure) -- this reruns a
 fixed, already-trained checkpoint every round. A real, deliberate scope cut
 for a first version, not an oversight; the natural next step once this
 baseline is in.
+
+A third seed mode, added for the targeted-search-against-official-problem-
+constraints experiment (vmec only so far):
+
+  fixed -- like anchor, but the anchor point isn't a real dataset row: it's
+    a caller-supplied fixed target (--target-override, raw physical units,
+    e.g. specific ConStellaration problem constraint values) plus a fixed
+    nfp (--fixed-nfp), still perturbed by a random unit direction * step_std
+    every draw purely for decode diversity (small step_std is appropriate
+    here -- this isn't exploring, it's asking "can the generator hit
+    approximately this one point at all," so keep the jitter small relative
+    to anchor mode's exploratory 1.5-3.0 range). Unspecified target
+    dimensions default to z=0 (the population mean -- "don't care").
+
+Two more knobs, anchor mode only:
+
+  --direction -- replaces anchor mode's random-unit-direction with a FIXED
+    one, e.g. '--direction max_elongation=-1' to consistently push that
+    metric's z-score down on every anchor draw instead of a fresh random
+    direction each time. Weights are directly in z-scored target space
+    (see build_direction_z's docstring for why raw-unit weights aren't
+    offered). Omit to keep today's random-direction behavior unchanged.
+
+  --anchor-source-tag / --anchor-top-k / --anchor-rank-by -- restrict which
+    real rows are eligible anchors to another pool's own accepted output
+    (rather than the domain's default global X.npy/Y.npy), optionally
+    narrowed to the top-K rows by one metric. Built for chaining a directed
+    push off a fixed, small set of "valid candidates" a --seed-mode=fixed
+    run already produced, rather than off the whole undifferentiated pool.
 """
 import argparse
 import json
@@ -54,8 +83,8 @@ import torch
 from gym_schema import vmec_spec, airfoil_spec, torax_spec
 from oracle_harness import run_batch_with_timeout
 
-OUT_DIR = Path("/work/output")
-CKPT_DIR = Path("/work/checkpoints")
+OUT_DIR = Path("/home/slater_victoroff_aihub/external/vega/output")
+CKPT_DIR = Path("/home/slater_victoroff_aihub/external/vega/checkpoints")
 
 
 # ---------------------------------------------------------------------------
@@ -73,8 +102,55 @@ def sample_unit_directions(n, dim, rng):
     return v / np.linalg.norm(v, axis=1, keepdims=True).clip(min=1e-12)
 
 
+def parse_kv_floats(s):
+    """Parses a '--name=value,name=value' CLI string into {name: float}.
+    Returns {} for None/empty so call sites can treat "not passed" and
+    "passed empty" the same."""
+    if not s:
+        return {}
+    out = {}
+    for pair in s.split(","):
+        name, val = pair.split("=")
+        out[name.strip()] = float(val)
+    return out
+
+
+def build_fixed_target_z(overrides, target_names, log_target_names, t_mean, t_std):
+    """Builds a z-scored target vector for --seed-mode=fixed from raw-space
+    overrides (physical units, e.g. a ConStellaration problem's actual
+    constraint values) -- every unspecified dimension stays at z=0 (the
+    population mean, i.e. "no opinion about this metric"). Applies the same
+    log-transform eval_space() applies to log_target_names before z-scoring,
+    so a raw override is interpreted exactly as it would be if it had come
+    from a real accepted row, not as a shortcut around that convention."""
+    z = np.zeros(len(target_names), dtype=np.float64)
+    for name, raw_value in overrides.items():
+        idx = target_names.index(name)
+        value = np.log(np.clip(raw_value, 1e-12, None)) if name in log_target_names else raw_value
+        z[idx] = (value - t_mean[idx]) / t_std[idx]
+    return z
+
+
+def build_direction_z(weights, target_names):
+    """Builds a FIXED unit-norm push direction directly in z-scored target
+    space for anchor mode's --direction. Deliberately z-space weights, not
+    raw physical units like build_fixed_target_z's overrides -- a log-
+    transformed metric's raw-to-z conversion is point-dependent for a
+    *value* but has no single well-defined meaning for a *direction*
+    (its derivative varies with where you are), so this stays an honest,
+    documented z-space knob instead of a fake physical one."""
+    v = np.zeros(len(target_names), dtype=np.float64)
+    for name, w in weights.items():
+        v[target_names.index(name)] = w
+    norm = np.linalg.norm(v)
+    if norm < 1e-12:
+        raise ValueError("--direction produced a zero vector -- check the metric name(s)")
+    return v / norm
+
+
 def build_round_vmec(sample_fn, target_names, n_targets, coeff_mean, coeff_std, t_mean, t_std,
-                      X, Y, seed_mode, step_std, n_per_round, k_per_seed, fidelity_name, rng):
+                      X, Y, seed_mode, step_std, n_per_round, k_per_seed, fidelity_name, rng,
+                      fixed_target_z=None, fixed_nfp=None, direction_z=None):
     from eval_cvae_steerability import eval_space
     import vmec_oracle as oracle
     from train_vae import NFP_VALUES, nfp_one_hot
@@ -87,8 +163,12 @@ def build_round_vmec(sample_fn, target_names, n_targets, coeff_mean, coeff_std, 
             idx = rng.integers(len(X))
             anchor_z = torch.tensor(Yz[idx:idx + 1], dtype=torch.float32)
             nfp = int(X[idx, 90])
-            u = sample_unit_directions(1, n_targets, rng)[0]
+            u = direction_z if direction_z is not None else sample_unit_directions(1, n_targets, rng)[0]
             target_z = anchor_z[0].numpy() + step_std * u
+        elif seed_mode == "fixed":
+            u = sample_unit_directions(1, n_targets, rng)[0]
+            target_z = fixed_target_z + step_std * u
+            nfp = fixed_nfp
         else:  # "prior"
             target_z = rng.normal(size=n_targets)
             nfp = int(rng.choice(NFP_VALUES))
@@ -182,7 +262,22 @@ def build_round_torax(sample_fn, target_names, n_targets, coeff_mean, coeff_std,
 
 def run_bootstrap(build_round_fn, worker_fn, target_names, out_dir, n_workers, timeout_s,
                    target_count, checkpoint_every, round_size, tag, sanity_filter=None,
-                   batch_worker_fn=None):
+                   batch_worker_fn=None, progress_fn=None, refresh_fn=None, refresh_every=None):
+    """progress_fn(out_dir) -> dict, called after every flush (i.e. against
+    the just-updated on-disk cumulative X.npy/Y.npy) -- e.g. p1_report's own
+    violation logic, so a run's oracle-calls-vs-best-violation convergence
+    curve lands directly in round_log.jsonl instead of needing a separate
+    reprocessing pass. None (default): no change to round_log's existing
+    per-round records.
+
+    refresh_fn()/refresh_every: if both given, every `refresh_every` rounds
+    this flushes then calls refresh_fn() (expected to reassign the caller's
+    own X/Y anchor pool, e.g. from this run's OWN growing output) before the
+    next round's build_round_fn call -- turns --seed-mode anchor into a
+    genuinely iterative/self-improving search instead of every round
+    redrawing from the same fixed pool it started with. None (default,
+    either arg omitted): unchanged behavior, anchors never refresh mid-run.
+    """
     out_dir.mkdir(parents=True, exist_ok=True)
     log_path = out_dir / "round_log.jsonl"
     accepted_X, accepted_Y = [], []
@@ -195,14 +290,23 @@ def run_bootstrap(build_round_fn, worker_fn, target_names, out_dir, n_workers, t
         np.save(path, arr)
 
     def flush():
+        did_write = False
         if accepted_X:
             _append(out_dir / "X.npy", [np.stack(accepted_X)])
             _append(out_dir / "Y.npy", [np.stack(accepted_Y)])
             accepted_X.clear(); accepted_Y.clear()
+            did_write = True
         if rejected_X:
             _append(out_dir / "rejected_X.npy", [np.stack(rejected_X)])
             (out_dir / "rejected_reasons.json").write_text(json.dumps(rejected_reason[-2000:]))
             rejected_X.clear()
+        if did_write and progress_fn is not None:
+            prog = progress_fn(out_dir)
+            record = {"progress_checkpoint": True, "n_attempted": n_attempted, "n_accepted": n_accepted,
+                       "elapsed_seconds": time.perf_counter() - t_start, **prog}
+            with open(log_path, "a") as f:
+                f.write(json.dumps(record) + "\n")
+            print(f"[{tag}] progress @ n_attempted={n_attempted}: {prog}")
 
     round_idx = 0
     while n_accepted < target_count:
@@ -266,6 +370,10 @@ def run_bootstrap(build_round_fn, worker_fn, target_names, out_dir, n_workers, t
         if len(accepted_X) >= checkpoint_every or len(rejected_X) >= checkpoint_every:
             flush()
 
+        if refresh_fn is not None and refresh_every and round_idx % refresh_every == 0:
+            flush()  # anchor refresh reads back from disk -- make sure it's current first
+            refresh_fn()
+
     flush()
     print(f"[{tag}] done: {n_accepted}/{n_attempted} accepted ({n_accepted / max(n_attempted, 1):.1%}) "
           f"in {time.perf_counter() - t_start:.0f}s. pool at {out_dir}")
@@ -276,9 +384,38 @@ def main():
     p.add_argument("--domain", required=True, choices=["vmec", "airfoil", "torax"])
     p.add_argument("--model-type", default="cvae", choices=["cvae", "diffusion", "gan"])
     p.add_argument("--tag", required=True, help="checkpoint tag to load")
-    p.add_argument("--seed-mode", default="anchor", choices=["anchor", "prior"])
+    p.add_argument("--seed-mode", default="anchor", choices=["anchor", "prior", "fixed"])
     p.add_argument("--step-std", type=float, default=1.5,
-                    help="anchor mode only: norm of the random target-space push away from the anchor's own measured target")
+                    help="anchor/fixed modes: norm of the random target-space push away from the anchor's own "
+                         "measured target ('fixed' mode: away from --target-override, kept small -- see module docstring)")
+    p.add_argument("--target-override", default=None,
+                    help="'fixed' mode only (vmec): raw-space target overrides, e.g. "
+                         "'aspect_ratio=3.5,average_triangularity=-0.6,"
+                         "edge_rotational_transform_over_n_field_periods=0.45,max_elongation=2.0'. "
+                         "Unspecified metrics default to the population mean (z=0).")
+    p.add_argument("--fixed-nfp", type=int, default=3, help="'fixed' mode only (vmec): n_field_periods to condition on")
+    p.add_argument("--direction", default=None,
+                    help="'anchor' mode only (vmec): a FIXED z-space push direction instead of a fresh random "
+                         "one every draw, e.g. 'max_elongation=-1' to consistently push that metric's z-score "
+                         "down. See build_direction_z's docstring for why these are z-space, not raw, weights.")
+    p.add_argument("--anchor-source-tag", default=None,
+                    help="'anchor' mode only (vmec): load anchors from output/bootstrap_generic_<tag>/{X,Y}.npy "
+                         "instead of the domain's default global pool.")
+    p.add_argument("--anchor-rank-by", default=None,
+                    help="with --anchor-top-k: restrict eligible anchors to the best K rows by this target name "
+                         "(ascending unless --anchor-rank-descending).")
+    p.add_argument("--anchor-top-k", type=int, default=None)
+    p.add_argument("--anchor-rank-descending", action="store_true")
+    p.add_argument("--anchor-refresh-every", type=int, default=None,
+                    help="'anchor' mode only (vmec): every N rounds, re-derive the anchor pool from THIS "
+                         "run's own accumulated output (re-applying --anchor-top-k/--anchor-rank-by if set) "
+                         "instead of anchoring off the same fixed pool the whole run -- a genuinely "
+                         "iterative/self-improving push. Omit for unchanged (fixed-pool-all-run) behavior.")
+    p.add_argument("--progress-metric", default=None, choices=[None, "p1"],
+                    help="vmec only: log a convergence-tracking metric into round_log.jsonl after every "
+                         "flush (oracle-calls-vs-best-progress, not just hit_rate) -- 'p1' uses "
+                         "p1_report.py's GeometricalProblem violation/objective, matching the official "
+                         "1%% tolerance and score exactly.")
     p.add_argument("--target-count", type=int, default=2000)
     p.add_argument("--round-size", type=int, default=112)
     p.add_argument("--k-per-seed", type=int, default=4, help="candidates decoded per seed/anchor draw")
@@ -299,6 +436,8 @@ def main():
     out_dir = OUT_DIR / f"bootstrap_generic_{out_tag}"
 
     batch_worker_fn = None
+    refresh_fn = None
+    progress_fn = None
 
     if args.domain == "torax":
         from steerability_generic import load_generative_model
@@ -322,17 +461,87 @@ def main():
             batch_worker_fn = lambda wargs: spec.batch_worker_fn(wargs, max_steps=args.max_steps)
     elif args.domain == "vmec":
         from eval_cvae_steerability import load_generative_model
+        import vmec_oracle as vmec_consts
         spec = vmec_spec()
         fidelity_name = spec.fidelities[{"low": 0, "medium": 1, "high": 2}[args.fidelity]].internal_name
         sample_fn, target_names, n_targets, coeff_mean, coeff_std, t_mean, t_std = \
             load_generative_model(args.model_type, args.tag, dev)
-        X, Y = np.load(OUT_DIR / "X.npy"), np.load(OUT_DIR / "Y.npy")
+
+        if args.anchor_source_tag:
+            anchor_dir = OUT_DIR / f"bootstrap_generic_{args.anchor_source_tag}"
+            X, Y = np.load(anchor_dir / "X.npy"), np.load(anchor_dir / "Y.npy")
+        else:
+            X, Y = np.load(OUT_DIR / "X.npy"), np.load(OUT_DIR / "Y.npy")
+
+        if args.anchor_top_k:
+            rank_idx = target_names.index(args.anchor_rank_by)
+            order = np.argsort(Y[:, rank_idx])
+            if args.anchor_rank_descending:
+                order = order[::-1]
+            keep = order[:args.anchor_top_k]
+            X, Y = X[keep], Y[keep]
+            print(f"[{out_tag}] anchors restricted to top {len(keep)} rows by {args.anchor_rank_by} "
+                  f"(range {Y[:, rank_idx].min():.4g}..{Y[:, rank_idx].max():.4g})")
+
+        fixed_target_z = fixed_nfp = direction_z = None
+        if args.seed_mode == "fixed":
+            overrides = parse_kv_floats(args.target_override)
+            fixed_target_z = build_fixed_target_z(
+                overrides, target_names, vmec_consts.LOG_TARGET_NAMES, t_mean, t_std)
+            fixed_nfp = args.fixed_nfp
+            print(f"[{out_tag}] fixed target overrides {overrides} -> "
+                  f"z={np.round(fixed_target_z, 3).tolist()} nfp={fixed_nfp}")
+        if args.direction:
+            direction_weights = parse_kv_floats(args.direction)
+            direction_z = build_direction_z(direction_weights, target_names)
+            print(f"[{out_tag}] directed anchor push {direction_weights} -> "
+                  f"unit z-direction={np.round(direction_z, 3).tolist()}")
+
+        def refresh_anchors():
+            # See run_bootstrap's refresh_fn docstring -- reassigns THIS
+            # closure's own X/Y (via nonlocal), which build_round below reads
+            # by name every call, so the very next round already anchors off
+            # whatever this run itself has found so far, not the fixed pool
+            # it started with.
+            nonlocal X, Y
+            run_dir = OUT_DIR / f"bootstrap_generic_{out_tag}"
+            if not (run_dir / "X.npy").exists():
+                return
+            newX, newY = np.load(run_dir / "X.npy"), np.load(run_dir / "Y.npy")
+            if args.anchor_top_k:
+                rank_idx = target_names.index(args.anchor_rank_by)
+                order = np.argsort(newY[:, rank_idx])
+                if args.anchor_rank_descending:
+                    order = order[::-1]
+                newX, newY = newX[order[:args.anchor_top_k]], newY[order[:args.anchor_top_k]]
+            X, Y = newX, newY
+            print(f"[{out_tag}] anchor pool refreshed from own output: {len(X)} rows")
+
+        if args.anchor_refresh_every:
+            refresh_fn = refresh_anchors
+
+        if args.progress_metric == "p1":
+            from p1_report import p1_violations, TOL
+            elong_i = target_names.index("max_elongation")
+
+            def progress_fn(out_dir_):
+                Yp = np.load(out_dir_ / "Y.npy")
+                v = p1_violations(Yp, target_names)
+                worst = v.max(axis=1)
+                feasible = worst <= TOL
+                out = {"p1_best_worst_violation": float(worst.min()), "p1_n_feasible": int(feasible.sum())}
+                if feasible.any():
+                    out["p1_best_feasible_elongation"] = float(Yp[feasible, elong_i].min())
+                return out
+
         print(f"[{out_tag}] domain=vmec model={args.model_type} seed_mode={args.seed_mode} "
-              f"fidelity={args.fidelity}={fidelity_name} step_std={args.step_std}")
+              f"fidelity={args.fidelity}={fidelity_name} step_std={args.step_std} "
+              f"anchor_refresh_every={args.anchor_refresh_every} progress_metric={args.progress_metric}")
 
         def build_round(n):
             return build_round_vmec(sample_fn, target_names, n_targets, coeff_mean, coeff_std, t_mean, t_std,
-                                     X, Y, args.seed_mode, args.step_std, n, args.k_per_seed, fidelity_name, rng)
+                                     X, Y, args.seed_mode, args.step_std, n, args.k_per_seed, fidelity_name, rng,
+                                     fixed_target_z=fixed_target_z, fixed_nfp=fixed_nfp, direction_z=direction_z)
         worker_fn = spec.worker_fn
     else:
         from eval_airfoil_steerability import load_generative_model
@@ -352,7 +561,8 @@ def main():
 
     run_bootstrap(build_round, worker_fn, target_names, out_dir, args.n_workers, args.timeout_seconds,
                   args.target_count, args.checkpoint_every, args.round_size, out_tag,
-                  sanity_filter=spec.sanity_filter, batch_worker_fn=batch_worker_fn)
+                  sanity_filter=spec.sanity_filter, batch_worker_fn=batch_worker_fn,
+                  progress_fn=progress_fn, refresh_fn=refresh_fn, refresh_every=args.anchor_refresh_every)
 
 
 if __name__ == "__main__":

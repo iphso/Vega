@@ -345,6 +345,10 @@ import 'katex/dist/katex.min.css';
           <div class="btn-row">
             <button id="tsneRecomputeBtn">recompute</button>
           </div>
+          <label style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12px; color:var(--text-dim); cursor:pointer;">
+            <input type="checkbox" id="tsneAuto" checked style="width:auto;" />
+            auto-recompute when filters change
+          </label>
           <div id="tsneStatus"></div>
           <div id="tsneLegend"><span id="tsneLegendMin"></span><span class="bar"></span><span id="tsneLegendMax"></span></div>
           <div id="hint">Points are up to 1000 randomly sampled from the current filtered set, positioned by similarity across all 11 metrics. Hover a source card to highlight it; click a point to inspect it.</div>
@@ -383,6 +387,8 @@ import 'katex/dist/katex.min.css';
           <a href="/airfoil">Airfoils</a>
           <a href="/torax">TORAX</a>
           <a href="/mug">Mug</a>
+          <a href="/bracket">Bracket</a>
+          <a href="/photonics">Photonics</a>
         </nav>
         <div id="subtitle">loading…</div>
         <div class="mode-switch" id="modeSwitch">
@@ -602,6 +608,7 @@ import 'katex/dist/katex.min.css';
     const umapCanvasWrap = document.getElementById('umapCanvasWrap');
     const tsneColorByEl = document.getElementById('tsneColorBy');
     const tsneStatusEl = document.getElementById('tsneStatus');
+    const tsneAutoEl = document.getElementById('tsneAuto');
     const tsneLegendMinEl = document.getElementById('tsneLegendMin');
     const tsneLegendMaxEl = document.getElementById('tsneLegendMax');
     const tsneLegendEl = document.getElementById('tsneLegend');
@@ -946,6 +953,18 @@ import 'katex/dist/katex.min.css';
       indexEl.max = Math.max(0, filteredIndices.length - 1);
       if (Number(indexEl.value) >= filteredIndices.length) indexEl.value = 0;
       renderCandidate();
+      // Direct user request: dragging/typing/resetting a filter range should
+      // also refresh the UMAP map, not just the match count/histograms --
+      // previously it only updated on a separate manual "recompute" click,
+      // so the scatter could silently go stale relative to the active
+      // filter. One choke point (every filter-changing action already
+      // calls recomputeFiltered()) rather than a call added at each of
+      // them separately. `tsnePoints` guards the initial page-load call
+      // (before computeAndRenderUMAP() has ever run) from double-computing;
+      // the checkbox is the "at least gives the option to" -- on by
+      // default, off if a user finds the recompute too disruptive while
+      // exploring.
+      if (tsnePoints && tsneAutoEl.checked) computeAndRenderUMAP();
     }
 
     function drawHistogram(t, counts, opts) {

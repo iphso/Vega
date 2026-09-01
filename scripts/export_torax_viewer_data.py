@@ -17,6 +17,19 @@ Two sources, same "real vs. synthetic" pairing as the airfoil export:
     domain's real-reference set is real device geometry, not a swept
     condition), but genuinely real and non-self-generated, same as
     airfoils' `real_naca` source.
+
+Chunked, not just subsampled (EXPERIMENT_LOG §61): direct user request --
+filtering down to a narrow slice of the distribution should be able to
+"grab more to fill it in" instead of being stuck with whatever fraction of
+one fixed random sample happened to land there. The bootstrap pool is
+shuffled ONCE in full (not `rng.choice` of a subset that discards the
+rest) and sliced into `--chunk-size`-row chunks; chunk 0 (+ the small,
+always-complete `real_devices` set, included here only) is written as
+today's plain `X.bin`/`Y.bin`, chunks 1..K-1 as new sibling bootstrap-only
+files the browser only fetches if a filter needs more rows than are
+currently loaded. `target_range` (real per-target min/max over the FULL
+bootstrap+real pool) ships in meta.json too, so histogram axes/percentiles
+are correct from the first paint regardless of how many chunks load.
 """
 import argparse
 import json
@@ -45,14 +58,17 @@ def sanity_mask(X, Y):
     return target_ok & param_ok
 
 
-def load_bootstrap(n_sample, seed):
+def load_bootstrap_shuffled(seed):
+    """The FULL sane-filtered bootstrap pool, shuffled once -- callers slice
+    off whatever prefix they need (chunk 0, then more chunks on demand),
+    rather than discarding everything past a fixed sample size."""
     X = np.load(OUT_DIR / "torax_X.npy")
     Y = np.load(OUT_DIR / "torax_Y.npy")
     sane = sanity_mask(X, Y)
     X, Y = X[sane], Y[sane]
     rng = np.random.default_rng(seed)
-    idx = rng.choice(len(X), size=min(n_sample, len(X)), replace=False)
-    return X[idx].astype(np.float32), Y[idx].astype(np.float32)
+    perm = rng.permutation(len(X))
+    return X[perm].astype(np.float32), Y[perm].astype(np.float32)
 
 
 def load_real_devices():
@@ -70,31 +86,52 @@ def load_real_devices():
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--n-bootstrap", type=int, default=2500)
+    ap.add_argument("--chunk-size", type=int, default=2500, help="rows per chunk; also chunk 0's bootstrap share, "
+                                                                   "matching this script's old --n-bootstrap default")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
 
-    X_boot, Y_boot = load_bootstrap(args.n_bootstrap, args.seed)
+    X_boot, Y_boot = load_bootstrap_shuffled(args.seed)
     X_real, Y_real = load_real_devices()
+    n_boot_total = len(X_boot)
+    chunk_size = args.chunk_size
 
-    X = np.concatenate([X_boot, X_real])
-    Y = np.concatenate([Y_boot, Y_real])
+    X_all = np.concatenate([X_boot, X_real])
+    Y_all = np.concatenate([Y_boot, Y_real])
+    target_range = [[float(Y_all[:, t].min()), float(Y_all[:, t].max())] for t in range(Y_all.shape[1])]
 
     VIEWER_DATA_DIR.mkdir(parents=True, exist_ok=True)
-    X.astype(np.float32).tofile(VIEWER_DATA_DIR / "X.bin")
-    Y.astype(np.float32).tofile(VIEWER_DATA_DIR / "Y.bin")
+    chunk0_boot = min(chunk_size, n_boot_total)
+    # real_devices FIRST, bootstrap LAST -- so a client-side top-up
+    # (appending more bootstrap rows to the end of the array) never
+    # disturbs real_devices's own contiguous [start, start+count) range.
+    X0 = np.concatenate([X_real, X_boot[:chunk0_boot]])
+    Y0 = np.concatenate([Y_real, Y_boot[:chunk0_boot]])
+    X0.tofile(VIEWER_DATA_DIR / "X.bin")
+    Y0.tofile(VIEWER_DATA_DIR / "Y.bin")
+
+    n_chunks_total = max(1, -(-n_boot_total // chunk_size))  # ceil div, over the bootstrap pool only
+    for c in range(1, n_chunks_total):
+        lo, hi = c * chunk_size, min((c + 1) * chunk_size, n_boot_total)
+        X_boot[lo:hi].tofile(VIEWER_DATA_DIR / f"X.chunk{c}.bin")
+        Y_boot[lo:hi].tofile(VIEWER_DATA_DIR / f"Y.chunk{c}.bin")
 
     meta = {
-        "n": int(len(X)),
-        "x_cols": int(X.shape[1]),
-        "y_cols": int(Y.shape[1]),
+        "n": int(len(X0)),
+        "n_total": int(n_boot_total + len(X_real)),
+        "n_chunks": int(n_chunks_total - 1),  # extra chunks beyond the initial load, bootstrap-only
+        "bootstrap_target": int(chunk_size),
+        "x_cols": int(X_all.shape[1]),
+        "y_cols": int(Y_all.shape[1]),
         "target_names": TARGET_NAMES,
-        "source_legend": {"0": "bootstrap", "1": "real_devices"},
-        "source_counts": {"bootstrap": int(len(X_boot)), "real_devices": int(len(X_real))},
+        "target_range": target_range,
+        "source_legend": {"0": "real_devices", "1": "bootstrap"},
+        "source_counts": {"bootstrap": int(chunk0_boot), "real_devices": int(len(X_real))},
         "feature_layout": FEATURE_LAYOUT,
     }
     (VIEWER_DATA_DIR / "meta.json").write_text(json.dumps(meta, indent=2))
-    print(f"wrote {len(X)} rows ({len(X_boot)} bootstrap + {len(X_real)} real_devices) -> {VIEWER_DATA_DIR}")
+    print(f"wrote chunk 0 ({chunk0_boot} bootstrap + {len(X_real)} real_devices) + {n_chunks_total - 1} more "
+          f"bootstrap chunk(s) ({n_boot_total} bootstrap rows total) -> {VIEWER_DATA_DIR}")
 
 
 if __name__ == "__main__":

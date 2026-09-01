@@ -1,0 +1,465 @@
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Vega photonics viewer</title>
+  <style is:global>
+    :root {
+      --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
+      --border: #2a2a30; --text: #e8e8ec; --text-dim: #8a8a94; --text-faint: #55555e;
+      --accent: #5b9dff; --accent-dim: #2a4a75; --radius: 10px;
+      --si: #d99b3f; --sio2: #3a5f8a; --air: #14141a;
+      --good: #5bd88a; --bad: #e0616b; --warn: #e0b35b;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    #app { display: flex; height: 100%; }
+    .side-pane { flex: 0 0 360px; overflow: hidden; }
+    .side-pane .pane-content { width: 100%; height: 100%; overflow-y: auto; padding: 18px; }
+    #leftPane .pane-content { background: var(--panel); border-right: 1px solid var(--border); }
+    #rightPane .pane-content { background: var(--panel); border-left: 1px solid var(--border); }
+    #centerPane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 18px; gap: 14px; overflow-y: auto; }
+
+    h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    #titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .domain-nav { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+    .domain-nav a {
+      font-size: 11px; color: var(--text-dim); text-decoration: none;
+      padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
+      background: var(--card-2); transition: color .12s, border-color .12s;
+    }
+    .domain-nav a:hover { color: var(--text); border-color: #3a3a42; }
+    .domain-nav a.active { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
+    #subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 14px; }
+    .card:first-child { margin-top: 0; }
+    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 600; margin-bottom: 10px; }
+
+    .slider-row { margin-bottom: 14px; }
+    .slider-row:last-child { margin-bottom: 0; }
+    .slider-label { display: flex; justify-content: space-between; font-size: 12.5px; color: #d4d4da; margin-bottom: 6px; }
+    .slider-label b { color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
+    input[type=range] { width: 100%; accent-color: var(--accent); }
+    .slider-hint { font-size: 10.5px; color: var(--text-faint); margin-top: 3px; }
+
+    select {
+      width: 100%; background: var(--card-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 7px 8px; font-size: 13px; font-family: inherit;
+    }
+    button {
+      background: var(--card-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+      padding: 7px 10px; cursor: pointer; font-size: 12.5px; font-family: inherit; transition: background .12s, border-color .12s;
+    }
+    button:hover { background: #26262e; border-color: #3a3a42; }
+    button.active { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
+    .seed-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .seed-row button { flex: 1 1 auto; }
+
+    #xsectionWrap { position: relative; flex: 1; min-height: 260px; display: flex; align-items: center; justify-content: center; }
+    #xsection { width: 100%; height: 100%; display: block; }
+    #statusPill { position: absolute; top: 10px; left: 10px; font-size: 11px; padding: 4px 10px; border-radius: 20px; background: var(--card-2); border: 1px solid var(--border); color: var(--text-dim); }
+    #statusPill.loading { color: var(--warn); }
+    #statusPill.ok { color: var(--good); }
+    #statusPill.err { color: var(--bad); }
+
+    .metric-bar-row { margin-bottom: 12px; }
+    .metric-bar-row:last-child { margin-bottom: 0; }
+    .metric-bar-label { display: flex; justify-content: space-between; font-size: 12px; color: #d4d4da; margin-bottom: 5px; }
+    .metric-bar-label b { font-variant-numeric: tabular-nums; color: var(--text); }
+    .metric-bar-track { height: 9px; background: var(--card-2); border-radius: 5px; overflow: hidden; }
+    .metric-bar-fill { height: 100%; border-radius: 5px; transition: width .2s ease; }
+    .metric-bar-fill.up { background: linear-gradient(90deg, #2a6f4a, var(--good)); }
+    .metric-bar-fill.down { background: linear-gradient(90deg, #6a4a2a, var(--warn)); }
+    .metric-bar-fill.transmitted { background: linear-gradient(90deg, #2a4a75, var(--accent)); }
+    .metric-bar-fill.reflected { background: linear-gradient(90deg, #7a2a30, var(--bad)); }
+    .metric-bar-fill.fiber { background: linear-gradient(90deg, #2a6a6a, #4fc3c3); }
+    .metric-bar-desc { font-size: 10.5px; color: var(--text-faint); margin-top: 3px; line-height: 1.4; }
+
+    #closurePill { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 6px; background: var(--card-2); border: 1px solid var(--border); font-size: 12px; margin-top: 12px; }
+    #closurePill b { font-variant-numeric: tabular-nums; }
+
+    #hint { font-size: 11px; color: var(--text-faint); margin-top: 10px; line-height: 1.5; }
+    .legend-row { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: var(--text-dim); margin-top: 4px; }
+    .legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex: 0 0 auto; }
+
+    .pill { background: var(--card-2); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; font-size: 11px; color: var(--text-dim); }
+    .pill b { color: var(--text); font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="leftPane" class="side-pane">
+      <div class="pane-content">
+        <div id="titleRow">
+          <div>
+            <h1>Vega — Photonics</h1>
+            <div id="subtitle">2D silicon grating coupler, real MEEP FDTD</div>
+          </div>
+        </div>
+        <nav class="domain-nav">
+          <a href="/">Stellarators</a>
+          <a href="/airfoil">Airfoils</a>
+          <a href="/torax">TORAX</a>
+          <a href="/mug">Mug</a>
+          <a href="/bracket">Bracket</a>
+          <a href="/photonics" class="active">Photonics</a>
+        </nav>
+
+        <div class="card">
+          <div class="section-title">Design (real seed archetypes)</div>
+          <div class="seed-row">
+            <button id="seedCanonical" class="active">canonical_630nm</button>
+            <button id="seedFullEtch">full_etch</button>
+            <button id="seedShallow">shallow_etch_weak</button>
+            <button id="seedThinSoi">thin_soi_150nm</button>
+            <button id="seedBragg">near_bragg (hard)</button>
+            <button id="seedApodized">apodized_literature</button>
+            <button id="seedThinBox">thin_box_interference</button>
+          </div>
+          <div class="slider-hint" style="margin-top:8px;">From `photonics_targets.py`/EXPERIMENT_LOG — near_bragg is the confirmed adversarial region (mean reflected_efficiency 0.36, worst row 0.998). apodized_literature is the exact Lomonte et al. 2021 recipe; thin_box_interference probes the up/down-split sensitivity to buried-oxide thickness.</div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Parameters</div>
+          <div class="slider-row">
+            <div class="slider-label"><span>wg_thickness_um</span><b id="vWg">0.220</b></div>
+            <input type="range" id="sWg" min="0.12" max="0.34" step="0.001" value="0.22" />
+            <div class="slider-hint">220nm = standard SOI process node; 150nm is the other real node.</div>
+          </div>
+          <div class="slider-row">
+            <div class="slider-label"><span>grating_period_um</span><b id="vPeriod">0.630</b></div>
+            <input type="range" id="sPeriod" min="0.25" max="1.00" step="0.001" value="0.63" />
+            <div class="slider-hint">~0.25-0.33 is the real near-Bragg backward-reflection band.</div>
+          </div>
+          <div class="slider-row">
+            <div class="slider-label"><span>duty_cycle_start</span><b id="vDutyStart">0.500</b></div>
+            <input type="range" id="sDutyStart" min="0.15" max="0.85" step="0.001" value="0.5" />
+            <div class="slider-hint">Fill factor at the FIRST tooth (nearest the source).</div>
+          </div>
+          <div class="slider-row">
+            <div class="slider-label"><span>duty_cycle_end</span><b id="vDutyEnd">0.500</b></div>
+            <input type="range" id="sDutyEnd" min="0.15" max="0.85" step="0.001" value="0.5" />
+            <div class="slider-hint">Fill factor at the LAST tooth — linearly tapered between the two (apodization). Equal to duty_cycle_start = uniform grating.</div>
+          </div>
+          <div class="slider-row">
+            <div class="slider-label"><span>etch_depth_um</span><b id="vEtch">0.070</b></div>
+            <input type="range" id="sEtch" min="0.005" max="0.34" step="0.001" value="0.07" />
+            <div class="slider-hint">Capped at wg_thickness_um (a fully-etched grating).</div>
+          </div>
+          <div class="slider-row">
+            <div class="slider-label"><span>box_thickness_um</span><b id="vBox">2.000</b></div>
+            <input type="range" id="sBox" min="0.5" max="3.0" step="0.01" value="2.0" />
+            <div class="slider-hint">Buried-oxide thickness — real designs are sensitive to this via up/down interference (EXPERIMENT_LOG). Watch down_efficiency swing as you drag.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Fidelity</div>
+          <select id="fidelitySelect">
+            <option value="low">low (resolution=10, ~1.3s/call)</option>
+            <option value="medium">medium (resolution=20, ~3.7s/call)</option>
+          </select>
+          <div class="slider-hint" style="margin-top:8px;">Real measured costs, generate_photonics_dataset.py / EXPERIMENT_LOG — not invented.</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="centerPane">
+      <div class="card" style="flex:1; display:flex; flex-direction:column; padding:0; overflow:hidden;">
+        <div id="xsectionWrap">
+          <div id="statusPill">idle</div>
+          <canvas id="xsection"></canvas>
+        </div>
+        <div style="padding:12px 14px; border-top:1px solid var(--border); display:flex; gap:14px; flex-wrap:wrap; align-items:center;">
+          <div class="legend-row">
+            <span style="width:70px; height:10px; border-radius:2px; background:linear-gradient(90deg, rgb(0,0,4), rgb(101,21,110), rgb(212,72,66), rgb(252,255,164)); display:inline-block;"></span>
+            real |E<sub>z</sub>|² field intensity (log scale, MEEP DFT at λ=1.55μm)
+          </div>
+          <div class="legend-row"><span style="width:16px; height:10px; border:1px solid rgba(255,255,255,0.55); display:inline-block;"></span>silicon outline</div>
+          <div class="legend-row" style="margin-left:auto;">
+            <span class="pill" id="metaPill">N_PERIODS=20 · λ=1.55μm</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="rightPane" class="side-pane">
+      <div class="pane-content">
+        <div class="card">
+          <div class="section-title">Real MEEP result</div>
+          <div class="metric-bar-row">
+            <div class="metric-bar-label"><span>up_efficiency (fiber/free-space coupling)</span><b id="mUp">—</b></div>
+            <div class="metric-bar-track"><div class="metric-bar-fill up" id="fUp" style="width:0%"></div></div>
+          </div>
+          <div class="metric-bar-row">
+            <div class="metric-bar-label"><span>down_efficiency (substrate leakage)</span><b id="mDown">—</b></div>
+            <div class="metric-bar-track"><div class="metric-bar-fill down" id="fDown" style="width:0%"></div></div>
+          </div>
+          <div class="metric-bar-row">
+            <div class="metric-bar-label"><span>transmitted_efficiency (past the grating)</span><b id="mTrans">—</b></div>
+            <div class="metric-bar-track"><div class="metric-bar-fill transmitted" id="fTrans" style="width:0%"></div></div>
+          </div>
+          <div class="metric-bar-row">
+            <div class="metric-bar-label"><span>reflected_efficiency (back into waveguide)</span><b id="mRefl">—</b></div>
+            <div class="metric-bar-track"><div class="metric-bar-fill reflected" id="fRefl" style="width:0%"></div></div>
+            <div class="metric-bar-desc">Spikes hard near the Bragg period band (~0.25-0.33μm) — a real, confirmed adversarial resonance, not simulation noise.</div>
+          </div>
+          <div class="metric-bar-row">
+            <div class="metric-bar-label"><span>fiber_coupling_efficiency (real SMF-28 overlap)</span><b id="mFiber">—</b></div>
+            <div class="metric-bar-track"><div class="metric-bar-fill fiber" id="fFiber" style="width:0%"></div></div>
+            <div class="metric-bar-desc">up_efficiency × mode-overlap with an optimally-aligned real fiber — always ≤ up_efficiency. The gap between them is beam-shape mismatch, not simulation error.</div>
+          </div>
+          <div id="closurePill">
+            <span>energy_closure (should be ≈1.0)</span>
+            <b id="mClosure">—</b>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Hard targets found in real data</div>
+          <div class="slider-hint">
+            <b style="color:var(--text)">HARD_CLEAN_DIRECTIVITY</b>: high up_efficiency AND reflected&lt;0.03 AND down&lt;0.15 simultaneously — only 12% of the real 3080-row dataset satisfies the loss-channel pair, and the best up_efficiency among those rows was just 0.127 (vs. 0.774 unconstrained). A 6x gap, measured not assumed.
+          </div>
+          <div class="slider-hint" style="margin-top:10px;">
+            <b style="color:var(--text)">HARD_LOW_REFLECTION_NEAR_BRAGG</b>: try the "near_bragg (hard)" seed above, then drag reflected_efficiency down without leaving the 0.25-0.33μm period band.
+          </div>
+        </div>
+
+        <div id="hint">
+          Live MEEP FDTD, not a lookup table or surrogate — every slider move triggers a real 2-run simulation (calibration + grating pass) via <code>photonics_physics_service.py</code>. Debounced ~350ms so dragging doesn't queue dozens of ~1.3-3.7s calls.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API = "http://localhost:8094";
+    const N_PERIODS = 20;
+
+    // Same seven archetypes as generate_photonics_dataset.py's own SEEDS
+    // dict -- kept in sync deliberately, not independently invented.
+    const SEEDS = {
+      canonical: { wg: 0.22, period: 0.63, dutyStart: 0.50, dutyEnd: 0.50, etch: 0.07, box: 2.0 },
+      fullEtch: { wg: 0.22, period: 0.63, dutyStart: 0.50, dutyEnd: 0.50, etch: 0.22, box: 2.0 },
+      shallow: { wg: 0.22, period: 0.63, dutyStart: 0.50, dutyEnd: 0.50, etch: 0.02, box: 2.0 },
+      thinSoi: { wg: 0.15, period: 0.55, dutyStart: 0.50, dutyEnd: 0.50, etch: 0.05, box: 2.0 },
+      bragg: { wg: 0.22, period: 0.28, dutyStart: 0.50, dutyEnd: 0.50, etch: 0.07, box: 2.0 },
+      apodized: { wg: 0.22, period: 0.83, dutyStart: 0.85, dutyEnd: 0.25, etch: 0.07, box: 2.0 },
+      thinBox: { wg: 0.22, period: 0.63, dutyStart: 0.50, dutyEnd: 0.50, etch: 0.07, box: 0.7 },
+    };
+
+    const sWg = document.getElementById("sWg");
+    const sPeriod = document.getElementById("sPeriod");
+    const sDutyStart = document.getElementById("sDutyStart");
+    const sDutyEnd = document.getElementById("sDutyEnd");
+    const sEtch = document.getElementById("sEtch");
+    const sBox = document.getElementById("sBox");
+    const vWg = document.getElementById("vWg");
+    const vPeriod = document.getElementById("vPeriod");
+    const vDutyStart = document.getElementById("vDutyStart");
+    const vDutyEnd = document.getElementById("vDutyEnd");
+    const vEtch = document.getElementById("vEtch");
+    const vBox = document.getElementById("vBox");
+    const fidelitySelect = document.getElementById("fidelitySelect");
+    const statusPill = document.getElementById("statusPill");
+    const canvas = document.getElementById("xsection");
+    const ctx = canvas.getContext("2d");
+
+    const seedButtons = {
+      canonical: document.getElementById("seedCanonical"),
+      fullEtch: document.getElementById("seedFullEtch"),
+      shallow: document.getElementById("seedShallow"),
+      thinSoi: document.getElementById("seedThinSoi"),
+      bragg: document.getElementById("seedBragg"),
+      apodized: document.getElementById("seedApodized"),
+      thinBox: document.getElementById("seedThinBox"),
+    };
+
+    function applySeed(name) {
+      const s = SEEDS[name];
+      sWg.value = s.wg; sPeriod.value = s.period; sDutyStart.value = s.dutyStart;
+      sDutyEnd.value = s.dutyEnd; sEtch.value = s.etch; sBox.value = s.box;
+      Object.values(seedButtons).forEach(b => b.classList.remove("active"));
+      seedButtons[name].classList.add("active");
+      onChange();
+    }
+    Object.entries(seedButtons).forEach(([name, btn]) => btn.addEventListener("click", () => applySeed(name)));
+
+    function clampEtch() {
+      const wg = parseFloat(sWg.value);
+      if (parseFloat(sEtch.value) > wg) sEtch.value = wg.toFixed(3);
+      sEtch.max = wg;
+    }
+
+    // Grating start, relative to the field's own extent_um[0] (left edge) --
+    // a FIXED constant derived from photonics_oracle.py's own cell layout
+    // (DPML_SRC_GAP_UM + CALIB_TAIL_UM = 0.5 + 1.0), independent of any
+    // design parameter: the field region excludes the PML but still
+    // includes the source gap + calibration tail, so this offset is exact,
+    // not fitted. Keeps the heatmap and the structure outline in the SAME
+    // real coordinate system rather than two independent schematics.
+    const GRATING_X0_REL_UM = 1.5;
+
+    // Inferno-ish colormap, log-scaled -- intensity spans ~3+ orders of
+    // magnitude (beam core vs. evanescent tails), so linear scale would
+    // show one bright dot and nothing else.
+    const CMAP_STOPS = [
+      [0.00, 0, 0, 4], [0.20, 40, 11, 84], [0.40, 101, 21, 110],
+      [0.60, 159, 42, 99], [0.80, 212, 72, 66], [0.90, 245, 125, 21], [1.00, 252, 255, 164],
+    ];
+    function cmap(t) {
+      t = Math.max(0, Math.min(1, t));
+      for (let i = 0; i < CMAP_STOPS.length - 1; i++) {
+        const [t0, r0, g0, b0] = CMAP_STOPS[i], [t1, r1, g1, b1] = CMAP_STOPS[i + 1];
+        if (t >= t0 && t <= t1) {
+          const f = (t - t0) / (t1 - t0);
+          return [r0 + f * (r1 - r0), g0 + f * (g1 - g0), b0 + f * (b1 - b0)];
+        }
+      }
+      return CMAP_STOPS[CMAP_STOPS.length - 1].slice(1);
+    }
+
+    function drawScene(geom, field) {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + "px";
+      canvas.style.height = rect.height + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, rect.width, rect.height);
+
+      const wg = geom.wg_thickness_um, period = geom.grating_period_um, etch = geom.etch_depth_um;
+      const [xmin, xmax, ymin, ymax] = field.extent_um;
+      const totalLen = xmax - xmin, totalHeight = ymax - ymin;
+      const pad = 24;
+      const scale = Math.min((rect.width - 2 * pad) / totalLen, (rect.height - 2 * pad) / totalHeight);
+      const ox = (rect.width - totalLen * scale) / 2;
+      const oy = (rect.height - totalHeight * scale) / 2;
+      const toPx = (x, y) => [ox + (x - xmin) * scale, oy + (ymax - y) * scale]; // y flipped: physics y-up, canvas y-down
+
+      ctx.fillStyle = "#0c0c0e";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+
+      // Real |Ez|^2 field heatmap -- rendered offscreen at the sim's own
+      // grid resolution, then scaled up onto the main canvas (smoothed),
+      // matching the flux monitors' own DFT frequency exactly (see
+      // photonics_oracle.py's _run_sim docstring on why this is a DFT
+      // field, not a raw time-domain snapshot).
+      const intensity = field.intensity; // [nx][ny]
+      const nx = intensity.length, ny = intensity[0].length;
+      let maxI = 0;
+      for (let i = 0; i < nx; i++) for (let j = 0; j < ny; j++) maxI = Math.max(maxI, intensity[i][j]);
+      const floor = maxI * 1e-3;
+      const logMax = Math.log10(maxI + 1e-30), logFloor = Math.log10(floor + 1e-30);
+
+      const off = document.createElement("canvas");
+      off.width = nx; off.height = ny;
+      const octx = off.getContext("2d");
+      const img = octx.createImageData(nx, ny);
+      for (let i = 0; i < nx; i++) {
+        for (let j = 0; j < ny; j++) {
+          const v = intensity[i][j];
+          const t = (Math.log10(v + 1e-30) - logFloor) / (logMax - logFloor);
+          const [r, g, b] = cmap(t);
+          // field row j=0 is physics ymin (bottom); canvas image row 0 is
+          // top, so flip j -> (ny-1-j) writing into the ImageData buffer.
+          const idx = ((ny - 1 - j) * nx + i) * 4;
+          img.data[idx] = r; img.data[idx + 1] = g; img.data[idx + 2] = b; img.data[idx + 3] = 255;
+        }
+      }
+      octx.putImageData(img, 0, 0);
+      const [hx0, hy0] = toPx(xmin, ymax), [hx1, hy1] = toPx(xmax, ymin);
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(off, hx0, hy0, hx1 - hx0, hy1 - hy0);
+
+      // Structure outline on top of the field, in real coordinates -- NOT
+      // filled (the field colors underneath stay visible), just a thin
+      // guide so the reader can see where the silicon actually is.
+      const gratingX0 = xmin + GRATING_X0_REL_UM;
+      ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1;
+      const [wx0, wy0] = toPx(xmin, -wg / 2), [wx1, wy1] = toPx(xmax, wg / 2);
+      ctx.strokeRect(wx0, wy1, wx1 - wx0, wy0 - wy1); // full waveguide slab bottom+top+ends
+      for (const tooth of geom.teeth) {
+        const toothX0 = gratingX0 + tooth.x0, toothX1 = toothX0 + tooth.width;
+        const [tx0, ty0] = toPx(toothX0, wg / 2 - etch), [tx1, ty1] = toPx(toothX1, wg / 2);
+        ctx.strokeRect(tx0, ty1, tx1 - tx0, ty0 - ty1);
+      }
+      // substrate/air boundary (bottom of waveguide slab is already drawn above)
+      ctx.strokeStyle = "rgba(255,255,255,0.25)";
+      const [b0x] = toPx(xmin, 0), [, b0y] = toPx(0, -wg / 2);
+      ctx.beginPath(); ctx.moveTo(0, b0y); ctx.lineTo(rect.width, b0y); ctx.stroke();
+    }
+
+    function setBar(fillId, labelId, value) {
+      const pct = Math.max(0, Math.min(1, value)) * 100;
+      document.getElementById(fillId).style.width = pct.toFixed(1) + "%";
+      document.getElementById(labelId).textContent = value.toFixed(3);
+    }
+
+    let debounceTimer = null;
+    let inFlight = 0;
+
+    function onChange() {
+      clampEtch();
+      vWg.textContent = parseFloat(sWg.value).toFixed(3);
+      vPeriod.textContent = parseFloat(sPeriod.value).toFixed(3);
+      vDutyStart.textContent = parseFloat(sDutyStart.value).toFixed(3);
+      vDutyEnd.textContent = parseFloat(sDutyEnd.value).toFixed(3);
+      vEtch.textContent = parseFloat(sEtch.value).toFixed(3);
+      vBox.textContent = parseFloat(sBox.value).toFixed(3);
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(fetchPhysics, 350);
+    }
+
+    async function fetchPhysics() {
+      const reqId = ++inFlight;
+      statusPill.textContent = "running MEEP…";
+      statusPill.className = "loading";
+      const body = {
+        wg_thickness_um: parseFloat(sWg.value),
+        grating_period_um: parseFloat(sPeriod.value),
+        duty_cycle_start: parseFloat(sDutyStart.value),
+        duty_cycle_end: parseFloat(sDutyEnd.value),
+        etch_depth_um: parseFloat(sEtch.value),
+        box_thickness_um: parseFloat(sBox.value),
+        fidelity: fidelitySelect.value,
+      };
+      try {
+        const res = await fetch(API + "/physics", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (reqId !== inFlight) return; // a newer request superseded this one
+        if (data.field) drawScene(data.geometry, data.field);
+        if (data.ok) {
+          statusPill.textContent = data.cached ? "ok (cached)" : "ok";
+          statusPill.className = "ok";
+          setBar("fUp", "mUp", data.targets.up_efficiency);
+          setBar("fDown", "mDown", data.targets.down_efficiency);
+          setBar("fTrans", "mTrans", data.targets.transmitted_efficiency);
+          setBar("fRefl", "mRefl", data.targets.reflected_efficiency);
+          setBar("fFiber", "mFiber", data.targets.fiber_coupling_efficiency);
+          const closure = data.targets.energy_closure;
+          const closureEl = document.getElementById("mClosure");
+          closureEl.textContent = closure.toFixed(3);
+          closureEl.style.color = Math.abs(closure - 1.0) < 0.05 ? "var(--good)" : "var(--warn)";
+        } else {
+          statusPill.textContent = "invalid: " + data.error;
+          statusPill.className = "err";
+        }
+      } catch (e) {
+        if (reqId !== inFlight) return;
+        statusPill.textContent = "service unreachable (is `docker compose up physics-photonics` running?)";
+        statusPill.className = "err";
+      }
+    }
+
+    [sWg, sPeriod, sDutyStart, sDutyEnd, sEtch, sBox].forEach(s => s.addEventListener("input", onChange));
+    fidelitySelect.addEventListener("change", fetchPhysics);
+    window.addEventListener("resize", () => fetchPhysics());
+
+    onChange();
+  </script>
+</body>
+</html>

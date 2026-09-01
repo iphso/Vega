@@ -38,6 +38,7 @@ Design choices baked in, not exposed as knobs (see EXPERIMENT_LOG for why):
 """
 import argparse
 import json
+import math
 import re
 from pathlib import Path
 
@@ -110,23 +111,60 @@ def violation(mean_col, op, value, std, use_abs=False):
     return raw / std
 
 
-def paper_feasibility_violation(mean_col, op, value, use_abs=False):
+def paper_feasibility_violation(mean_col, op, value, use_abs=False, divisor=None, log_transform=False):
     """Exact normalized constraint violation formula from the ConStellaration
     benchmark's problems.py (_normalized_constraint_violations): signed,
     normalized by the constraint threshold's own magnitude rather than the
     target's dataset std. A design is feasible there iff this is <= a
-    relative tolerance (paper default 1e-2) for every constraint -- used
-    here only for final reporting, to make feasibility directly comparable
-    to the paper's own definition rather than this script's internal
-    (differently-normalized) optimization-loss weighting."""
+    relative tolerance (paper default 1e-2) for every constraint. Despite an
+    earlier version of this docstring claiming otherwise, this is NOT
+    reporting-only -- generate_candidates.py's constraint_tilde (and
+    grounded_walk_step.py's) both call this directly to build the ALM loss's
+    constraint penalty, i.e. it drives the search's actual gradient, not just
+    a final feasibility check.
+
+    `divisor` overrides the default `abs(value)` normalizer -- needed for
+    P3's `vacuum_well>=0.0` constraint, whose threshold is exactly zero:
+    dividing by it produces inf/NaN that (via the ALM outer-loop multiplier
+    update) corrupts every row's z on the very first outer iteration, not
+    just that one constraint's column. The official benchmark code hits the
+    same zero-threshold problem and works around it the same way: MHDStableQI
+    Stellarator._normalized_constraint_violations divides vacuum_well's
+    violation by `np.maximum(1e-1, self._vacuum_well_lower_bound)` instead of
+    the bound itself. Callers building a constraint list should pass
+    `divisor=max(0.1, abs(value))` for that constraint (see generate_candidates.py
+    / diag_p2_constraints2.py's constraint_tilde) to match the paper exactly;
+    every other constraint keeps the default (abs(value), unchanged).
+
+    `log_transform` -- needed for `qi`: p2_report.py/p3_report.py's own
+    p2_violations/p3_violations (the functions that decide every "genuinely
+    P2/P3-feasible" count reported all session) compute qi's violation in
+    LOG10 space, not linear -- `(log10(qi) - LOG10_QI_UB) / abs(LOG10_QI_UB)`.
+    This function, used instead for the ALM loss's actual gradient, had no
+    such transform: for real qi in its typical 0.003-0.1 range against a
+    ~3e-4 threshold, the untransformed linear violation is 10-300x larger
+    than the correctly-scaled log violation, while every other P2/P3
+    constraint (iota, mirror, flux_compression, vacuum_well) produces an
+    O(0.01-2) violation either way. That scale mismatch meant qi's penalty
+    term has been dominating every ALM search's gradient all session
+    (free-push, continuation, sequential-constraints, grounded-walk alike),
+    crowding out real pressure to jointly satisfy the other four constraints
+    -- not necessarily a fundamental fact about the design space, as
+    previously concluded, but at least partly an artifact of this bug.
+    Callers should pass `log_transform=True` for a `qi` constraint (value is
+    still the raw linear threshold, e.g. 3.162e-4 -- converted to log10
+    internally, matching LOG10_QI_UB's convention exactly)."""
     col = mean_col.abs() if use_abs else mean_col
+    if log_transform:
+        col = torch.log10(col.clamp_min(1e-12))
+        value = math.log10(value)
     if op == "<=":
         raw = col - value
     elif op == ">=":
         raw = value - col
     else:
         raw = (col - value).abs()
-    return raw / abs(value)
+    return raw / (abs(value) if divisor is None else divisor)
 
 
 def elongation_style_score(value, lower_bound, upper_bound, minimize):
