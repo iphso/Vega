@@ -179,7 +179,7 @@ table.cmp td.d { color: var(--ink-2); }
 
         <section class="panel res" id="respanel">
           <div class="rowhead"><h2>Resolved model</h2><span class="eyebrow">the campaign's high-fidelity tier, run in your browser</span></div>
-          <p class="note">The fully resolved tier behind the precomputed runs: axisymmetric RANS with the Lagrangian spray, mist bins, fog and wall film (stonelab.spray_cfd), then every disc period of the corona section solved in 2D, Poisson + ion drift-diffusion + Kaptsov corona, Newton with an exact Jacobian, with charged droplets tracked through it, two-way coupled (stonelab.ehd). It is a TypeScript port of the Python and matches it field by field. It runs on this rail's design and takes about a minute; the fast model above takes 20 ms.</p>
+          <p class="note">The fully resolved tier behind the precomputed runs: axisymmetric RANS with the Lagrangian spray, mist bins, fog and wall film (stonelab.spray_cfd), then every disc period of the corona section solved in 2D, Poisson + ion drift-diffusion + Kaptsov corona, Newton with an exact Jacobian, with charged droplets tracked through it, two-way coupled (stonelab.ehd). It is a TypeScript port of the Python and matches it field by field. It runs on this rail's design, with the large sparse factorizations spread over your spare cores, and takes 30 s to a minute and a half (most for spray-laden coronas); the fast model above takes 20 ms.</p>
           <div class="resbar">
             <button type="button" class="btn primary" id="resrun">Run the resolved model</button>
             <button type="button" class="btn" id="rescancel" hidden>Cancel</button>
@@ -1099,7 +1099,7 @@ function runResolved() {
       $("#respbar").style.width = "100%";
       $("#resstatus").textContent = `done in ${el}`;
       resLog(`done in ${el}`);
-      resLast = { ...m.result, inp, fastRun, preset, seconds: (performance.now() - resT0) / 1e3 };
+      resLast = { ...m.result, inp, fastRun, preset, threads: m.threads || 1, seconds: (performance.now() - resT0) / 1e3 };
       finishResolved();
     } else if (m.type === "error") {
       $("#resstatus").textContent = `failed: ${m.message}`; resLog("error: " + m.message); finishResolved(true);
@@ -1143,7 +1143,7 @@ function renderResolved() {
   const lin = R.corona ? R.corona.linear : null;
   $("#resnote").textContent = `Spray stage ${m.cfd_s.toFixed(1)} s (${R.sprayDiag.nOuter} outer iterations, water closure ${R.sprayDiag.waterResidual.toExponential(1)}, ` +
     `${R.sprayDiag.recirculating ? "with reverse flow" : "no reverse flow"}); corona ${m.ehd_s.toFixed(1)} s over ${R.corona ? R.corona.currents.length : 0} periods` +
-    (lin ? ` (${lin.newton ? lin.newton.factorizations : 0} Newton factorizations)` : "") + `. ` +
+    (lin ? ` (${lin.newton ? lin.newton.factorizations : 0} Newton factorizations, ${R.threads > 1 ? `factored on ${R.threads} workers` : "factored in one thread"})` : "") + `. ` +
     (R.inp.from ? "The stored run used the same code in Python with its own random numbers, so spray-trace and droplet totals differ by Monte Carlo noise." : "Not every rail input exists in the campaign data; this is a new design.");
   fillResField(); drawResMap(); drawCorMap(); drawPeriods();
 }
