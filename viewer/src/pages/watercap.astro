@@ -1,0 +1,480 @@
+---
+---
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Vega Watercap viewer</title>
+  <style is:global>
+    :root {
+      --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
+      --border: #2a2a30; --text: #e8e8ec; --text-dim: #8a8a94; --text-faint: #55555e;
+      --accent: #5b9dff; --accent-dim: #2a4a75; --radius: 10px;
+      --spray: #3ccfb4; --caught: #5b9dff; --escaped: #ff9a4d;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    #app { display: flex; height: 100%; }
+    .side-pane { flex: 0 0 330px; overflow: hidden; }
+    .side-pane .pane-content { width: 100%; height: 100%; overflow-y: auto; padding: 18px; }
+    #leftPane .pane-content { background: var(--panel); border-right: 1px solid var(--border); }
+    #rightPane .pane-content { background: var(--panel); border-left: 1px solid var(--border); }
+    #centerPane { flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 18px; gap: 14px; overflow-y: auto; }
+    h1 { font-size: 15px; font-weight: 600; margin: 0; }
+    #subtitle { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+    .domain-nav { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+    .domain-nav a { font-size: 11px; color: var(--text-dim); text-decoration: none; padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border); background: var(--card-2); }
+    .domain-nav a.active { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 14px; }
+    #centerPane .card { margin-top: 0; }
+    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+    .about { font-size: 11.5px; color: var(--text-dim); line-height: 1.5; }
+    .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+    .chip { font-size: 11px; padding: 4px 9px; border-radius: 14px; border: 1px solid var(--border); background: var(--card-2); color: var(--text-dim); cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px; }
+    .chip.on { color: var(--text); border-color: #3e3e48; }
+    .chip .sw { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .chip.off .sw { opacity: 0.25; }
+    .list { display: flex; flex-direction: column; gap: 2px; max-height: 360px; overflow-y: auto; }
+    .row { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; font-size: 11.5px; padding: 5px 7px; border-radius: 6px; cursor: pointer; color: var(--text-dim); align-items: center; }
+    .row:hover { background: var(--card-2); color: var(--text); }
+    .row.sel { background: var(--accent-dim); color: var(--text); }
+    .row .num { font-variant-numeric: tabular-nums; }
+    .row .scene { font-size: 9.5px; color: var(--spray); border: 1px solid #2c6b60; border-radius: 8px; padding: 0 5px; }
+    .viz-title { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .viz-title .status { color: var(--text-faint); font-size: 11px; }
+    #sceneWrap { width: 100%; height: 640px; position: relative; background: #08080a; border-radius: 8px; overflow: hidden; }
+    #sceneWrap canvas { display: block; }
+    .legend { position: absolute; left: 12px; bottom: 10px; font-size: 11px; color: var(--text-dim); display: flex; gap: 12px; pointer-events: none; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+    .toggles { display: flex; gap: 5px; flex-wrap: wrap; }
+    .toggles label { font-size: 11px; color: var(--text-dim); display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+    .split { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
+    .fields { display: grid; grid-template-rows: 400px 220px; gap: 14px; }
+    .fields canvas { width: 100%; height: 100%; display: block; background: #08080a; border-radius: 8px; }
+    select { background: var(--card-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font-size: 11.5px; }
+    #strip { width: 100%; height: 340px; display: block; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .stat { background: var(--card-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+    .stat .k { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat .v { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 2px; }
+    .stat .v.good { color: #7ee0a8; } .stat .v.bad { color: #ff8a7a; }
+    table.params { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    table.params td { padding: 4px 2px; border-bottom: 1px solid var(--border); color: var(--text-dim); }
+    table.params td:last-child { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+    .note { font-size: 11px; color: var(--text-faint); margin-top: 8px; line-height: 1.45; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="leftPane" class="side-pane"><div class="pane-content">
+      <h1>Vega Watercap viewer</h1>
+      <nav class="domain-nav">
+        <a href="/">Stellarators</a><a href="/airfoil">Airfoils</a><a href="/torax">TORAX</a><a href="/mug">Mug</a>
+        <a href="/mug-v2">Mug (v2)</a><a href="/bracket">Bracket</a><a href="/photonics">Photonics</a>
+        <a href="/watercap" class="active">Watercap</a>
+      </nav>
+      <div id="subtitle">loading…</div>
+      <div class="card">
+        <div class="section-title">About</div>
+        <div class="about">A vertical tube taking water out of cooling-tower exhaust: an optional cold spray stage below,
+          a corona disc stack above. Results come from the watercap campaign (scripts/watercap_campaign.py): the
+          resolved tier (RANS spray stage + resolved corona) where available, else ROM spray + resolved corona.
+          Designs marked <b style="color:var(--spray)">3D</b> carry exported drop paths and fields
+          (scripts/export_watercap_viewer_data.py).</div>
+      </div>
+      <div class="card">
+        <div class="section-title">Concepts</div>
+        <div class="chips" id="conceptChips"></div>
+      </div>
+      <div class="card">
+        <div class="section-title"><span>Designs</span><select id="sortBy">
+          <option value="recovered">water recovered</option><option value="energy_total">energy per litre</option>
+          <option value="outlet">outlet water</option><option value="vapor">vapor removed</option></select></div>
+        <label style="font-size:11px;color:var(--text-dim);display:flex;gap:6px;align-items:center;margin-bottom:8px;">
+          <input type="checkbox" id="onlyScenes" /> only designs with 3D scenes</label>
+        <div class="list" id="designList"></div>
+      </div>
+    </div></div>
+
+    <div id="centerPane">
+      <div class="card">
+        <div class="split">
+          <div>
+            <div class="viz-title">
+              <span id="sceneTitle">Tube</span>
+              <div class="toggles">
+                <label><input type="checkbox" id="tSpray" checked /> spray</label>
+                <label><input type="checkbox" id="tMist" checked /> mist</label>
+                <label><input type="checkbox" id="tFlow" checked /> moving drops</label>
+                <label><input type="checkbox" id="tSpin" /> rotate</label>
+                <select id="viewSel"><option value="all">whole tube</option><option value="spray">spray stage</option><option value="corona">disc stack</option></select>
+              </div>
+            </div>
+            <div id="sceneWrap">
+              <div class="legend"><span><i style="background:var(--spray)"></i>cold spray</span><span><i style="background:var(--caught)"></i>mist caught on wall</span><span><i style="background:var(--escaped)"></i>mist leaving the top</span></div>
+            </div>
+          </div>
+          <div>
+            <div class="viz-title"><span>Fields</span>
+              <select id="fieldSel"><option value="T">air temperature (°C)</option><option value="S">saturation ratio</option>
+                <option value="speed">air speed (m/s)</option><option value="spray">spray density (g/m³)</option></select></div>
+            <div class="fields"><canvas id="fieldCanvas"></canvas><canvas id="discCanvas"></canvas></div>
+          </div>
+        </div>
+        <div class="note" id="sceneNote"></div>
+        <div class="note">Fields, top: spray stage and tube (radius mirrored, height up). Bottom: electric field in one disc gap (kV/cm, log), disc in white.</div>
+      </div>
+      <div class="card">
+        <div class="viz-title"><span>Every design, by concept: water recovered per tube</span><span class="status">click a dot to select</span></div>
+        <canvas id="strip"></canvas>
+      </div>
+    </div>
+
+    <div id="rightPane" class="side-pane"><div class="pane-content">
+      <div class="card" style="margin-top:0">
+        <div class="section-title"><span id="selName">–</span></div>
+        <div class="stats" id="stats"></div>
+        <div class="note" id="tierNote"></div>
+      </div>
+      <div class="card">
+        <div class="section-title">Design</div>
+        <table class="params" id="params"></table>
+      </div>
+    </div></div>
+  </div>
+
+  <script>
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+    import { colormapRgb } from '../lib/colormap';
+
+    const COLORS = { corona: '#9aa0a6', rain: '#ff9a4d', coflow: '#5b9dff', charged: '#3ccfb4', spray: '#8f7bff', tiers: '#e86fb3', ring: '#ffd166', wall: '#7ee0a8' };
+    const ORDER = ['corona', 'rain', 'coflow', 'charged', 'spray', 'tiers', 'ring', 'wall'];
+    const PARAM_LABELS: [string, string, (v: number) => string][] = [
+      ['air_flow_m3_s', 'air flow (m³/s)', v => v.toFixed(3)], ['tube_diameter_m', 'tube diameter (m)', v => v.toFixed(3)],
+      ['spray_section_length_m', 'spray section (m)', v => v.toFixed(2)], ['corona_section_length_m', 'corona section (m)', v => v.toFixed(2)],
+      ['disc_diameter_frac', 'disc / tube diameter', v => v.toFixed(2)], ['disc_spacing_m', 'disc spacing (m)', v => v.toFixed(3)],
+      ['disc_thickness_mm', 'disc thickness (mm)', v => v.toFixed(2)], ['corona_voltage_kV', 'voltage (kV)', v => v.toFixed(1)],
+      ['corona_polarity', 'polarity', v => (v >= 0 ? '+' : '−')], ['spray_flow_L_min', 'spray (L/min)', v => v.toFixed(2)],
+      ['spray_T_C', 'spray temperature (°C)', v => v.toFixed(1)], ['spray_d_um', 'spray drop size (µm)', v => v.toFixed(0)],
+      ['spray_q_frac', 'spray charge (×Rayleigh)', v => v.toFixed(3)], ['spray_v0', 'launch speed (m/s)', v => v.toFixed(1)],
+      ['nozzle_height_frac', 'nozzle height (frac)', v => v.toFixed(2)], ['nozzle_radial_frac', 'nozzle radius (frac)', v => v.toFixed(2)],
+      ['spray_axis_angle_deg', 'spray axis (°)', v => v.toFixed(0)], ['spray_n_tiers', 'spray levels', v => String(Math.round(v))],
+      ['wall_U_W_m2K', 'wall cooling (W/m²K)', v => v.toFixed(1)],
+    ];
+    let data: any = null, scenes: Record<string, boolean> = {}, sel: any = null, sceneData: any = null;
+    const on: Record<string, boolean> = {};
+    ORDER.forEach(k => on[k] = true);
+    const $ = (id: string) => document.getElementById(id) as any;
+
+    // ------------------------------------------------------------------ 3D
+    const wrap = $('sceneWrap');
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+    wrap.appendChild(renderer.domElement);
+    const scene3 = new THREE.Scene();
+    scene3.background = new THREE.Color('#08080a');
+    const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 100);
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    scene3.add(new THREE.HemisphereLight(0xdfe8ff, 0x1a1a22, 1.1));
+    const dl = new THREE.DirectionalLight(0xffffff, 1.2); dl.position.set(2, 4, 3); scene3.add(dl);
+    let group = new THREE.Group(); scene3.add(group);
+    let movers: { pts: THREE.Points, paths: Float32Array[], phase: Float32Array, speed: number }[] = [];
+    let sprayGroup = new THREE.Group(), mistGroup = new THREE.Group();
+
+    function resize() {
+      const w = wrap.clientWidth, h = wrap.clientHeight;
+      renderer.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', () => { resize(); drawFields(); drawStrip(); });
+
+    function hashAngle(i: number) { const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453; return (x - Math.floor(x)) * Math.PI * 2; }
+
+    function buildScene(d: any, sc: any) {
+      scene3.remove(group); group = new THREE.Group(); scene3.add(group);
+      movers = []; sprayGroup = new THREE.Group(); mistGroup = new THREE.Group();
+      group.add(sprayGroup); group.add(mistGroup);
+      const R = (sc ? sc.geom.R : d.tube_diameter_m / 2);
+      const Ls = sc ? sc.geom.Ls : (d.spray_section_length_m ?? 0.5);
+      const Lc = sc ? sc.geom.Lc : d.corona_section_length_m;
+      const H = Ls + Lc;
+      // tube
+      const tube = new THREE.Mesh(new THREE.CylinderGeometry(R, R, H, 64, 1, true),
+        new THREE.MeshPhysicalMaterial({ color: 0x9fb3c8, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false }));
+      tube.position.y = H / 2; group.add(tube);
+      const ring = (y: number, col: number, op = 0.6) => {
+        const pts: THREE.Vector3[] = []; for (let i = 0; i <= 96; i++) { const a = i / 96 * Math.PI * 2; pts.push(new THREE.Vector3(R * Math.cos(a), y, R * Math.sin(a))); }
+        group.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineBasicMaterial({ color: col, transparent: true, opacity: op })));
+      };
+      ring(0, 0x6b7c8f); ring(H, 0x6b7c8f); ring(Ls, 0x3a4250, 0.5);
+      // spray section tint
+      if (Ls > 0) {
+        const sp = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.995, R * 0.995, Ls, 64, 1, true),
+          new THREE.MeshBasicMaterial({ color: 0x3ccfb4, transparent: true, opacity: 0.025, side: THREE.DoubleSide, depthWrite: false }));
+        sp.position.y = Ls / 2; group.add(sp);
+      }
+      // discs + rod
+      const rd = sc ? sc.geom.disc_r : d.disc_diameter_frac * R;
+      const s = sc ? sc.geom.spacing : d.disc_spacing_m;
+      const n = sc ? sc.geom.n_discs : Math.max(1, Math.round(Lc / s));
+      const t = Math.max(0.003, (sc ? sc.geom.disc_t : (d.disc_thickness_mm ?? 0.3) / 1000) * 6);
+      const dmat = new THREE.MeshStandardMaterial({ color: 0x4a5568, metalness: 0.7, roughness: 0.35 });
+      for (let k = 0; k < n; k++) {
+        const m = new THREE.Mesh(new THREE.CylinderGeometry(rd, rd, t, 64), dmat);
+        m.position.y = Ls + s / 2 + k * s; group.add(m);
+      }
+      const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.004, Lc, 12), dmat); rod.position.y = Ls + Lc / 2; group.add(rod);
+      // nozzles
+      if (sc) for (const nz of sc.geom.nozzles) {
+        const cone = new THREE.Mesh(new THREE.ConeGeometry(0.012, 0.03, 16), new THREE.MeshStandardMaterial({ color: 0x3ccfb4 }));
+        cone.position.set(nz.r, nz.z, 0); cone.rotation.z = Math.PI; group.add(cone);
+      }
+      // paths
+      if (sc) {
+        // spray paths stop at the corona stage: the spray trace has no corona, the corona model
+        // (and the mist paths) take over there
+        const sprayLines = (sc.spray_paths || []).map((p0: number[][]) => {
+          const cut = p0.findIndex(q => q[2] > Ls + 0.02);
+          const p = cut > 1 ? p0.slice(0, cut) : p0;
+          const arr = new Float32Array(p.length * 3);
+          p.forEach((q, i) => { arr[3 * i] = q[0]; arr[3 * i + 1] = q[2]; arr[3 * i + 2] = q[1]; });
+          return arr;
+        }).filter((a: Float32Array) => a.length >= 6);
+        addPaths(sprayGroup, sprayLines, 0x3ccfb4, 0.35, 0.9);
+        const caught: Float32Array[] = [], esc: Float32Array[] = [];
+        sc.corona.tracks.forEach((tr: any, i: number) => {
+          const a0 = hashAngle(i), sw = (i % 2 ? 1 : -1) * 0.5;
+          const arr = new Float32Array(tr.zr.length * 3);
+          tr.zr.forEach((q: number[], j: number) => {
+            const a = a0 + sw * q[0] / Lc, r = q[1] * R;
+            arr[3 * j] = r * Math.cos(a); arr[3 * j + 1] = Ls + q[0]; arr[3 * j + 2] = r * Math.sin(a);
+          });
+          (tr.fate === 'escaped' ? esc : caught).push(arr);
+        });
+        addPaths(mistGroup, caught, 0x5b9dff, 0.55, 0.6);
+        addPaths(mistGroup, esc, 0xff9a4d, 0.75, 0.6);
+      }
+      sprayGroup.visible = $('tSpray').checked; mistGroup.visible = $('tMist').checked;
+      frame = { H, Ls, Lc, R };
+      setView($('viewSel').value);
+    }
+
+    let frame = { H: 1, Ls: 0, Lc: 1, R: 0.15 };
+    function setView(v: string) {
+      const { H, Ls, Lc, R } = frame;
+      const [y0, y1] = v === 'spray' && Ls > 0 ? [0, Ls] : v === 'corona' ? [Ls, H] : [0, H];
+      const span = Math.max(y1 - y0, 6 * R);
+      controls.target.set(0, (y0 + y1) / 2, 0);
+      const dist = (span * 0.56) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+      camera.position.set(dist * 0.42, (y0 + y1) / 2 + span * 0.08, dist * 0.9);
+      controls.update();
+    }
+
+    function addPaths(g: THREE.Group, paths: Float32Array[], color: number, opacity: number, speed: number) {
+      if (!paths.length) return;
+      const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity, depthWrite: false });
+      for (const p of paths) {
+        const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(p, 3));
+        g.add(new THREE.Line(geo, mat));
+      }
+      const pos = new Float32Array(paths.length * 3);
+      const pg = new THREE.BufferGeometry(); pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const pts = new THREE.Points(pg, new THREE.PointsMaterial({ color, size: 0.012, sizeAttenuation: true, transparent: true, opacity: 1 }));
+      g.add(pts);
+      const phase = new Float32Array(paths.length).map((_, i) => (i * 0.6180339) % 1);
+      movers.push({ pts, paths, phase, speed });
+    }
+
+    let last = performance.now();
+    function tick(now: number) {
+      const dt = Math.min(0.05, (now - last) / 1000); last = now;
+      if ($('tSpin').checked) group.rotation.y += dt * 0.25;
+      const flow = $('tFlow').checked;
+      for (const m of movers) {
+        m.pts.visible = flow && (m.pts.parent as any).visible;
+        if (!flow) continue;
+        const pos = (m.pts.geometry.getAttribute('position') as THREE.BufferAttribute).array as Float32Array;
+        m.paths.forEach((p, i) => {
+          m.phase[i] = (m.phase[i] + dt * 0.12 * m.speed) % 1;
+          const npt = p.length / 3, f = m.phase[i] * (npt - 1), j = Math.floor(f), u = f - j, j2 = Math.min(npt - 1, j + 1);
+          for (let c = 0; c < 3; c++) pos[3 * i + c] = p[3 * j + c] * (1 - u) + p[3 * j2 + c] * u;
+        });
+        m.pts.geometry.getAttribute('position').needsUpdate = true;
+      }
+      controls.update();
+      renderer.render(scene3, camera);
+      requestAnimationFrame(tick);
+    }
+
+    // ------------------------------------------------------------------ fields
+    function fit(canvas: HTMLCanvasElement) {
+      const w = canvas.clientWidth, h = canvas.clientHeight, dpr = Math.min(2, window.devicePixelRatio);
+      canvas.width = w * dpr; canvas.height = h * dpr;
+      const ctx = canvas.getContext('2d')!; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+      return { ctx, w, h };
+    }
+    function colorbar(ctx: CanvasRenderingContext2D, x: number, y: number, h: number, lo: number, hi: number, cmap: string, fmt: (v: number) => string) {
+      for (let i = 0; i < h; i++) { const [r, g, b] = colormapRgb(cmap, 1 - i / h); ctx.fillStyle = `rgb(${r},${g},${b})`; ctx.fillRect(x, y + i, 10, 1); }
+      ctx.fillStyle = '#8a8a94'; ctx.font = '10.5px system-ui';
+      ctx.fillText(fmt(hi), x + 14, y + 8); ctx.fillText(fmt(lo), x + 14, y + h);
+    }
+    function drawFields() {
+      const c = $('fieldCanvas'), dc = $('discCanvas');
+      const { ctx, w, h } = fit(c); const d2 = fit(dc);
+      ctx.fillStyle = '#55555e'; ctx.font = '12px system-ui'; d2.ctx.fillStyle = '#55555e'; d2.ctx.font = '12px system-ui';
+      if (!sceneData) { ctx.fillText('fields are exported for 3D designs only', 16, 24); d2.ctx.fillText('—', 16, 24); return; }
+      const f = sceneData.fields, which = $('fieldSel').value;
+      const nr = f.r.length, nz = f.z.length;
+      const val = (i: number, j: number) => which === 'T' ? f.T[i][j] : which === 'S' ? f.S[i][j] : which === 'spray' ? Math.log10(Math.max(f.spray_g_m3[i][j], 1e-2)) : Math.hypot(f.u[i][j], f.v[i][j]);
+      let lo = Infinity, hi = -Infinity;
+      for (let i = 0; i < nr; i++) for (let j = 0; j < nz; j++) { const v = val(i, j); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+      if (which === 'S') { lo = Math.min(lo, 0.95); hi = Math.max(hi, 1.02); }
+      if (hi - lo < 1e-9) hi = lo + 1;
+      const R = sceneData.geom.R, H = f.z[nz - 1];
+      const pad = 34, ph = h - 2 * pad + 10, pw = Math.min(w - 120, ph * (2 * R) / H * 3.2);
+      const x0 = pad + 10, y0 = pad - 10;
+      const cmap = which === 'T' ? 'plasma' : 'viridis';
+      const cellW = pw / (2 * nr), cellH = ph / nz;
+      for (let j = 0; j < nz; j++) for (let i = 0; i < nr; i++) {
+        const [r, g, b] = colormapRgb(cmap, (val(i, j) - lo) / (hi - lo));
+        ctx.fillStyle = `rgb(${r},${g},${b})`;
+        const yy = y0 + ph - (j + 1) * cellH;
+        // cell edges: midpoints between centres, 0 on the axis, R at the wall
+        const e0 = i ? (f.r[i - 1] + f.r[i]) / 2 : 0, e1 = i + 1 < nr ? (f.r[i] + f.r[i + 1]) / 2 : R;
+        const cx = x0 + pw / 2, a0 = e0 / R * pw / 2, a1 = e1 / R * pw / 2 + 0.6;
+        ctx.fillRect(cx + a0, yy, a1 - a0, cellH + 1);
+        ctx.fillRect(cx - a1, yy, a1 - a0, cellH + 1);
+      }
+      const Ls = sceneData.geom.Ls;
+      const yLs = y0 + ph - Ls / H * ph;
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.setLineDash([4, 4]); ctx.beginPath(); ctx.moveTo(x0, yLs); ctx.lineTo(x0 + pw, yLs); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = '#8a8a94'; ctx.font = '10.5px system-ui';
+      ctx.fillText('spray stage ↓  corona stage ↑', x0 + pw + 8, yLs + 4);
+      ctx.fillText('0 m', 6, y0 + ph); ctx.fillText(`${H.toFixed(1)} m`, 2, y0 + 10);
+      const fmt = which === 'spray' ? (v: number) => `${(10 ** v).toFixed(1)}` : which === 'S' ? (v: number) => v.toFixed(3) : (v: number) => v.toFixed(1);
+      colorbar(ctx, w - 62, y0, Math.min(200, ph), lo, hi, cmap, fmt);
+      // disc field
+      const cor = sceneData.corona, E = cor.emap, NR = E.length, NZ = E[0].length;
+      const dh = d2.h - 30, dw = Math.min(d2.w - 80, dh * (2 * cor.emap_R) / cor.emap_s);
+      const lg = (v: number) => Math.log10(Math.max(v, 0.3));
+      let elo = lg(0.3), ehi = -Infinity; E.forEach((row: number[]) => row.forEach(v => ehi = Math.max(ehi, lg(v))));
+      const ox = 16, oy = 12;
+      for (let i = 0; i < NR; i++) for (let j = 0; j < NZ; j++) {
+        const [r, g, b] = colormapRgb('plasma', (lg(E[i][j]) - elo) / (ehi - elo));
+        d2.ctx.fillStyle = `rgb(${r},${g},${b})`;
+        const yy = oy + dh - (j + 1) * dh / NZ, xr = ox + dw / 2 + (i / NR) * dw / 2, cw = dw / 2 / NR + 1;
+        d2.ctx.fillRect(xr, yy, cw, dh / NZ + 1); d2.ctx.fillRect(ox + dw / 2 - (i + 1) / NR * dw / 2, yy, cw, dh / NZ + 1);
+      }
+      const rdpx = sceneData.geom.disc_r / cor.emap_R * dw / 2;
+      d2.ctx.strokeStyle = '#ffffff'; d2.ctx.lineWidth = 3; d2.ctx.beginPath(); d2.ctx.moveTo(ox + dw / 2 - rdpx, oy + dh / 2); d2.ctx.lineTo(ox + dw / 2 + rdpx, oy + dh / 2); d2.ctx.stroke(); d2.ctx.lineWidth = 1;
+      colorbar(d2.ctx, ox + dw + 10, oy, Math.min(160, dh), 0.3, 10 ** ehi, 'plasma', v => `${v.toFixed(1)}`);
+      d2.ctx.fillStyle = '#8a8a94'; d2.ctx.font = '10.5px system-ui';
+      d2.ctx.fillText(`${(cor.current_uA_period).toFixed(1)} µA per disc (no mist)`, ox, d2.h - 6);
+    }
+
+    // ------------------------------------------------------------------ strip chart
+    let stripHits: { x: number, y: number, d: any }[] = [];
+    function drawStrip() {
+      const { ctx, w, h } = fit($('strip'));
+      if (!data) return;
+      const keys = ORDER.filter(k => on[k]);
+      const left = 190, right = w - 30, top = 16, rowH = (h - 50) / Math.max(1, keys.length);
+      const lo = -10, hi = 24, X = (v: number) => left + (Math.max(lo, Math.min(hi, v)) - lo) / (hi - lo) * (right - left);
+      ctx.font = '11px system-ui';
+      for (const v of [-10, 0, 10, 20]) { ctx.strokeStyle = v === 0 ? '#55555e' : '#202027'; ctx.beginPath(); ctx.moveTo(X(v), top); ctx.lineTo(X(v), h - 30); ctx.stroke(); ctx.fillStyle = '#55555e'; ctx.fillText(v === -10 ? '≤ −10' : String(v), X(v) - 8, h - 14); }
+      ctx.fillText('water recovered per tube, L/h', right - 170, h - 2);
+      stripHits = [];
+      keys.forEach((k, ri) => {
+        const y = top + rowH * (ri + 0.5);
+        ctx.fillStyle = '#e8e8ec'; ctx.fillText(data.concepts[k], 10, y + 4);
+        data.designs.filter((d: any) => d.concept === k && d.o.recovered != null).forEach((d: any, i: number) => {
+          const x = X(d.o.recovered), yy = y + ((i * 37) % 13 - 6) * rowH / 34;
+          ctx.fillStyle = COLORS[k as keyof typeof COLORS]; ctx.globalAlpha = (d.o.arc ?? 1) > 0 ? 0.55 : 0.15;
+          ctx.beginPath(); ctx.arc(x, yy, 2.4, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
+          stripHits.push({ x, y: yy, d });
+          if (sel && d.id === sel.id) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, yy, 6, 0, 7); ctx.stroke(); ctx.lineWidth = 1; }
+          if (scenes[d.id]) { ctx.strokeStyle = '#3ccfb4'; ctx.beginPath(); ctx.arc(x, yy, 4, 0, 7); ctx.stroke(); }
+        });
+      });
+    }
+    $('strip').addEventListener('click', (e: MouseEvent) => {
+      const r = (e.target as HTMLElement).getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+      let best: any = null, bd = 64;
+      for (const p of stripHits) { const dd = (p.x - x) ** 2 + (p.y - y) ** 2; if (dd < bd) { bd = dd; best = p.d; } }
+      if (best) select(best);
+    });
+
+    // ------------------------------------------------------------------ panels
+    function pct(v: number | null | undefined) { return v == null ? '–' : `${(100 * v).toFixed(1)}%`; }
+    function num(v: number | null | undefined, d = 1) { return v == null ? '–' : v.toFixed(d); }
+    function renderStats(d: any) {
+      $('selName').textContent = `${data.concepts[d.concept]} · ${d.id}`;
+      const o = d.o;
+      const items: [string, string, string?][] = [
+        ['water out the top', pct(o.outlet), o.outlet != null && o.outlet < 0.95 ? 'good' : ''],
+        ['vapor removed', pct(o.vapor)], ['recovered', `${num(o.recovered)} L/h`, o.recovered > 0 ? 'good' : 'bad'],
+        ['energy (all-in)', `${num(o.energy_total, 0)} Wh/L`], ['electrical', `${num(o.power, 0)} W`],
+        ['corona current', `${num(o.current, 2)} mA`], ['corona quenching', pct(o.quench)],
+        ['liquid escaping', pct(o.escape), (o.escape ?? 0) > 0.01 ? 'bad' : ''], ['arc margin', num(o.arc, 2), (o.arc ?? 1) <= 0 ? 'bad' : ''],
+        ['water closure', o.closure == null ? '–' : o.closure.toExponential(1)],
+      ];
+      if (o.fog != null) items.push(['fog at outlet', pct(o.fog)]);
+      if (o.momentum != null) items.push(['spray momentum no.', num(o.momentum, 1)]);
+      $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="v ${c ?? ''}">${v}</div></div>`).join('');
+      $('tierNote').textContent = d.tier === 'resolved' ? 'Resolved tier: RANS spray stage + resolved corona.'
+        : d.tier === 'ehd' ? 'EHD tier: 1D ROM spray stage + resolved corona.' : 'Scene-only design (visualization re-run).';
+      $('params').innerHTML = PARAM_LABELS.filter(([k]) => d.d[k] != null).map(([k, l, f]) => `<tr><td>${l}</td><td>${f(d.d[k])}</td></tr>`).join('');
+    }
+    function renderList() {
+      const key = $('sortBy').value, only = $('onlyScenes').checked;
+      const dir = key === 'energy_total' || key === 'outlet' ? 1 : -1;
+      const rows = data.designs.filter((d: any) => on[d.concept] && (!only || scenes[d.id]) && d.o[key] != null && (d.o.arc ?? 1) > 0)
+        .sort((a: any, b: any) => dir * (a.o[key] - b.o[key])).slice(0, 120);
+      const sceneOnly = only ? data.designs.filter((d: any) => scenes[d.id] && d.tier === 'scene-only') : [];
+      $('designList').innerHTML = [...sceneOnly, ...rows].map((d: any) => `<div class="row ${sel && sel.id === d.id ? 'sel' : ''}" data-id="${d.id}">
+        <span><span class="chip-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${COLORS[d.concept as keyof typeof COLORS]};margin-right:6px"></span>${d.id}</span>
+        <span class="num">${d.o.recovered == null ? '' : d.o.recovered.toFixed(1) + ' L/h'}</span>${scenes[d.id] ? '<span class="scene">3D</span>' : '<span></span>'}</div>`).join('');
+      $('designList').querySelectorAll('.row').forEach((el: HTMLElement) => el.addEventListener('click', () => select(data.designs.find((d: any) => d.id === el.dataset.id))));
+    }
+    function renderChips() {
+      $('conceptChips').innerHTML = ORDER.map(k => `<span class="chip ${on[k] ? 'on' : 'off'}" data-k="${k}"><span class="sw" style="background:${COLORS[k as keyof typeof COLORS]}"></span>${data.concepts[k]}</span>`).join('');
+      $('conceptChips').querySelectorAll('.chip').forEach((el: HTMLElement) => el.addEventListener('click', () => { const k = el.dataset.k!; on[k] = !on[k]; renderChips(); renderList(); drawStrip(); }));
+    }
+
+    async function select(d: any) {
+      sel = d; renderStats(d); renderList(); drawStrip();
+      $('sceneTitle').textContent = `Tube · ${data.concepts[d.concept]}`;
+      sceneData = null;
+      if (scenes[d.id]) {
+        $('sceneNote').textContent = 'loading scene…';
+        sceneData = await (await fetch(`/data/watercap/scenes/${d.id}.json`)).json();
+        $('sceneNote').textContent = 'Spray paths: recorded from the resolved spray-stage trace (3D). Mist paths: traced through this design\'s resolved corona field without mist coupling (axisymmetric, azimuth added for display).';
+      } else {
+        $('sceneNote').textContent = 'Geometry only: drop paths and fields are exported for the designs marked 3D.';
+      }
+      buildScene(d.d, sceneData); drawFields();
+    }
+
+    async function init() {
+      resize(); requestAnimationFrame(tick);
+      data = await (await fetch('/data/watercap/designs.json')).json();
+      try { (await (await fetch('/data/watercap/scenes/index.json')).json()).forEach((s: any) => scenes[s.id] = true); } catch (e) { /* no scenes yet */ }
+      // scene-only designs (baseline, disc geometry) join the list
+      for (const id of Object.keys(scenes)) if (!data.designs.find((d: any) => d.id === id)) {
+        const sc = await (await fetch(`/data/watercap/scenes/${id}.json`)).json();
+        data.designs.push({ id, concept: sc.concept, tier: 'scene-only', d: sc.d, o: sc.o || {} });
+      }
+      $('subtitle').textContent = `${data.designs.length} designs · ${Object.keys(scenes).length} with 3D scenes · generated ${data.generated}`;
+      renderChips();
+      const first = data.designs.find((d: any) => scenes[d.id] && d.concept === 'rain') || data.designs.find((d: any) => scenes[d.id]) || data.designs[0];
+      await select(first);
+      ['tSpray', 'tMist'].forEach(id => $(id).addEventListener('change', () => { sprayGroup.visible = $('tSpray').checked; mistGroup.visible = $('tMist').checked; }));
+      $('fieldSel').addEventListener('change', drawFields);
+      $('viewSel').addEventListener('change', () => setView($('viewSel').value));
+      $('sortBy').addEventListener('change', renderList); $('onlyScenes').addEventListener('change', renderList);
+    }
+    init();
+  </script>
+</body>
+</html>

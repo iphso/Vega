@@ -1,0 +1,537 @@
+<meta charset="utf-8">
+<title>Watercap Design Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: instrument bench. Left rail of grouped sliders, right the live map (GPU), slices and the design readout.
+   Color: water = blue, electric = amber, map = viridis; neutrals lean slate. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --ink: #142029; --ink-2: #4a5864; --rule: #d3dae0; --chip: #e5eaee;
+  --water: #1f6fb2; --volt: #b86a00; --good: #2c7a4b; --bad: #b3382c; --hatch: rgba(179,56,44,0.55);
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151a; --panel: #172027; --ink: #e2e8ed; --ink-2: #9aa9b5; --rule: #29353f; --chip: #212c34;
+  --water: #5aa9e8; --volt: #f0a53a; --good: #5cc28a; --bad: #ef7b6e; --hatch: rgba(239,123,110,0.6); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f151a; --panel: #172027; --ink: #e2e8ed; --ink-2: #9aa9b5; --rule: #29353f; --chip: #212c34;
+  --water: #5aa9e8; --volt: #f0a53a; --good: #5cc28a; --bad: #ef7b6e; --hatch: rgba(239,123,110,0.6); color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 400 14.5px/1.5 var(--f-body); }
+.wrap { max-width: 1400px; margin: 0 auto; padding-block: 24px 60px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; }
+header { display: flex; flex-wrap: wrap; gap: 10px 24px; align-items: end; justify-content: space-between; }
+h1 { font: 700 clamp(30px, 4.5vw, 44px)/1 var(--f-display); margin: 0; letter-spacing: 0.01em; }
+h2 { font: 600 20px/1.1 var(--f-display); margin: 0; letter-spacing: 0.02em; }
+.sub { margin: 6px 0 0; color: var(--ink-2); max-width: 75ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 500 11.5px/1 var(--f-mono); padding: 6px 8px; border-radius: 4px; background: var(--chip); color: var(--ink-2); }
+.chip.ok { color: var(--good); } .chip.warn { color: var(--volt); } .chip.err { color: var(--bad); }
+.bench { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 960px) { .bench { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; min-width: 0; }
+.rail { display: grid; gap: 14px; }
+.group { display: grid; gap: 9px; }
+.ghead { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid var(--rule); padding-bottom: 4px; }
+.ghead span { font: 500 11px/1 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
+.sl { display: grid; gap: 2px; }
+.sl label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.sl label b { font: 500 12.5px/1.3 var(--f-mono); font-variant-numeric: tabular-nums; }
+.sl.onaxis label b { color: var(--water); }
+.sl input { width: 100%; accent-color: var(--water); margin: 0; }
+.sl.onaxis input { opacity: 0.35; }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; }
+.seg button { font: 500 12px/1 var(--f-mono); padding: 7px 9px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--water); outline-offset: 2px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets button { font: 500 12px/1.2 var(--f-body); padding: 6px 9px; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); cursor: pointer; text-align: left; }
+.presets button:hover { border-color: var(--water); }
+.main { display: grid; gap: 18px; min-width: 0; }
+.mapbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
+.mapbar label { font: 500 11px/1 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+select { font: 400 13px var(--f-body); padding: 5px 6px; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); max-width: 210px; }
+.mapbox { position: relative; }
+canvas { display: block; width: 100%; }
+#tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; font: 400 11.5px/1.45 var(--f-mono); color: var(--ink); box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; z-index: 2; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); margin-top: 8px; }
+.cbar { width: 200px; height: 10px; border-radius: 2px; display: inline-block; vertical-align: -1px; }
+.slices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 18px; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--ink-2); font: 400 10.5px var(--f-mono); }
+svg .ttl { fill: var(--ink); font: 600 12.5px var(--f-body); }
+.readout { display: grid; gap: 14px; }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.kpi { border-top: 2px solid var(--rule); padding-top: 6px; display: grid; gap: 1px; }
+.kpi .k { font: 500 10.5px/1.25 var(--f-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-2); }
+.kpi .v { font: 600 23px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
+.kpi .s { font-size: 12px; color: var(--ink-2); }
+.budget { display: grid; gap: 6px; }
+.bar { display: flex; height: 18px; border-radius: 3px; overflow: hidden; background: var(--chip); }
+.bar span { display: block; height: 100%; }
+.bl { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.note { font-size: 12.5px; color: var(--ink-2); margin: 0; max-width: 90ch; }
+details summary { cursor: pointer; font: 600 15px var(--f-body); }
+.val { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px 24px; margin-top: 10px; }
+.val div { font-size: 13px; }
+.val b { font-family: var(--f-mono); font-weight: 500; }
+.mono { font-family: var(--f-mono); font-size: 0.92em; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Watercap Design Explorer</h1>
+      <p class="sub">Every pixel of the map is one full run of the tube model, recomputed on your GPU each time you move a slider. The model is the fast model's spray stage plus a corona stage refitted to the resolved electric model. Click the map to load that design. Hover to read values.</p>
+    </div>
+    <div class="chips" id="chips"><span class="chip">starting…</span></div>
+  </header>
+
+  <div class="bench">
+    <aside class="panel rail" id="rail" aria-label="Design inputs">
+      <div class="group"><div class="ghead"><h2>Presets</h2></div><div class="presets" id="presets"></div></div>
+    </aside>
+
+    <div class="main">
+      <section class="panel">
+        <div class="mapbar">
+          <label for="xsel">X axis <select id="xsel"></select></label>
+          <label for="ysel">Y axis <select id="ysel"></select></label>
+          <label for="msel">Color <select id="msel"></select></label>
+          <span class="seg" id="cseg" aria-label="Corona model">
+            <button type="button" data-c="refit" aria-pressed="true">Refit corona</button><button type="button" data-c="rom" aria-pressed="false">Old fast-model corona</button></span>
+          <label for="arc"><input type="checkbox" id="arc" checked> hatch arcing</label>
+        </div>
+        <div class="mapbox"><canvas id="map" aria-label="Design map"></canvas><div id="tip" hidden></div></div>
+        <div class="legend" id="legend"></div>
+      </section>
+
+      <div class="slices">
+        <section class="panel"><svg id="sx" viewBox="0 0 480 230" role="img" aria-label="Slice along X"></svg></section>
+        <section class="panel"><svg id="sy" viewBox="0 0 480 230" role="img" aria-label="Slice along Y"></svg></section>
+      </div>
+
+      <section class="panel readout" aria-live="polite">
+        <h2>Selected design</h2>
+        <div class="kpis" id="kpis"></div>
+        <div class="budget"><div class="bl"><b style="color:var(--ink)">Water budget</b> <span id="budtxt"></span></div><div class="bar" id="bud"></div><div class="bl" id="budleg"></div></div>
+        <p class="note" id="cmp"></p>
+      </section>
+
+      <section class="panel">
+        <details id="valdet">
+          <summary>How far to trust this map</summary>
+          <div class="val" id="val"></div>
+          <p class="note" style="margin-top:12px">The model behind the map: the fast model's 1D spray stage (heat and mass transfer, Kelvin–Thomson, Coulomb dispersion, scavenging) ported to a fixed-step GPU march. The corona stage uses onset and current tables from 264 resolved field and corona solves. Charging is calibrated to resolved collection by drop size. Spray is described by drop size and charge as a fraction of the Rayleigh limit, which fits any atomizer. Not modeled: ionic wind, separated flow behind the discs, sparkover from measurement (the sparkover formula is uncalibrated), and serrated or sharpened disc edges (all discs are 0.3 mm thick with a smooth edge).</p>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+
+<script id="wcm-src">/*__WCMODEL__*/</script>
+<script id="wcg-src">/*__WCGPU__*/</script>
+<script>
+const FIT = /*__FIT__*/null;
+const $ = s => document.querySelector(s);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, a = {}, p) { const e = document.createElementNS(NS, tag); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+const MODEL_OPT = { nb: 4, nz: 40, outer: 3, fall_steps: 4000 };
+
+/* ---------- inputs ---------- */
+const PARAMS = [
+  { g: "Air & inlet", k: "U", n: "Face velocity", u: "m/s", lo: 0.5, hi: 4, v: 2.12, d: 2 },
+  { g: "Air & inlet", k: "inlet_T_C", n: "Inlet temperature", u: "°C", lo: 20, hi: 45, v: 35, d: 1 },
+  { g: "Air & inlet", k: "inlet_RH", n: "Inlet humidity", u: "RH", lo: 0.85, hi: 1, v: 1, d: 3 },
+  { g: "Air & inlet", k: "inlet_lwc_g_m3", n: "Mist loading", u: "g/m³", lo: 0.1, hi: 5, v: 2, log: 1, d: 2 },
+  { g: "Air & inlet", k: "mist_mmd_um", n: "Mist median size", u: "µm", lo: 3, hi: 40, v: 15, log: 1, d: 1 },
+  { g: "Air & inlet", k: "mist_gsd", n: "Mist size spread (GSD)", u: "", lo: 1.2, hi: 2.5, v: 1.8, d: 2 },
+  { g: "Spray stage", k: "spray_flow_L_min", n: "Spray flow", u: "L/min", lo: 0, hi: 20, v: 4, d: 2 },
+  { g: "Spray stage", k: "spray_T_C", n: "Spray temperature", u: "°C", lo: 5, hi: 40, v: 15, d: 1 },
+  { g: "Spray stage", k: "spray_d_um", n: "Spray drop size", u: "µm", lo: 5, hi: 300, v: 60, log: 1, d: 0 },
+  { g: "Spray stage", k: "spray_q_frac", n: "Spray charge (× Rayleigh)", u: "", lo: 1e-5, hi: 0.5, v: 1e-5, log: 1, d: 5 },
+  { g: "Spray stage", k: "spray_section_length_m", n: "Spray section length", u: "m", lo: 0.3, hi: 3, v: 1.5, d: 2 },
+  { g: "Spray stage", k: "nozzle_height_frac", n: "Nozzle height (frac. of section)", u: "", lo: 0.3, hi: 1, v: 0.9, d: 2 },
+  { g: "Corona stage", k: "corona_voltage_kV", n: "Disc voltage", u: "kV", lo: 0, hi: 60, v: 40, d: 1 },
+  { g: "Corona stage", k: "corona_section_length_m", n: "Corona section length", u: "m", lo: 0.3, hi: 3, v: 1.5, d: 2 },
+  { g: "Corona stage", k: "disc_diameter_frac", n: "Disc / tube diameter", u: "", lo: 0.05, hi: 0.6, v: 0.3, d: 2 },
+  { g: "Corona stage", k: "disc_spacing_m", n: "Disc spacing", u: "m", lo: 0.02, hi: 0.3, v: 0.1, d: 3 },
+  { g: "Corona stage", k: "tube_diameter_m", n: "Tube diameter", u: "m", lo: 0.1, hi: 0.6, v: 0.3, d: 2 },
+];
+const PK = Object.fromEntries(PARAMS.map(p => [p.k, p]));
+const state = { x: Object.fromEntries(PARAMS.map(p => [p.k, p.v])), pol: -1, spol: 1, xKey: "spray_T_C", yKey: "corona_voltage_kV", metric: "out", corona: "refit", arc: true };
+
+const METRICS = [
+  { k: "out", n: "Total water out, % of inlet", f: o => 100 * o[0], better: "low", cap: 110, fmt: v => v.toFixed(1) + "%" },
+  { k: "rec", n: "Water recovered, L/h", f: o => o[3], better: "high", fmt: v => v.toFixed(2) + " L/h" },
+  { k: "vap", n: "Vapor removed, %", f: o => 100 * o[1], better: "high", fmt: v => v.toFixed(1) + "%" },
+  { k: "ceil", n: "Vapor removed, % of ceiling", f: o => o[8] > 1e-6 ? 100 * o[1] / o[8] : NaN, better: "high", fmt: v => isFinite(v) ? v.toFixed(0) + "%" : "–" },
+  { k: "esc", n: "Liquid escaping, % of liquid in", f: o => 100 * o[2], better: "low", cap: 100, fmt: v => v.toFixed(2) + "%" },
+  { k: "cur", n: "Corona current, mA", f: o => o[7], better: "", fmt: v => v.toFixed(3) + " mA" },
+  { k: "pow", n: "Electrical power, W", f: o => o[4], better: "low", fmt: v => v.toFixed(1) + " W" },
+  { k: "spec", n: "Energy per liter, Wh/L", f: o => o[3] > 1e-3 ? (o[4] + o[5]) / o[3] : NaN, better: "low", log: 1, fmt: v => isFinite(v) ? v.toPrecision(3) + " Wh/L" : "no recovery" },
+  { k: "dp", n: "Pressure drop, Pa", f: o => o[9], better: "low", fmt: v => v.toFixed(1) + " Pa" },
+  { k: "arc", n: "Arc margin", f: o => o[6], better: "high", fmt: v => v.toFixed(2) },
+];
+const MK = Object.fromEntries(METRICS.map(m => [m.k, m]));
+
+const PRESETS = [
+  { n: "Brad's prototype at 30 kV", x: { spray_flow_L_min: 0, corona_voltage_kV: 30 }, ax: ["corona_voltage_kV", "disc_diameter_frac"], m: "esc" },
+  { n: "Prototype, corona voltage × mist size", x: { spray_flow_L_min: 0, corona_voltage_kV: 40 }, ax: ["corona_voltage_kV", "mist_mmd_um"], m: "esc" },
+  { n: "Cold coarse spray + corona", x: { spray_flow_L_min: 8, spray_T_C: 12, spray_d_um: 60, spray_q_frac: 1e-5, corona_voltage_kV: 40 }, ax: ["spray_T_C", "spray_flow_L_min"], m: "rec" },
+  { n: "Spray drop size × charge", x: { spray_flow_L_min: 4, spray_T_C: 15, corona_voltage_kV: 40 }, ax: ["spray_d_um", "spray_q_frac"], m: "ceil" },
+  { n: "Spray temperature × voltage", x: { spray_flow_L_min: 4, spray_T_C: 15, spray_d_um: 60, spray_q_frac: 1e-5, corona_voltage_kV: 40 }, ax: ["spray_T_C", "corona_voltage_kV"], m: "out" },
+];
+
+// spray water / dry air, kg/kg: the Python model, its dataset and every check here stayed at <= 1
+const LG_MAX = 1;
+function lgRatio(x) { return (x.spray_flow_L_min / 60) / (1.15 * x.air_flow_m3_s); }
+function toModel(u, pol, spol) {
+  return { air_flow_m3_s: u.U * Math.PI * u.tube_diameter_m ** 2 / 4, tube_diameter_m: u.tube_diameter_m, spray_section_length_m: u.spray_section_length_m,
+    corona_section_length_m: u.corona_section_length_m, nozzle_height_frac: u.nozzle_height_frac, disc_diameter_frac: u.disc_diameter_frac,
+    disc_spacing_m: u.disc_spacing_m, spray_flow_L_min: u.spray_flow_L_min, spray_T_C: u.spray_T_C, spray_d_um: u.spray_d_um,
+    spray_q_frac: u.spray_q_frac <= 1.0001e-5 ? 0 : u.spray_q_frac, corona_voltage_kV: u.corona_voltage_kV, corona_polarity: pol, spray_polarity_rel: spol,
+    inlet_T_C: u.inlet_T_C, inlet_RH: u.inlet_RH, inlet_lwc_g_m3: u.inlet_lwc_g_m3, mist_mmd_um: u.mist_mmd_um, mist_gsd: u.mist_gsd };
+}
+const toT = (p, v) => p.log ? (Math.log(v) - Math.log(p.lo)) / (Math.log(p.hi) - Math.log(p.lo)) : (v - p.lo) / (p.hi - p.lo);
+const fromT = (p, t) => p.log ? Math.exp(Math.log(p.lo) + t * (Math.log(p.hi) - Math.log(p.lo))) : p.lo + t * (p.hi - p.lo);
+function fmtP(p, v) { if (p.k === "spray_q_frac" && v <= 1.0001e-5) return "0 (neutral)"; if (p.k === "spray_q_frac") return v.toPrecision(2); return v.toFixed(p.d) + (p.u ? " " + p.u : ""); }
+
+/* ---------- rail ---------- */
+function buildRail() {
+  const rail = $("#rail"), groups = {};
+  const pr = $("#presets");
+  PRESETS.forEach((p, i) => { const b = document.createElement("button"); b.type = "button"; b.textContent = p.n; b.onclick = () => applyPreset(i); pr.appendChild(b); });
+  for (const p of PARAMS) {
+    if (!groups[p.g]) { const g = document.createElement("div"); g.className = "group"; g.innerHTML = `<div class="ghead"><h2>${p.g}</h2></div>`; rail.appendChild(g); groups[p.g] = g; }
+    const d = document.createElement("div"); d.className = "sl"; d.id = "sl-" + p.k;
+    d.innerHTML = `<label for="in-${p.k}">${p.n}<b id="v-${p.k}"></b></label><input id="in-${p.k}" type="range" min="0" max="1000" step="1">`;
+    groups[p.g].appendChild(d);
+    const inp = d.querySelector("input");
+    inp.value = Math.round(1000 * toT(p, state.x[p.k]));
+    inp.addEventListener("input", () => { state.x[p.k] = fromT(p, inp.value / 1000); syncRail(); schedule(); });
+  }
+  const g = groups["Corona stage"], t = document.createElement("div"); t.className = "toggles";
+  t.innerHTML = `<span>Corona polarity <span class="seg" id="polseg"><button type="button" data-v="-1">−</button><button type="button" data-v="1">+</button></span></span>
+    <span>Spray charge sign <span class="seg" id="spolseg"><button type="button" data-v="1">same</button><button type="button" data-v="-1">opposite</button></span></span>`;
+  g.appendChild(t);
+  $("#polseg").querySelectorAll("button").forEach(b => b.onclick = () => { state.pol = +b.dataset.v; syncRail(); schedule(); });
+  $("#spolseg").querySelectorAll("button").forEach(b => b.onclick = () => { state.spol = +b.dataset.v; syncRail(); schedule(); });
+}
+function syncRail() {
+  for (const p of PARAMS) {
+    $("#v-" + p.k).textContent = (p.k === state.xKey ? "X axis · " : p.k === state.yKey ? "Y axis · " : "") + fmtP(p, state.x[p.k]);
+    $("#sl-" + p.k).classList.toggle("onaxis", p.k === state.xKey || p.k === state.yKey);
+    $("#in-" + p.k).value = Math.round(1000 * toT(p, state.x[p.k]));
+  }
+  $("#polseg").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === state.pol));
+  $("#spolseg").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.v === state.spol));
+}
+function applyPreset(i) {
+  const p = PRESETS[i];
+  state.x = Object.fromEntries(PARAMS.map(q => [q.k, q.v]));
+  Object.assign(state.x, p.x);
+  state.xKey = p.ax[0]; state.yKey = p.ax[1]; state.metric = p.m;
+  $("#xsel").value = state.xKey; $("#ysel").value = state.yKey; $("#msel").value = state.metric;
+  syncRail(); schedule();
+}
+function buildSelects() {
+  for (const id of ["#xsel", "#ysel"]) { const s = $(id); PARAMS.forEach(p => { const o = document.createElement("option"); o.value = p.k; o.textContent = p.n; s.appendChild(o); }); }
+  METRICS.forEach(m => { const o = document.createElement("option"); o.value = m.k; o.textContent = m.n; $("#msel").appendChild(o); });
+  $("#xsel").value = state.xKey; $("#ysel").value = state.yKey; $("#msel").value = state.metric;
+  $("#xsel").onchange = e => { if (e.target.value === state.yKey) state.yKey = state.xKey; state.xKey = e.target.value; $("#ysel").value = state.yKey; syncRail(); schedule(); };
+  $("#ysel").onchange = e => { if (e.target.value === state.xKey) state.xKey = state.yKey; state.yKey = e.target.value; $("#xsel").value = state.xKey; syncRail(); schedule(); };
+  $("#msel").onchange = e => { state.metric = e.target.value; render(); };
+  $("#cseg").querySelectorAll("button").forEach(b => b.onclick = () => { state.corona = b.dataset.c; $("#cseg").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b)); schedule(); });
+  $("#arc").onchange = e => { state.arc = e.target.checked; render(); };
+}
+
+/* ---------- engines ---------- */
+let engine = null, grid = null, busy = false, dirty = false;
+const IN = WCGPU.IN, S_IN = WCGPU.IN_STRIDE, S_OUT = WCGPU.OUT_STRIDE;
+function gridDesigns(nx, ny) {
+  const px = PK[state.xKey], py = PK[state.yKey], arr = new Float32Array(nx * ny * S_IN), u = { ...state.x }, ok = new Uint8Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    u[px.k] = fromT(px, (i + 0.5) / nx); u[py.k] = fromT(py, (j + 0.5) / ny);
+    const x = toModel(u, state.pol, state.spol); ok[j * nx + i] = lgRatio(x) <= LG_MAX ? 1 : 0;
+    WCGPU.packDesign(arr, j * nx + i, x);
+  }
+  return { arr, ok };
+}
+async function gpuEngine() {
+  const g = await WCGPU.GPUModel.create(FIT);
+  return { name: "GPU", res: 192, async run(arr, n, corona) { return g.run(arr, n, { ...MODEL_OPT, corona }); } };
+}
+function cpuEngine() {
+  const src = document.getElementById("wcm-src").textContent;
+  const wsrc = src + `\nconst FIT=${JSON.stringify(FIT)};const IN=${JSON.stringify(IN)};
+onmessage=e=>{const {arr,n,opt,corona,id}=e.data;const out=new Float32Array(n*${S_OUT});
+for(let i=0;i<n;i++){const x={};IN.forEach((k,j)=>x[k]=arr[i*${S_IN}+j]);const r=WCModel.simulate(x,{...opt,fit:FIT,corona});
+const v=[r.outlet_total_water_frac,r.vapor_removed_frac,r.liquid_escape_frac,r.recovered_L_h,r.electrical_power_W,r.fan_power_W,r.arc_margin,r.corona_current_mA,r.vapor_ceiling_frac,r.pressure_drop_Pa];
+for(let k=0;k<${S_OUT};k++)out[i*${S_OUT}+k]=v[k];}postMessage({out,id},[out.buffer]);};`;
+  const N = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
+  const ws = Array.from({ length: N }, () => new Worker(URL.createObjectURL(new Blob([wsrc], { type: "text/javascript" }))));
+  let seq = 0;
+  return { name: "CPU", res: 40, workers: N, run(arr, n, corona) {
+    const per = Math.ceil(n / N), jobs = [];
+    for (let w = 0; w < N; w++) {
+      const a = w * per, b = Math.min(n, a + per); if (a >= b) continue;
+      const id = ++seq, sub = arr.slice(a * S_IN, b * S_IN);
+      jobs.push(new Promise(res => { const h = e => { if (e.data.id === id) { ws[w].removeEventListener("message", h); res([a, e.data.out]); } }; ws[w].addEventListener("message", h); ws[w].postMessage({ arr: sub, n: b - a, opt: MODEL_OPT, corona, id }); }));
+    }
+    return Promise.all(jobs).then(parts => { const out = new Float32Array(n * S_OUT); for (const [a, o] of parts) out.set(o, a * S_OUT); return out; });
+  } };
+}
+function schedule() { dirty = true; if (!busy) compute(); updateReadout(); }
+async function compute() {
+  if (!engine) return;
+  busy = true; dirty = false;
+  const nx = engine.res, ny = engine.res, t0 = performance.now();
+  const { arr, ok } = gridDesigns(nx, ny);
+  const out = await engine.run(arr, nx * ny, state.corona);
+  grid = { nx, ny, out, ok, xKey: state.xKey, yKey: state.yKey, ms: performance.now() - t0 };
+  render();
+  busy = false;
+  if (dirty) compute();
+}
+
+/* ---------- map ---------- */
+const VIR = [[68, 1, 84], [72, 40, 120], [62, 74, 137], [49, 104, 142], [38, 130, 142], [31, 158, 137], [53, 183, 121], [110, 206, 88], [181, 222, 43], [253, 231, 37]];
+function vir(t) { t = Math.min(1, Math.max(0, t)) * (VIR.length - 1); const i = Math.min(VIR.length - 2, Math.floor(t)), u = t - i; return VIR[i].map((c, k) => Math.round(c + (VIR[i + 1][k] - c) * u)); }
+const virCSS = "linear-gradient(90deg," + VIR.map((c, i) => `rgb(${c}) ${(i / (VIR.length - 1) * 100).toFixed(0)}%`).join(",") + ")";
+const cv = $("#map"), ctx = cv.getContext("2d");
+const M = { l: 84, r: 14, t: 12, b: 46 };
+function niceTicks(lo, hi, n = 6) { const st0 = (hi - lo) / n, p = 10 ** Math.floor(Math.log10(st0)), f = st0 / p, st = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; const t = []; for (let v = Math.ceil(lo / st) * st; v <= hi + 1e-9 * st; v += st) t.push(+v.toPrecision(10)); return t; }
+function logTicks(lo, hi) { const t = []; for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) for (const m of [1, 2, 5]) { const v = m * 10 ** e; if (v >= lo * 0.999 && v <= hi * 1.001) t.push(v); } return t; }
+let range = null, img = null;
+function metricGrid() {
+  const m = MK[state.metric], { nx, ny, out } = grid, vals = new Float32Array(nx * ny);
+  const o = new Array(S_OUT);
+  for (let i = 0; i < nx * ny; i++) { for (let k = 0; k < S_OUT; k++) o[k] = out[i * S_OUT + k]; vals[i] = grid.ok[i] ? m.f(o) : NaN; }
+  return vals;
+}
+function render() {
+  if (!grid) return;
+  const w = cv.parentElement.clientWidth, h = Math.round(Math.min(Math.max(w * 0.62, 300), 640)), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pw = w - M.l - M.r, ph = h - M.t - M.b, { nx, ny, out } = grid, m = MK[state.metric];
+  const vals = metricGrid();
+  // color range: 1st-99th percentile, so a few extreme designs (spray blowing
+  // out the top at 10x the inlet water) do not flatten the rest of the map
+  const tr = v => m.log ? Math.log10(v) : v;
+  const fin = []; for (const v of vals) if (isFinite(v) && (!m.log || v > 0)) fin.push(tr(v));
+  fin.sort((a, b) => a - b);
+  let lo = fin.length ? fin[Math.floor(0.01 * (fin.length - 1))] : Infinity, hi = fin.length ? fin[Math.ceil(0.99 * (fin.length - 1))] : -Infinity;
+  // metrics with a meaningful ceiling saturate there (e.g. > 110% out: the tube adds water)
+  if (m.cap !== undefined) { hi = Math.min(hi, tr(m.cap)); lo = Math.min(lo, hi - 1e-6); }
+  if (!isFinite(lo)) { lo = 0; hi = 1; } if (hi - lo < 1e-9) { hi = lo + 1e-6; }
+  range = { lo, hi, tr };
+  // image
+  const off = document.createElement("canvas"); off.width = nx; off.height = ny;
+  const ox = off.getContext("2d"), id = ox.createImageData(nx, ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const v = vals[j * nx + i], k = ((ny - 1 - j) * nx + i) * 4;
+    if (!isFinite(v) || (m.log && v <= 0)) { id.data[k] = id.data[k + 1] = id.data[k + 2] = 128; id.data[k + 3] = 90; continue; }
+    const c = vir((tr(v) - lo) / (hi - lo)); id.data[k] = c[0]; id.data[k + 1] = c[1]; id.data[k + 2] = c[2]; id.data[k + 3] = 255;
+  }
+  ox.putImageData(id, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(off, M.l, M.t, pw, ph);
+  // contours (marching squares on the transformed metric)
+  const levels = niceTicks(lo, hi, 7).filter(v => v > lo && v < hi);
+  ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1;
+  const X = i => M.l + (i + 0.5) / nx * pw, Y = j => M.t + ph - (j + 0.5) / ny * ph;
+  ctx.beginPath();
+  for (const L of levels) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const a = tr(vals[j * nx + i]) - L, b = tr(vals[j * nx + i + 1]) - L, c = tr(vals[(j + 1) * nx + i + 1]) - L, d = tr(vals[(j + 1) * nx + i]) - L;
+    if (![a, b, c, d].every(isFinite)) continue;
+    const pts = [];
+    if ((a > 0) !== (b > 0)) pts.push([X(i + a / (a - b)), Y(j)]);
+    if ((b > 0) !== (c > 0)) pts.push([X(i + 1), Y(j + b / (b - c))]);
+    if ((c > 0) !== (d > 0)) pts.push([X(i + 1 - c / (c - d)), Y(j + 1)]);
+    if ((d > 0) !== (a > 0)) pts.push([X(i), Y(j + 1 - d / (d - a))]);
+    if (pts.length >= 2) { ctx.moveTo(...pts[0]); ctx.lineTo(...pts[1]); if (pts.length === 4) { ctx.moveTo(...pts[2]); ctx.lineTo(...pts[3]); } }
+  }
+  ctx.stroke();
+  // arcing hatch
+  if (state.arc) {
+    ctx.save(); ctx.beginPath();
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (out[(j * nx + i) * S_OUT + 6] < 0) ctx.rect(M.l + i / nx * pw, M.t + ph - (j + 1) / ny * ph, pw / nx + 0.5, ph / ny + 0.5);
+    ctx.clip(); ctx.strokeStyle = css("--hatch"); ctx.lineWidth = 1.2; ctx.beginPath();
+    for (let s = -ph; s < pw; s += 7) { ctx.moveTo(M.l + s, M.t + ph); ctx.lineTo(M.l + s + ph, M.t); }
+    ctx.stroke(); ctx.restore();
+  }
+  // outside the validated water/air range
+  if (!grid.ok.every(v => v)) {
+    ctx.save(); ctx.beginPath();
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (!grid.ok[j * nx + i]) ctx.rect(M.l + i / nx * pw, M.t + ph - (j + 1) / ny * ph, pw / nx + 0.5, ph / ny + 0.5);
+    ctx.clip(); ctx.fillStyle = css("--chip"); ctx.fillRect(M.l, M.t, pw, ph); ctx.strokeStyle = css("--ink-2"); ctx.globalAlpha = 0.35; ctx.lineWidth = 1; ctx.beginPath();
+    for (let s = 0; s < pw + ph; s += 9) { ctx.moveTo(M.l + s, M.t); ctx.lineTo(M.l + s - ph, M.t + ph); }
+    ctx.stroke(); ctx.restore();
+  }
+  // best point
+  let bi = -1, bv = m.better === "low" ? Infinity : -Infinity;
+  if (m.better) for (let i = 0; i < nx * ny; i++) { const v = vals[i]; if (!isFinite(v) || out[i * S_OUT + 6] < 0) continue; if (m.better === "low" ? v < bv : v > bv) { bv = v; bi = i; } }
+  // axes
+  const ink2 = css("--ink-2"), rule = css("--rule"), ink = css("--ink");
+  ctx.strokeStyle = rule; ctx.strokeRect(M.l + 0.5, M.t + 0.5, pw, ph);
+  ctx.fillStyle = ink2; ctx.font = "11px " + css("--f-mono");
+  const px = PK[grid.xKey], py = PK[grid.yKey];
+  const tx = px.log ? logTicks(px.lo, px.hi) : niceTicks(px.lo, px.hi), ty = py.log ? logTicks(py.lo, py.hi) : niceTicks(py.lo, py.hi, 5);
+  ctx.textAlign = "center";
+  for (const t of tx) { const x = M.l + toT(px, t) * pw; ctx.fillRect(x, M.t + ph, 1, 5); ctx.fillText(+t.toPrecision(3), x, M.t + ph + 17); }
+  ctx.textAlign = "right";
+  for (const t of ty) { const y = M.t + ph - toT(py, t) * ph; ctx.fillRect(M.l - 5, y, 5, 1); ctx.fillText(+t.toPrecision(3), M.l - 8, y + 4); }
+  ctx.textAlign = "center"; ctx.fillStyle = ink;
+  ctx.fillText(px.n + (px.u ? ` (${px.u})` : ""), M.l + pw / 2, h - 10);
+  ctx.save(); ctx.translate(14, M.t + ph / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(py.n + (py.u ? ` (${py.u})` : ""), 0, 0); ctx.restore();
+  // current design crosshair
+  const cx = M.l + toT(px, state.x[px.k]) * pw, cy = M.t + ph - toT(py, state.x[py.k]) * ph;
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 7, 0, 7); ctx.stroke();
+  ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, 8.5, 0, 7); ctx.stroke();
+  if (bi >= 0) { const bx = M.l + ((bi % nx) + 0.5) / nx * pw, by = M.t + ph - (Math.floor(bi / nx) + 0.5) / ny * ph; star(bx, by); }
+  // legend
+  const lg = v => m.log ? 10 ** v : v;
+  $("#legend").innerHTML = `<span>${m.n}</span><span>≤ ${m.fmt(lg(lo))} <span class="cbar" style="background:${virCSS}"></span> ≥ ${m.fmt(lg(hi))}</span>` +
+    (bi >= 0 ? `<span>★ ${m.better === "low" ? "lowest" : "highest"} non-arcing: ${m.fmt(bv)}</span>` : "") +
+    `<span>◯ selected design</span>` + (grid.ok.every(v => v) ? "" : `<span><span class="sw" style="background:var(--chip);outline:1px solid var(--ink-2)"></span>spray water &gt; air by mass: outside the validated range</span>`) + (state.arc ? `<span><span class="sw" style="background:var(--hatch)"></span>arcs (arc margin &lt; 0)</span>` : "") +
+    `<span>${nx}×${ny} = ${(nx * ny).toLocaleString()} runs in ${grid.ms.toFixed(0)} ms (${engine.name})</span>`;
+  drawSlices(vals);
+}
+function star(x, y) { ctx.save(); ctx.translate(x, y); ctx.beginPath(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 3.5 : 8.5, a = -Math.PI / 2 + i * Math.PI / 5; ctx.lineTo(r * Math.cos(a), r * Math.sin(a)); } ctx.closePath(); ctx.fillStyle = "#fff"; ctx.fill(); ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.stroke(); ctx.restore(); }
+
+/* ---------- slices ---------- */
+function drawSlices(vals) {
+  const { nx, ny } = grid, px = PK[grid.xKey], py = PK[grid.yKey], m = MK[state.metric];
+  const ix = Math.min(nx - 1, Math.max(0, Math.floor(toT(px, state.x[px.k]) * nx))), jy = Math.min(ny - 1, Math.max(0, Math.floor(toT(py, state.x[py.k]) * ny)));
+  const rowX = Array.from({ length: nx }, (_, i) => [fromT(px, (i + 0.5) / nx), vals[jy * nx + i], grid.out[(jy * nx + i) * S_OUT + 6] < 0]);
+  const colY = Array.from({ length: ny }, (_, j) => [fromT(py, (j + 0.5) / ny), vals[j * nx + ix], grid.out[(j * nx + ix) * S_OUT + 6] < 0]);
+  line($("#sx"), rowX, px, m, `${m.n} along ${px.n.toLowerCase()}` + (m.cap !== undefined ? ` (capped at ${m.cap}%)` : ""), state.x[px.k]);
+  line($("#sy"), colY, py, m, `${m.n} along ${py.n.toLowerCase()}` + (m.cap !== undefined ? ` (capped at ${m.cap}%)` : ""), state.x[py.k]);
+}
+function line(svg, pts, p, m, title, cur) {
+  svg.innerHTML = "";
+  const W = 480, H = 230, l = 52, r = 10, t = 28, b = 38, pw = W - l - r, ph = H - t - b;
+  const good = pts.filter(q => isFinite(q[1]) && (!m.log || q[1] > 0));
+  if (!good.length) return;
+  const tr = v => m.log ? Math.log10(v) : v;
+  const capv = v => m.cap !== undefined ? Math.min(v, m.cap) : v;
+  for (const q of good) q[1] = capv(q[1]);
+  let lo = Math.min(...good.map(q => tr(q[1]))), hi = Math.max(...good.map(q => tr(q[1]))); if (hi - lo < 1e-9) { lo -= 0.5; hi += 0.5; }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const X = v => l + toT(p, v) * pw, Y = v => t + ph - (tr(v) - lo) / (hi - lo) * ph;
+  el("text", { x: 2, y: 14, class: "ttl" }, svg).textContent = title;
+  const g = el("g", {}, svg);
+  for (const v of niceTicks(lo, hi, 4)) { const y = t + ph - (v - lo) / (hi - lo) * ph; el("line", { x1: l, x2: l + pw, y1: y, y2: y, stroke: css("--rule") }, g); el("text", { x: l - 6, y: y + 3.5, "text-anchor": "end" }, g).textContent = +(m.log ? 10 ** v : v).toPrecision(3); }
+  for (const v of (p.log ? logTicks(p.lo, p.hi) : niceTicks(p.lo, p.hi, 5))) el("text", { x: X(v), y: t + ph + 15, "text-anchor": "middle" }, g).textContent = +v.toPrecision(3);
+  el("text", { x: l + pw / 2, y: H - 4, "text-anchor": "middle" }, g).textContent = p.n + (p.u ? ` (${p.u})` : "");
+  // arcing spans
+  for (const q of pts) if (q[2]) { const x0 = l + (toT(p, q[0]) - 0.5 / pts.length) * pw; el("rect", { x: x0, y: t, width: pw / pts.length + 0.5, height: ph, fill: css("--bad"), opacity: 0.08 }, g); }
+  const d = good.map((q, i) => (i ? "L" : "M") + X(q[0]).toFixed(1) + "," + Y(q[1]).toFixed(1)).join("");
+  el("path", { d: d + `L${X(good[good.length - 1][0]).toFixed(1)},${t + ph}L${X(good[0][0]).toFixed(1)},${t + ph}Z`, fill: css("--water"), opacity: 0.1 }, g);
+  el("path", { d, fill: "none", stroke: css("--water"), "stroke-width": 2 }, g);
+  const xc = X(cur); el("line", { x1: xc, x2: xc, y1: t, y2: t + ph, stroke: css("--ink"), "stroke-dasharray": "3 3", opacity: 0.6 }, g);
+}
+
+/* ---------- hover / click ---------- */
+function cellAt(ev) {
+  if (!grid) return null;
+  const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, pw = r.width - M.l - M.r, ph = r.height - M.t - M.b;
+  const tx = (x - M.l) / pw, ty = 1 - (y - M.t) / ph;
+  if (tx < 0 || tx > 1 || ty < 0 || ty > 1) return null;
+  const i = Math.min(grid.nx - 1, Math.floor(tx * grid.nx)), j = Math.min(grid.ny - 1, Math.floor(ty * grid.ny));
+  return { i, j, tx, ty, x, y };
+}
+cv.addEventListener("mousemove", ev => {
+  const c = cellAt(ev), tip = $("#tip");
+  if (!c) { tip.hidden = true; return; }
+  const k = (c.j * grid.nx + c.i) * S_OUT, o = Array.from(grid.out.slice(k, k + S_OUT));
+  const px = PK[grid.xKey], py = PK[grid.yKey];
+  tip.innerHTML = `${px.n}: ${fmtP(px, fromT(px, c.tx))}<br>${py.n}: ${fmtP(py, fromT(py, c.ty))}<br>` +
+    ["out", "rec", "vap", "esc", "cur", "spec", "arc"].map(key => `${MK[key].n.split(",")[0]}: <b>${MK[key].fmt(MK[key].f(o))}</b>`).join("<br>");
+  tip.hidden = false;
+  const r = cv.getBoundingClientRect(), tw = tip.offsetWidth;
+  tip.style.left = Math.min(c.x + 14, r.width - tw - 4) + "px"; tip.style.top = (c.y + 14) + "px";
+});
+cv.addEventListener("mouseleave", () => { $("#tip").hidden = true; });
+cv.addEventListener("click", ev => {
+  const c = cellAt(ev); if (!c) return;
+  const px = PK[grid.xKey], py = PK[grid.yKey];
+  state.x[px.k] = fromT(px, c.tx); state.x[py.k] = fromT(py, c.ty);
+  syncRail(); render(); updateReadout();
+});
+
+/* ---------- readout (CPU, float64) ---------- */
+function updateReadout() {
+  const x = toModel(state.x, state.pol, state.spol);
+  const r = WCModel.simulate(x, { ...MODEL_OPT, fit: FIT, corona: state.corona });
+  const o = WCModel.simulate(x, { ...MODEL_OPT, fit: FIT, corona: state.corona === "refit" ? "rom" : "refit" });
+  const vin = r.vapor_in_L_h, min_ = r.mist_in_L_h, spray = state.x.spray_flow_L_min * 60;
+  const vout = vin * (1 - r.vapor_removed_frac), liqOut = r.liquid_escape_frac * (min_ + spray);
+  const arc = r.arc_margin < 0;
+  const k = (key, v, s, cls = "") => `<div class="kpi"><span class="k">${key}</span><span class="v ${cls}">${v}</span><span class="s">${s}</span></div>`;
+  $("#kpis").innerHTML =
+    k("Total water out", (100 * r.outlet_total_water_frac).toFixed(1) + "%", "of vapor + mist coming in", r.outlet_total_water_frac < 0.95 ? "" : "") +
+    k("Recovered", r.recovered_L_h.toFixed(2) + " L/h", "net, inlet minus outlet water", "") +
+    k("Vapor removed", (100 * r.vapor_removed_frac).toFixed(1) + "%", r.vapor_ceiling_frac > 0 ? `ceiling from subcooling ${(100 * r.vapor_ceiling_frac).toFixed(1)}%` : "spray not colder than air: ceiling 0") +
+    k("Liquid escaping", (100 * r.liquid_escape_frac).toFixed(2) + "%", `mist ${(100 * r.mist_escape_frac).toFixed(1)}% · spray ${(100 * r.spray_top_frac).toFixed(1)}%`) +
+    k("Corona", r.corona_current_mA > 1e-4 ? r.corona_current_mA.toFixed(3) + " mA" : "off", `onset ${r.corona_onset_kV.toFixed(1)} kV` + (r.corona_current_mA > 1e-4 ? ` · ${(100 * (1 - r.corona_current_mA / Math.max(r.corona_current_no_mist_mA, 1e-12))).toFixed(0)}% quenched by mist` : "")) +
+    k("Power", (r.electrical_power_W + r.fan_power_W).toFixed(1) + " W", `electric ${r.electrical_power_W.toFixed(1)} · fan ${r.fan_power_W.toFixed(1)} · ${r.recovered_L_h > 1e-3 ? r.specific_energy_Wh_L.toPrecision(3) + " Wh/L" : "no recovery"}`) +
+    k("Pressure drop", r.pressure_drop_Pa.toFixed(1) + " Pa", "tube friction + discs + spray drag") +
+    k("Arc margin", r.arc_margin.toFixed(2), arc ? `arcs · spray space charge ${r.spray_space_charge_kV_cm.toPrecision(2)} kV/cm vs 24 breakdown` : "positive = no arcing", arc ? "" : "");
+  if (arc) $("#kpis").lastElementChild.querySelector(".v").style.color = "var(--bad)";
+  const lg = lgRatio(x);
+  $("#kpis").insertAdjacentHTML("beforeend", k("Water / air", lg.toFixed(2) + " kg/kg", lg > LG_MAX ? "outside the validated range (≤ 1): treat with suspicion" : "spray mass per mass of air"));
+  if (lg > LG_MAX) $("#kpis").lastElementChild.querySelector(".v").style.color = "var(--volt)";
+  // budget bar, scaled to the larger of in/out
+  const totIn = vin + min_, totOut = vout + liqOut, sc = Math.max(totIn, totOut, 1e-9);
+  const seg = (v, c, t) => `<span style="width:${(100 * v / sc).toFixed(2)}%;background:${c}" title="${t}"></span>`;
+  $("#bud").innerHTML = seg(vout, "var(--water)", "vapor out") + seg(liqOut, "var(--volt)", "liquid out") + seg(Math.max(totIn - totOut, 0), "var(--good)", "recovered");
+  $("#budtxt").textContent = `in ${totIn.toFixed(1)} L/h (vapor ${vin.toFixed(1)} + mist ${min_.toFixed(2)}) · spray added ${spray.toFixed(0)} L/h`;
+  $("#budleg").innerHTML = `<span><span class="sw" style="background:var(--water)"></span>vapor out ${vout.toFixed(2)}</span><span><span class="sw" style="background:var(--volt)"></span>liquid out ${liqOut.toFixed(2)}</span><span><span class="sw" style="background:var(--good)"></span>recovered ${Math.max(totIn - totOut, 0).toFixed(2)} L/h</span>` + (totOut > totIn ? `<span style="color:var(--bad)">more water leaves than came in: spray is escaping</span>` : "");
+  const oname = state.corona === "refit" ? "the old fast-model corona" : "the refit corona";
+  $("#cmp").innerHTML = `With ${oname} this design would give <b>${(100 * o.outlet_total_water_frac).toFixed(1)}%</b> total water out and ${o.corona_current_mA.toFixed(3)} mA (onset ${o.corona_onset_kV.toFixed(1)} kV).`;
+}
+
+/* ---------- validation ---------- */
+async function selfCheck() {
+  const n = 64, arr = new Float32Array(n * S_IN), xs = [];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  while (xs.length < n) { const u = {}; for (const p of PARAMS) u[p.k] = fromT(p, rnd()); const x = toModel(u, rnd() < 0.5 ? -1 : 1, rnd() < 0.5 ? -1 : 1); if (lgRatio(x) > LG_MAX) continue; WCGPU.packDesign(arr, xs.length, x); xs.push(x); }
+  const out = await engine.run(arr, n, "refit");
+  const d = xs.map((x, i) => Math.abs(out[i * S_OUT] - WCModel.simulate(x, { ...MODEL_OPT, fit: FIT }).outlet_total_water_frac)).sort((a, b) => a - b);
+  return { med: d[n >> 1], p90: d[Math.floor(0.9 * n)], max: d[n - 1] };
+}
+function fillValidation(chk) {
+  $("#val").innerHTML = `
+  <div><b>${engine.name === "GPU" ? "GPU (float32) vs CPU (float64)" : "CPU engine"}</b>, checked just now on 64 random designs: total water out differs by a median of <b>${chk.med.toExponential(1)}</b>, p90 <b>${chk.p90.toExponential(1)}</b>, max <b>${chk.max.toExponential(1)}</b>.</div>
+  <div><b>This port vs. the Python fast model</b> (200 random designs, same spray and corona): total water out median error <b>5.6e-4</b>, p90 <b>5.9e-3</b>. Liquid escaping p90 <b>7.8e-4</b>. Two strongly charged 5 µm sprays differ by up to <b>0.09</b> in vapor removed.</div>
+  <div><b>Refit corona vs. the resolved model</b> on 55 pilot designs: corona on or off matches <b>55/55</b>. Total water out median error <b>8e-4</b>, p90 <b>2.6e-3</b>. Liquid escaping p90 <b>2.2e-3</b>. Current median ratio <b>1.18</b>. Fine-mist designs are under-quenched, with current up to about 5× too high.</div>
+  <div><b>Brad's geometry</b> (30 cm tube, 9 cm discs, 2 g/m³ of 15 µm mist): onset <b>32.8 kV</b> (resolved 33.0–33.5). Current at 35 / 40 / 46 kV is <b>0.135 / 0.649 / 1.43 mA</b> (resolved 0.134 / 0.669 / 1.46). Liquid escaping at 35 / 37 kV is <b>9.0% / 2.7%</b> (resolved 6.5% / 1.5%).</div>`;
+}
+
+/* ---------- boot ---------- */
+buildRail(); buildSelects(); syncRail(); updateReadout();
+(async () => {
+  const chips = $("#chips");
+  try { engine = await gpuEngine(); } catch (e) { engine = cpuEngine(); chips.innerHTML = `<span class="chip warn">WebGPU unavailable: ${e.message}. Running on CPU at ${engine.res}×${engine.res}</span>`; }
+  await compute();
+  const chk = await selfCheck(); fillValidation(chk);
+  const ok = chk.p90 < 1e-2;
+  chips.innerHTML = (engine.name === "GPU" ? `<span class="chip ok">WebGPU · ${engine.res}² live grid</span>` : chips.innerHTML) +
+    `<span class="chip ${ok ? "ok" : "warn"}">${engine.name} vs float64 check: p90 Δ ${chk.p90.toExponential(1)}</span><span class="chip">corona refit from 264 resolved solves</span>`;
+})();
+addEventListener("resize", () => render());
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>

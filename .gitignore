@@ -27,3 +27,7 @@ viewer/.astro
 exports/
 data/
 logs_p1_latent_optimize*.log
+
+# watercap workbench build outputs (python watercap_web/build.py)
+watercap_web/workbench.html
+watercap_web/test.html

@@ -1,0 +1,1320 @@
+<meta charset="utf-8">
+<title>Watercap Workbench</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: instrument bench with two benches behind tabs. Simulate: left rail of inputs grouped like the
+   partner's list, right the targets, the tube, and a GPU sweep map. Designs: filters, scatter, table, detail.
+   Color: water = blue, electric = amber, stored-run sets = slate / blue / teal, maps = viridis; neutrals lean slate. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --ink: #142029; --ink-2: #4a5864; --rule: #d3dae0; --chip: #e5eaee;
+  --water: #1f6fb2; --volt: #b86a00; --good: #2c7a4b; --bad: #b3382c; --hatch: rgba(179,56,44,0.55);
+  --set-v1: #6f7f8c; --set-rerun: #1f6fb2; --set-new: #11806f; --liquid: #6a8fb0;
+  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151a; --panel: #172027; --ink: #e2e8ed; --ink-2: #9aa9b5; --rule: #29353f; --chip: #212c34;
+  --water: #5aa9e8; --volt: #f0a53a; --good: #5cc28a; --bad: #ef7b6e; --hatch: rgba(239,123,110,0.6);
+  --set-v1: #8c9aa6; --set-rerun: #5aa9e8; --set-new: #4cc3b4; --liquid: #8fb3d4; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0f151a; --panel: #172027; --ink: #e2e8ed; --ink-2: #9aa9b5; --rule: #29353f; --chip: #212c34;
+  --water: #5aa9e8; --volt: #f0a53a; --good: #5cc28a; --bad: #ef7b6e; --hatch: rgba(239,123,110,0.6);
+  --set-v1: #8c9aa6; --set-rerun: #5aa9e8; --set-new: #4cc3b4; --liquid: #8fb3d4; color-scheme: dark; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--bg); color: var(--ink); font: 400 14.5px/1.5 var(--f-body); }
+.wrap { max-width: 1440px; margin: 0 auto; padding-block: 22px 60px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
+h1 { font: 700 clamp(30px, 4.5vw, 44px)/1 var(--f-display); margin: 0; letter-spacing: 0.01em; text-wrap: balance; }
+h2 { font: 600 20px/1.1 var(--f-display); margin: 0; letter-spacing: 0.02em; text-wrap: balance; }
+h3 { font: 600 16px/1.2 var(--f-display); margin: 0; letter-spacing: 0.03em; }
+.sub { margin: 6px 0 0; color: var(--ink-2); max-width: 82ch; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 500 11.5px/1 var(--f-mono); padding: 6px 8px; border-radius: 4px; background: var(--chip); color: var(--ink-2); }
+.chip.ok { color: var(--good); } .chip.warn { color: var(--volt); } .chip.err { color: var(--bad); }
+.tabs { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--panel); }
+.tabs button { font: 600 17px/1 var(--f-display); letter-spacing: 0.04em; padding: 10px 16px; background: transparent; color: var(--ink-2); border: 0; border-right: 1px solid var(--rule); cursor: pointer; }
+.tabs button:last-child { border-right: 0; }
+.tabs button[aria-selected="true"] { background: var(--ink); color: var(--panel); }
+.tabs button span { font: 500 11px/1 var(--f-mono); letter-spacing: 0; opacity: 0.75; margin-left: 6px; }
+.bench { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 980px) { .bench { grid-template-columns: 1fr; } }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; min-width: 0; }
+.rail { display: grid; gap: 16px; }
+.group { display: grid; gap: 9px; }
+.ghead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; border-bottom: 1px solid var(--rule); padding-bottom: 4px; flex-wrap: wrap; }
+.sl { display: grid; gap: 2px; }
+.sl label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.sl label b { font: 500 12.5px/1.3 var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.sl.onaxis label b { color: var(--water); }
+.sl input { width: 100%; accent-color: var(--water); margin: 0; }
+.sl.onaxis input { opacity: 0.35; }
+.sl .hint { font-size: 11.5px; color: var(--ink-2); line-height: 1.35; }
+.derived { font: 400 12px/1.45 var(--f-mono); color: var(--ink-2); background: var(--chip); border-radius: 4px; padding: 7px 9px; }
+.derived b { color: var(--ink); font-weight: 500; }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 13px; align-items: center; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; vertical-align: middle; }
+.seg button { font: 500 12px/1 var(--f-mono); padding: 7px 9px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); cursor: pointer; }
+.seg button:last-child { border-right: 0; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--water); outline-offset: 2px; }
+.presets { display: flex; flex-wrap: wrap; gap: 6px; }
+.presets button, .btn { font: 500 12px/1.2 var(--f-body); padding: 6px 9px; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); cursor: pointer; text-align: left; }
+.presets button:hover, .btn:hover { border-color: var(--water); }
+.btn.primary { background: var(--water); border-color: var(--water); color: var(--panel); font-weight: 600; }
+.main { display: grid; gap: 18px; min-width: 0; }
+.mapbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
+.mapbar label { font: 500 11px/1 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+select { font: 400 13px var(--f-body); padding: 5px 6px; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); max-width: 230px; }
+.mapbox { position: relative; }
+canvas { display: block; width: 100%; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; font: 400 11.5px/1.45 var(--f-mono); color: var(--ink); box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; z-index: 2; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); margin-top: 8px; }
+.cbar { width: 180px; height: 10px; border-radius: 2px; display: inline-block; vertical-align: -1px; }
+.slices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 18px; }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { fill: var(--ink-2); font: 400 10.5px var(--f-mono); }
+svg .ttl { fill: var(--ink); font: 600 12.5px var(--f-body); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.kpi { border-top: 2px solid var(--rule); padding-top: 6px; display: grid; gap: 1px; align-content: start; }
+.kpi.target { border-top-color: var(--water); }
+.kpi .k { font: 500 10.5px/1.25 var(--f-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-2); }
+.kpi .v { font: 600 24px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
+.kpi .v.bad { color: var(--bad); } .kpi .v.warn { color: var(--volt); }
+.kpi .s { font-size: 12px; color: var(--ink-2); }
+.rowhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; }
+.eyebrow { font: 500 11px/1 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
+.budget { display: grid; gap: 6px; }
+.bar { display: flex; height: 16px; border-radius: 3px; overflow: hidden; background: var(--chip); }
+.bar span { display: block; height: 100%; }
+.bl { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.note { font-size: 12.5px; color: var(--ink-2); margin: 0; max-width: 92ch; }
+.banner[hidden] { display: none; }
+.banner { border: 1px solid var(--water); border-radius: 6px; padding: 10px 12px; display: grid; gap: 6px; background: var(--panel); }
+.banner .rowhead b { font-family: var(--f-mono); font-weight: 500; }
+details summary { cursor: pointer; font: 600 15px var(--f-body); }
+.val { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px 24px; margin-top: 10px; }
+.val div { font-size: 13px; }
+.val b { font-family: var(--f-mono); font-weight: 500; }
+.mono { font-family: var(--f-mono); font-size: 0.92em; }
+.tube-wrap { display: grid; gap: 4px; }
+/* designs bench */
+.fl { display: grid; gap: 6px; }
+.check { display: flex; gap: 8px; align-items: baseline; font-size: 13px; cursor: pointer; }
+.check input { accent-color: var(--water); }
+.check .n { margin-left: auto; font: 400 11.5px var(--f-mono); color: var(--ink-2); }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; transform: translateY(1px); }
+.famchips { display: flex; flex-wrap: wrap; gap: 5px; }
+.famchips button { font: 500 11.5px/1 var(--f-mono); padding: 5px 7px; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); cursor: pointer; }
+.famchips button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink-2); background: var(--chip); }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; white-space: nowrap; }
+th { font: 500 10.5px/1.2 var(--f-mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-2); cursor: pointer; user-select: none; }
+th[aria-sort] { color: var(--ink); }
+td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+th.n { text-align: right; }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: var(--chip); }
+tbody tr[aria-selected="true"] td { background: var(--chip); font-weight: 600; }
+.detail { display: grid; gap: 14px; }
+.res { display: grid; gap: 12px; }
+.resbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.progress { display: grid; gap: 6px; }
+.pbar { height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
+.pbar span { display: block; height: 100%; width: 0; background: var(--water); transition: width .3s; }
+.reslog { font-size: 11.5px; color: var(--ink-2); max-height: 7.5em; overflow-y: auto; white-space: pre-wrap; }
+table.cmp td, table.cmp th { white-space: nowrap; }
+table.cmp th { cursor: default; }
+table.cmp td.d { color: var(--ink-2); }
+.ptable td:first-child { color: var(--ink-2); }
+.ptable td { white-space: normal; }
+.flag { color: var(--volt); font: 500 11px var(--f-mono); }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Watercap Workbench</h1>
+      <p class="sub">Set the tube's operating and design parameters and two physics models run in your browser. The fast model answers in 20 ms, and every pixel of the sweep map is a full run of it on your GPU. The resolved model, the same spray CFD and 2D corona solver that produced the campaign, runs in about a minute in a background worker. The second tab browses the 2,074 campaign runs computed offline, and any of them can be re-run here.</p>
+    </div>
+    <div style="display:grid;gap:10px;justify-items:end">
+      <div class="tabs" role="tablist" aria-label="Bench">
+        <button type="button" role="tab" id="tab-simulate" aria-controls="simulate" aria-selected="true">Simulate</button><button type="button" role="tab" id="tab-designs" aria-controls="designs" aria-selected="false">Precomputed designs<span id="tabcount"></span></button>
+      </div>
+      <div class="chips" id="chips"><span class="chip">starting…</span></div>
+    </div>
+  </header>
+
+  <!-- ================= SIMULATE ================= -->
+  <section id="simulate" role="tabpanel" aria-labelledby="tab-simulate">
+    <div class="bench">
+      <aside class="panel rail" id="rail" aria-label="Design and control parameters">
+        <div class="group"><div class="ghead"><h2>Start from</h2></div><div class="presets" id="presets"></div></div>
+      </aside>
+
+      <div class="main">
+        <div class="banner" id="loaded" hidden></div>
+
+        <section class="panel" style="display:grid;gap:14px" aria-live="polite">
+          <div class="rowhead"><h2>Targets</h2><span class="eyebrow" id="runinfo"></span></div>
+          <div class="kpis" id="targets"></div>
+          <div class="kpis" id="kpis"></div>
+          <div class="budget"><div class="bl"><b style="color:var(--ink)">Water budget</b> <span id="budtxt"></span></div><div class="bar" id="bud"></div><div class="bl" id="budleg"></div></div>
+        </section>
+
+        <section class="panel tube-wrap">
+          <div class="rowhead"><h2>Along the tube</h2><span class="eyebrow">bottom (inlet) → top (outlet), to scale</span></div>
+          <svg id="tube" viewBox="0 0 1000 380" role="img" aria-label="Tube schematic with axial profiles"></svg>
+          <p class="note" id="tubenote"></p>
+        </section>
+
+        <section class="panel res" id="respanel">
+          <div class="rowhead"><h2>Resolved model</h2><span class="eyebrow">the campaign's high-fidelity tier, run in your browser</span></div>
+          <p class="note">The fully resolved tier behind the precomputed runs: axisymmetric RANS with the Lagrangian spray, mist bins, fog and wall film (stonelab.spray_cfd), then every disc period of the corona section solved in 2D, Poisson + ion drift-diffusion + Kaptsov corona, Newton with an exact Jacobian, with charged droplets tracked through it, two-way coupled (stonelab.ehd). It is a TypeScript port of the Python and matches it field by field. It runs on this rail's design and takes about a minute; the fast model above takes 20 ms.</p>
+          <div class="resbar">
+            <button type="button" class="btn primary" id="resrun">Run the resolved model</button>
+            <button type="button" class="btn" id="rescancel" hidden>Cancel</button>
+            <label for="respreset" class="eyebrow">Resolution <select id="respreset"><option value="resolved_coarse">coarse (campaign tier)</option><option value="resolved">full (about 5x longer)</option></select></label>
+            <span class="eyebrow" id="resstatus">not run yet</span>
+          </div>
+          <div class="progress" id="resprog" hidden><div class="pbar"><span id="respbar"></span></div><div class="reslog mono" id="reslog"></div></div>
+          <div id="resout" hidden>
+            <div class="scroll"><table class="cmp" id="rescmp"></table></div>
+            <div class="two">
+              <div><div class="mapbar"><label for="resfield">Spray stage <select id="resfield"></select></label></div><canvas id="resmap" aria-label="Spray stage field, r-z"></canvas><div class="legend" id="resmapleg"></div></div>
+              <div><div class="mapbar"><span class="eyebrow">Corona: one disc period, no mist</span><label for="corfield"><select id="corfield"><option value="E">Field |E|</option><option value="rho">Ion density</option></select></label></div><canvas id="cormap" aria-label="Corona unit cell"></canvas><div class="legend" id="cormapleg"></div></div>
+            </div>
+            <svg id="resper" viewBox="0 0 760 220" role="img" aria-label="Corona current and collection by period"></svg>
+            <p class="note" id="resnote"></p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="rowhead" style="margin-bottom:8px"><h2>Sweep two parameters</h2><span class="eyebrow">every other input held at the rail's values</span></div>
+          <div class="mapbar">
+            <label for="xsel">X axis <select id="xsel"></select></label>
+            <label for="ysel">Y axis <select id="ysel"></select></label>
+            <label for="msel">Color <select id="msel"></select></label>
+            <label for="arc"><input type="checkbox" id="arc" checked> hatch arcing</label>
+          </div>
+          <div class="mapbox"><canvas id="map" aria-label="Sweep map"></canvas><div class="tip" id="tip" hidden></div></div>
+          <div class="legend" id="legend"></div>
+        </section>
+
+        <div class="slices">
+          <section class="panel"><svg id="sx" viewBox="0 0 480 230" role="img" aria-label="Slice along X"></svg></section>
+          <section class="panel"><svg id="sy" viewBox="0 0 480 230" role="img" aria-label="Slice along Y"></svg></section>
+        </div>
+
+        <section class="panel">
+          <details id="valdet">
+            <summary>What the browser model is, and how far to trust it</summary>
+            <div class="val" id="val"></div>
+            <p class="note" style="margin-top:12px">The browser model is Vega's fast model ported to a fixed-step march (a 1D, well-mixed cross-section with heat and mass transfer, Kelvin–Thomson surface vapor pressure, Coulomb dispersion of the spray cloud and mist scavenging). Its corona stage uses onset, current and field tables fitted to 264 resolved field and corona solves. Spray is given either as an atomizer (a lognormal drop size distribution, launch speed, and charge as a fraction of the Rayleigh limit, exactly as the campaign's atomizer runs) or as electrospray, where cone-jet scaling (Fernández de la Mora &amp; Loscertales) turns flow, conductivity and voltage into drop size, charge and current. It does not model ionic wind, flow separation behind the discs, wall films, spray momentum, or disc edges other than a smooth 0.3 mm disc. The sparkover formula is uncalibrated. The precomputed tab holds the runs that do model the spray flow, the film, and the 2D field.</p>
+          </details>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DESIGNS ================= -->
+  <section id="designs" role="tabpanel" aria-labelledby="tab-designs" hidden>
+    <div class="bench">
+      <aside class="panel rail" aria-label="Filters">
+        <div class="group">
+          <div class="ghead"><h2>Which runs</h2></div>
+          <div class="fl" id="setfl"></div>
+          <p class="note" id="snapnote"></p>
+        </div>
+        <div class="group">
+          <div class="ghead"><h2>Concept family</h2><button type="button" class="btn" id="famall">all</button></div>
+          <div class="famchips" id="famfl"></div>
+        </div>
+        <div class="group">
+          <div class="ghead"><h2>Filters</h2></div>
+          <label class="check"><input type="checkbox" id="f-arc" checked> Hide designs that arc</label>
+          <label class="check"><input type="checkbox" id="f-lg"> Hide spray water &gt; air by mass</label>
+          <label class="check"><input type="checkbox" id="f-recool"> Count spray recooling in energy</label>
+          <p class="note">All campaign runs share one inlet: saturated air at 35 °C carrying 2 g/m³ of 15 µm mist. Recooling the spray water below ambient needs a chiller, which dominates energy per liter when counted.</p>
+        </div>
+        <div class="group">
+          <div class="ghead"><h2>Browser model check</h2></div>
+          <p class="note" id="bmstat">Runs every stored design through the browser model once the engine is up.</p>
+        </div>
+      </aside>
+
+      <div class="main">
+        <section class="panel">
+          <div class="mapbar">
+            <label for="dx">X axis <select id="dx"></select></label>
+            <label for="dy">Y axis <select id="dy"></select></label>
+            <label for="dc">Color <select id="dc"></select></label>
+            <label for="dpar"><input type="checkbox" id="dpar" checked> Pareto front</label>
+          </div>
+          <div class="mapbox"><canvas id="scat" aria-label="Stored designs scatter"></canvas><div class="tip" id="stip" hidden></div></div>
+          <div class="legend" id="slegend"></div>
+        </section>
+
+        <section class="panel detail" id="detail" aria-live="polite"></section>
+
+        <section class="panel">
+          <div class="rowhead" style="margin-bottom:8px"><h2 id="tabletitle">Best designs</h2><span class="eyebrow">click a column to sort · click a row to inspect</span></div>
+          <div class="scroll"><table id="dtable"></table></div>
+        </section>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script id="wcm-src">/*__WCMODEL__*/</script>
+<script id="wcg-src">/*__WCGPU__*/</script>
+<script id="res-src" type="text/plain">/*__RESWORKER__*/</script>
+<script>
+const FIT = /*__FIT__*/null;
+const DATA = /*__DESIGNS__*/null;
+const $ = s => document.querySelector(s);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const SVGNS = "http://www.w3.org/2000/svg";
+function el(tag, a = {}, p) { const e = document.createElementNS(SVGNS, tag); for (const k in a) e.setAttribute(k, a[k]); if (p) p.appendChild(e); return e; }
+const MODEL_OPT = { nb: 4, nz: 40, outer: 3, fall_steps: 4000 };
+const IN = WCGPU.IN, S_IN = WCGPU.IN_STRIDE, S_OUT = WCGPU.OUT_STRIDE;
+const O = Object.fromEntries(WCGPU.OUT.map((k, i) => [k, i]));
+const PI = Math.PI, EPS0 = 8.854e-12, RHO_L = 998, G = 9.81, EPS_R_W = 80;
+const fmtN = (v, p = 3) => !isFinite(v) ? "–" : Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : +v.toPrecision(p) + "";
+
+/* ======================= physics helpers outside the GPU kernel ======================= */
+const NOZZLE_R = 2.5e-4, CONE_JET_MAX_Q_RATIO = 1e4;
+const sigma = T => 0.0756 - 1.4e-4 * T;
+function sparkV(gap, pol) { const gc = gap * 100; return 1e3 * (pol > 0 ? 4.5 : 8.0) * (1 + 1 / Math.sqrt(gc)) * gc; }
+// cone-jet operating point per nozzle, line for line from watercap_oracle.electrospray()
+function electrospray(Qper, K, V, R, T) {
+  const g = sigma(T);
+  const V_on = Math.sqrt(g * NOZZLE_R * Math.cos(49.3 * PI / 180) / (2 * EPS0)) * Math.log(4 * R / NOZZLE_R);
+  const Q0 = g * EPS_R_W * EPS0 / (RHO_L * K);
+  if (V < V_on || Qper <= 0) {
+    const a = (6 * NOZZLE_R * g / (RHO_L * G)) ** (1 / 3);
+    return { a, qf: 0.01, I: 0, regime: "dripping", V_on };
+  }
+  const ratio = Qper / Q0;
+  let a = 1.89 * Math.cbrt(Qper * EPS_R_W * EPS0 / K) / 2, regime = "cone-jet";
+  const I = 18 * Math.sqrt(g * K * Qper / EPS_R_W);
+  if (ratio < 1) regime = "below minimum flow";
+  else if (ratio > CONE_JET_MAX_Q_RATIO) { regime = "multi-jet"; a = 1.89 * Math.cbrt(CONE_JET_MAX_Q_RATIO * Q0 * EPS_R_W * EPS0 / K) / 2; }
+  const nRate = Qper / (4 / 3 * PI * a ** 3), qR = WCModel.rayleigh(a, T);
+  return { a, qf: Math.min(I / nRate, 0.8 * qR) / qR, I, regime, V_on };
+}
+// corona voltage that draws a given total current in clean air (refit I-V: I = J x(x-1)/s per m, x = V/V_on)
+function coronaVforI(x, I_mA) {
+  const R = x.tube_diameter_m / 2, pol = x.corona_polarity >= 0 ? 1 : -1;
+  const cs = WCModel.corona_refit(1, R, x.disc_diameter_frac * R, x.disc_spacing_m, pol, FIT), b = cs.base;
+  const Ipm = I_mA * 1e-3 / x.corona_section_length_m;
+  if (Ipm <= 0) return b.V_on0;
+  return b.V_on0 * (1 + Math.sqrt(1 + 4 * Ipm * b.s / b.J)) / 2;
+}
+
+/* ======================= inputs (grouped as in the partner's list) ======================= */
+const PARAMS = [
+  { g: "Air & inlet", k: "air_flow_m3_s", n: "Air flow rate", u: "m³/s", lo: 0.03, hi: 0.6, v: 0.15, log: 1, d: 3 },
+  { g: "Air & inlet", k: "inlet_T_C", n: "Inlet air temperature", u: "°C", lo: 20, hi: 45, v: 35, d: 1 },
+  { g: "Air & inlet", k: "inlet_RH", n: "Inlet relative humidity", u: "%", lo: 0.85, hi: 1, v: 1, d: 1, pct: 1 },
+  { g: "Air & inlet", k: "inlet_lwc_g_m3", n: "Mist loading (liquid water)", u: "g/m³", lo: 0.1, hi: 5, v: 2, log: 1, d: 2 },
+  { g: "Air & inlet", k: "mist_mmd_um", n: "Mist median drop size", u: "µm", lo: 3, hi: 40, v: 15, log: 1, d: 1 },
+  { g: "Air & inlet", k: "mist_gsd", n: "Mist size spread (GSD)", u: "", lo: 1.2, hi: 2.5, v: 1.6, d: 2 },
+  { g: "Spray stage", k: "spray_flow_L_min", n: "Spray liquid flow", u: "L/min", lo: 0, hi: 20, v: 4, d: 2 },
+  { g: "Spray stage", k: "spray_T_C", n: "Spray liquid temperature", u: "°C", lo: 5, hi: 40, v: 15, d: 1 },
+  { g: "Spray stage", k: "spray_d_um", n: "Drop size (mass median)", u: "µm", lo: 5, hi: 2000, v: 60, log: 1, d: 0, mode: "atomizer" },
+  { g: "Spray stage", k: "spray_gsd", n: "Drop size spread (GSD)", u: "", lo: 1, hi: 2.5, v: 1.5, d: 2, mode: "atomizer" },
+  { g: "Spray stage", k: "spray_v0", n: "Launch speed (downward)", u: "m/s", lo: 1, hi: 20, v: 3, log: 1, d: 1, mode: "atomizer" },
+  { g: "Spray stage", k: "spray_q_frac", n: "Drop charge (× Rayleigh limit)", u: "", lo: 1e-5, hi: 0.5, v: 1e-5, log: 1, d: 5, mode: "atomizer" },
+  { g: "Spray stage", k: "es_voltage_kV", n: "Electrospray voltage", u: "kV", lo: 0, hi: 30, v: 12, d: 1, mode: "electrospray" },
+  { g: "Spray stage", k: "es_nozzles", n: "Number of nozzles", u: "", lo: 1, hi: 2000, v: 200, log: 1, d: 0, int: 1, mode: "electrospray" },
+  { g: "Spray stage", k: "es_conductivity_mS_m", n: "Liquid conductivity", u: "mS/m", lo: 0.1, hi: 500, v: 50, log: 1, d: 1, mode: "electrospray" },
+  { g: "Corona stage", k: "corona_voltage_kV", n: "Corona voltage", u: "kV", lo: 0, hi: 75, v: 40, d: 1, supply: "V" },
+  { g: "Corona stage", k: "corona_current_mA", n: "Corona current (clean air)", u: "mA", lo: 0.01, hi: 30, v: 0.6, log: 1, d: 3, supply: "I" },
+  { g: "Geometry", k: "tube_diameter_m", n: "Tube diameter", u: "cm", lo: 0.1, hi: 0.6, v: 0.3, d: 1, cm: 1 },
+  { g: "Geometry", k: "spray_section_length_m", n: "Spray section length", u: "m", lo: 0.3, hi: 3, v: 1.5, d: 2 },
+  { g: "Geometry", k: "corona_section_length_m", n: "Corona section length", u: "m", lo: 0.3, hi: 3, v: 1.5, d: 2 },
+  { g: "Geometry", k: "nozzle_height_frac", n: "Nozzle position (up the spray section)", u: "", lo: 0.02, hi: 1, v: 0.9, d: 2 },
+  { g: "Geometry", k: "disc_diameter_frac", n: "Disc diameter (fraction of tube)", u: "", lo: 0.05, hi: 0.6, v: 0.3, d: 2 },
+  { g: "Geometry", k: "disc_spacing_m", n: "Disc spacing", u: "cm", lo: 0.02, hi: 0.3, v: 0.1, log: 1, d: 1, cm: 1 },
+  { g: "Resolved model only", k: "disc_thickness_mm", n: "Disc thickness (edge radius = half)", u: "mm", lo: 0.1, hi: 1, v: 0.3, log: 1, d: 2, res: 1 },
+  { g: "Resolved model only", k: "spray_cone_half_angle_deg", n: "Spray cone half-angle", u: "°", lo: 5, hi: 60, v: 30, d: 0, res: 1 },
+  { g: "Resolved model only", k: "wall_U_W_m2K", n: "Wall cooling to ambient (U)", u: "W/m²K", lo: 0, hi: 100, v: 0, d: 0, res: 1 },
+  { g: "Resolved model only", k: "ambient_T_C", n: "Ambient temperature", u: "°C", lo: 0, hi: 40, v: 25, d: 1, res: 1 },
+];
+const PK = Object.fromEntries(PARAMS.map(p => [p.k, p]));
+const DEFAULTS = Object.fromEntries(PARAMS.map(p => [p.k, p.v]));
+const state = { u: { ...DEFAULTS }, pol: -1, spol: 1, sprayMode: "atomizer", supply: "V", xKey: "spray_T_C", yKey: "corona_voltage_kV", metric: "out", arc: true, loaded: null };
+const visible = p => (!p.mode || p.mode === state.sprayMode) && (!p.supply || p.supply === state.supply);
+
+const METRICS = [
+  { k: "out", n: "Total water out, % of inlet", f: o => 100 * o[O.outlet_total_water_frac], better: "low", cap: 110, fmt: v => v.toFixed(1) + "%" },
+  { k: "spec", n: "Energy per liter recovered, Wh/L", f: (o, e) => o[O.recovered_L_h] > 1e-3 ? (o[O.electrical_power_W] + e.esW + o[O.fan_power_W]) / o[O.recovered_L_h] : NaN, better: "low", log: 1, fmt: v => isFinite(v) ? v.toPrecision(3) + " Wh/L" : "no recovery" },
+  { k: "dp", n: "Pressure drop, Pa", f: o => o[O.pressure_drop_Pa], better: "low", fmt: v => v.toFixed(1) + " Pa" },
+  { k: "arc", n: "Arc margin", f: (o, e) => Math.min(o[O.arc_margin], e.arcS), better: "high", floor: -1, fmt: v => v <= -1 ? "≤ −1" : v.toFixed(2) },
+  { k: "ewall", n: "Field at the wall, kV/cm", f: o => o[O.wall_field_kV_cm], better: "", fmt: v => v.toFixed(2) + " kV/cm" },
+  { k: "rec", n: "Water recovered, L/h", f: o => o[O.recovered_L_h], better: "high", fmt: v => v.toFixed(2) + " L/h" },
+  { k: "vap", n: "Vapor removed, %", f: o => 100 * o[O.vapor_removed_frac], better: "high", fmt: v => v.toFixed(1) + "%" },
+  { k: "esc", n: "Liquid escaping, % of liquid in", f: o => 100 * o[O.liquid_escape_frac], better: "low", cap: 100, fmt: v => v.toFixed(2) + "%" },
+  { k: "cur", n: "Corona current, mA", f: o => o[O.corona_current_mA], better: "", fmt: v => v.toFixed(3) + " mA" },
+  { k: "pow", n: "Electrical power, W", f: (o, e) => o[O.electrical_power_W] + e.esW, better: "low", fmt: v => v.toFixed(1) + " W" },
+];
+const MK = Object.fromEntries(METRICS.map(m => [m.k, m]));
+
+const PRESETS = [
+  { n: "Brad's prototype, 40 kV", x: { spray_flow_L_min: 0, corona_voltage_kV: 40 }, ax: ["corona_voltage_kV", "mist_mmd_um"], m: "esc" },
+  { n: "Prototype at 30 kV (below onset)", x: { spray_flow_L_min: 0, corona_voltage_kV: 30 }, ax: ["corona_voltage_kV", "disc_diameter_frac"], m: "esc" },
+  { n: "Prototype, current-controlled 1 mA", x: { spray_flow_L_min: 0, corona_current_mA: 1 }, supply: "I", ax: ["corona_current_mA", "air_flow_m3_s"], m: "spec" },
+  { n: "Cold coarse spray + corona", x: { spray_flow_L_min: 8, spray_T_C: 12, spray_d_um: 60, spray_q_frac: 1e-5, corona_voltage_kV: 40 }, ax: ["spray_T_C", "spray_flow_L_min"], m: "out" },
+  { n: "Electrospray at 2 L/min (where does it stop arcing?)", x: { spray_flow_L_min: 2, spray_T_C: 15, es_voltage_kV: 12, corona_voltage_kV: 40 }, mode: "electrospray", ax: ["es_conductivity_mS_m", "es_nozzles"], m: "arc" },
+  { n: "Spray drop size × charge", x: { spray_flow_L_min: 4, spray_T_C: 15, corona_voltage_kV: 40 }, ax: ["spray_d_um", "spray_q_frac"], m: "vap" },
+];
+
+// spray water / dry air, kg/kg: the Python model, its dataset and every check of this port stayed at <= 1
+const LG_MAX = 1;
+function lgRatio(x) { return (x.spray_flow_L_min / 60) / (1.15 * x.air_flow_m3_s); }
+// user-facing inputs -> the kernel's 19 inputs, plus the parts computed outside the kernel
+function toModel(u, mode = state.sprayMode, supply = state.supply, pol = state.pol, spol = state.spol) {
+  const x = { air_flow_m3_s: u.air_flow_m3_s, tube_diameter_m: u.tube_diameter_m, spray_section_length_m: u.spray_section_length_m,
+    corona_section_length_m: u.corona_section_length_m, nozzle_height_frac: u.nozzle_height_frac, disc_diameter_frac: u.disc_diameter_frac,
+    disc_spacing_m: u.disc_spacing_m, spray_flow_L_min: u.spray_flow_L_min, spray_T_C: u.spray_T_C, spray_d_um: u.spray_d_um,
+    spray_q_frac: u.spray_q_frac <= 1.0001e-5 ? 0 : u.spray_q_frac, spray_gsd: u.spray_gsd, spray_v0: u.spray_v0, corona_voltage_kV: u.corona_voltage_kV, corona_polarity: pol, spray_polarity_rel: spol,
+    inlet_T_C: u.inlet_T_C, inlet_RH: u.inlet_RH, inlet_lwc_g_m3: u.inlet_lwc_g_m3, mist_mmd_um: u.mist_mmd_um, mist_gsd: u.mist_gsd };
+  const ex = { esW: 0, arcS: Infinity, es: null };
+  if (mode === "electrospray") {
+    const R = u.tube_diameter_m / 2, n = Math.max(1, Math.round(u.es_nozzles)), Q = u.spray_flow_L_min / 60000;
+    const es = electrospray(Q / n, u.es_conductivity_mS_m * 1e-3, u.es_voltage_kV * 1e3, R, u.spray_T_C);
+    x.spray_d_um = 2 * es.a * 1e6; x.spray_q_frac = es.qf; x.spray_gsd = 1; x.spray_v0 = 2;
+    const spolAbs = (pol >= 0 ? 1 : -1) * (spol >= 0 ? 1 : -1);
+    ex.es = { ...es, n, Itot: n * es.I };
+    if (Q > 0) { ex.esW = u.es_voltage_kV * 1e3 * n * es.I; ex.arcS = 1 - u.es_voltage_kV * 1e3 / sparkV(R, spolAbs); }
+  }
+  if (supply === "I") x.corona_voltage_kV = coronaVforI(x, u.corona_current_mA) / 1e3;
+  return { x, ex };
+}
+const toT = (p, v) => p.log ? (Math.log(v) - Math.log(p.lo)) / (Math.log(p.hi) - Math.log(p.lo)) : (v - p.lo) / (p.hi - p.lo);
+const fromT = (p, t) => { const v = p.log ? Math.exp(Math.log(p.lo) + t * (Math.log(p.hi) - Math.log(p.lo))) : p.lo + t * (p.hi - p.lo); return p.int ? Math.round(v) : v; };
+function fmtP(p, v) {
+  if (p.k === "spray_q_frac") return v <= 1.0001e-5 ? "0 (neutral)" : v.toPrecision(2);
+  if (p.k === "spray_gsd" && v < 1.005) return "1 (one size + satellites)";
+  if (p.pct) return (100 * v).toFixed(p.d) + "%";
+  if (p.cm) return (100 * v).toFixed(p.d) + " cm";
+  return v.toFixed(p.d) + (p.u ? " " + p.u : "");
+}
+const axisLabel = p => p.n + (p.u ? ` (${p.u})` : "");
+const axisVal = (p, v) => p.pct ? 100 * v : p.cm ? 100 * v : v;
+
+/* ======================= rail ======================= */
+function buildRail() {
+  const rail = $("#rail"), groups = {};
+  PRESETS.forEach((p, i) => { const b = document.createElement("button"); b.type = "button"; b.textContent = p.n; b.onclick = () => applyPreset(i); $("#presets").appendChild(b); });
+  for (const p of PARAMS) {
+    if (!groups[p.g]) {
+      const g = document.createElement("div"); g.className = "group"; g.innerHTML = `<div class="ghead"><h2>${p.g}</h2></div>`; rail.appendChild(g); groups[p.g] = g;
+      if (p.g === "Spray stage") g.querySelector(".ghead").insertAdjacentHTML("beforeend", `<span class="seg" id="modeseg" aria-label="Spray hardware"><button type="button" data-v="atomizer">atomizer</button><button type="button" data-v="electrospray">electrospray</button></span>`);
+      if (p.g === "Corona stage") g.querySelector(".ghead").insertAdjacentHTML("beforeend", `<span class="seg" id="supseg" aria-label="Corona supply control"><button type="button" data-v="V">set voltage</button><button type="button" data-v="I">set current</button></span>`);
+    }
+    const d = document.createElement("div"); d.className = "sl"; d.id = "sl-" + p.k;
+    d.innerHTML = `<label for="in-${p.k}">${p.n}<b id="v-${p.k}"></b></label><input id="in-${p.k}" type="range" min="0" max="1000" step="1">`;
+    groups[p.g].appendChild(d);
+    const inp = d.querySelector("input");
+    inp.addEventListener("input", () => { state.u[p.k] = fromT(p, inp.value / 1000); state.loaded = null; syncRail(); schedule(); });
+  }
+  groups["Spray stage"].insertAdjacentHTML("beforeend", `<div class="derived" id="sprayderived"></div>`);
+  groups["Corona stage"].insertAdjacentHTML("beforeend", `<div class="toggles"><span>Corona polarity <span class="seg" id="polseg"><button type="button" data-v="-1">negative</button><button type="button" data-v="1">positive</button></span></span>
+    <span>Spray charge vs corona <span class="seg" id="spolseg"><button type="button" data-v="1">same sign</button><button type="button" data-v="-1">opposite</button></span></span></div><div class="derived" id="coronaderived"></div>`);
+  groups["Air & inlet"].insertAdjacentHTML("beforeend", `<div class="derived" id="airderived"></div>`);
+  const seg = (id, key) => $(id).querySelectorAll("button").forEach(b => b.onclick = () => {
+    const v = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v; if (state[key] === v) return;
+    state[key] = v; state.loaded = null;
+    if (key === "sprayMode" || key === "supply") fixAxes();
+    syncRail(); schedule();
+  });
+  seg("#modeseg", "sprayMode"); seg("#supseg", "supply"); seg("#polseg", "pol"); seg("#spolseg", "spol");
+}
+// keep the map axes on visible inputs after a mode switch (swap to the input that replaced it)
+function fixAxes() {
+  const swap = { spray_d_um: "es_conductivity_mS_m", spray_q_frac: "es_nozzles", spray_gsd: "es_voltage_kV", spray_v0: "es_voltage_kV", es_conductivity_mS_m: "spray_d_um", es_nozzles: "spray_q_frac", es_voltage_kV: "spray_d_um", corona_voltage_kV: "corona_current_mA", corona_current_mA: "corona_voltage_kV" };
+  for (const ax of ["xKey", "yKey"]) if (!visible(PK[state[ax]])) state[ax] = swap[state[ax]] || "spray_T_C";
+  if (state.xKey === state.yKey) state.yKey = state.xKey === "spray_T_C" ? "spray_flow_L_min" : "spray_T_C";
+  fillAxisSelects();
+}
+function syncRail() {
+  for (const p of PARAMS) {
+    const vis = visible(p);
+    $("#sl-" + p.k).hidden = !vis;
+    $("#v-" + p.k).textContent = (p.k === state.xKey ? "X axis · " : p.k === state.yKey ? "Y axis · " : "") + fmtP(p, state.u[p.k]);
+    $("#sl-" + p.k).classList.toggle("onaxis", p.k === state.xKey || p.k === state.yKey);
+    $("#in-" + p.k).value = Math.round(1000 * toT(p, state.u[p.k]));
+  }
+  for (const [id, key] of [["#modeseg", "sprayMode"], ["#supseg", "supply"], ["#polseg", "pol"], ["#spolseg", "spol"]])
+    $(id).querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v) === String(state[key])));
+  const { x, ex } = toModel(state.u), u = state.u, A = PI * u.tube_diameter_m ** 2 / 4;
+  $("#airderived").innerHTML = `face velocity <b>${(u.air_flow_m3_s / A).toFixed(2)} m/s</b> · mist in <b>${(u.inlet_lwc_g_m3 * u.air_flow_m3_s * 3.6).toFixed(2)} L/h</b>`;
+  if (state.sprayMode === "electrospray") {
+    const es = ex.es, qflow = u.spray_flow_L_min / 60000;
+    $("#sprayderived").innerHTML = qflow <= 0 ? "no spray flow" :
+      `cone-jet scaling → <b>${es.regime}</b> (onset ${(es.V_on / 1e3).toFixed(1)} kV)<br>drops <b>${x.spray_d_um.toPrecision(3)} µm</b> at <b>${(100 * x.spray_q_frac).toPrecision(2)}%</b> of Rayleigh<br>spray current <b>${es.Itot > 0 ? (es.Itot * 1e6).toPrecision(3) + " µA" : "0"}</b> (${(es.I * 1e6).toPrecision(2)} µA per nozzle) · <b>${(ex.esW).toPrecision(3)} W</b>`;
+  } else $("#sprayderived").innerHTML = `water / air by mass <b>${lgRatio(x).toFixed(2)}</b> kg/kg` + (lgRatio(x) > LG_MAX ? ` <span class="flag">outside the validated range (≤ 1)</span>` : "");
+  const R = u.tube_diameter_m / 2, cs = WCModel.corona_refit(x.corona_voltage_kV * 1e3, R, u.disc_diameter_frac * R, u.disc_spacing_m, state.pol, FIT);
+  const nd = Math.max(1, Math.floor(u.corona_section_length_m / u.disc_spacing_m));
+  $("#coronaderived").innerHTML = `${nd} discs of <b>${(200 * R * u.disc_diameter_frac).toFixed(1)} cm</b> · gap to wall ${(100 * R * (1 - u.disc_diameter_frac)).toFixed(1)} cm<br>onset <b>${(cs.V_on0 / 1e3).toFixed(1)} kV</b> · sparkover ≈ ${(sparkV(R * (1 - u.disc_diameter_frac), state.pol) / 1e3).toFixed(0)} kV (uncalibrated)` +
+    (state.supply === "I" ? `<br>voltage needed: <b>${x.corona_voltage_kV.toFixed(1)} kV</b>` : "");
+}
+function applyPreset(i) {
+  const p = PRESETS[i];
+  state.u = { ...DEFAULTS, ...p.x }; state.sprayMode = p.mode || "atomizer"; state.supply = p.supply || "V"; state.pol = -1; state.spol = 1; state.loaded = null;
+  state.xKey = p.ax[0]; state.yKey = p.ax[1]; state.metric = p.m;
+  fillAxisSelects(); $("#msel").value = state.metric;
+  syncRail(); schedule();
+}
+function fillAxisSelects() {
+  for (const [id, key] of [["#xsel", "xKey"], ["#ysel", "yKey"]]) {
+    const s = $(id); s.innerHTML = "";
+    let grp = null;
+    PARAMS.filter(p => visible(p) && !p.res).forEach(p => {
+      if (!grp || grp.label !== p.g) { grp = document.createElement("optgroup"); grp.label = p.g; s.appendChild(grp); }
+      const o = document.createElement("option"); o.value = p.k; o.textContent = p.n; grp.appendChild(o);
+    });
+    s.value = state[key];
+  }
+}
+function buildSelects() {
+  fillAxisSelects();
+  METRICS.forEach(m => { const o = document.createElement("option"); o.value = m.k; o.textContent = m.n; $("#msel").appendChild(o); });
+  $("#msel").value = state.metric;
+  $("#xsel").onchange = e => { if (e.target.value === state.yKey) state.yKey = state.xKey; state.xKey = e.target.value; fillAxisSelects(); syncRail(); schedule(); };
+  $("#ysel").onchange = e => { if (e.target.value === state.xKey) state.xKey = state.yKey; state.yKey = e.target.value; fillAxisSelects(); syncRail(); schedule(); };
+  $("#msel").onchange = e => { state.metric = e.target.value; render(); };
+  $("#arc").onchange = e => { state.arc = e.target.checked; render(); };
+}
+
+/* ======================= engines ======================= */
+let engine = null, grid = null, busy = false, dirty = false;
+function gridDesigns(nx, ny) {
+  const px = PK[state.xKey], py = PK[state.yKey], arr = new Float32Array(nx * ny * S_IN), u = { ...state.u };
+  const ok = new Uint8Array(nx * ny), esW = new Float32Array(nx * ny), arcS = new Float32Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    u[px.k] = fromT(px, (i + 0.5) / nx); u[py.k] = fromT(py, (j + 0.5) / ny);
+    const { x, ex } = toModel(u), c = j * nx + i;
+    ok[c] = lgRatio(x) <= LG_MAX ? 1 : 0; esW[c] = ex.esW; arcS[c] = ex.arcS;
+    WCGPU.packDesign(arr, c, x);
+  }
+  return { arr, ok, esW, arcS };
+}
+async function gpuEngine() {
+  const g = await WCGPU.GPUModel.create(FIT);
+  return { name: "GPU", res: 160, run: (arr, n) => g.run(arr, n, { ...MODEL_OPT, corona: "refit" }) };
+}
+function cpuEngine() {
+  const src = document.getElementById("wcm-src").textContent, OUTK = WCGPU.OUT;
+  const wsrc = src + `\nconst FIT=${JSON.stringify(FIT)};const IN=${JSON.stringify(IN)};const OUTK=${JSON.stringify(OUTK)};
+onmessage=e=>{const {arr,n,opt,id}=e.data;const out=new Float32Array(n*${S_OUT});
+for(let i=0;i<n;i++){const x={};IN.forEach((k,j)=>x[k]=arr[i*${S_IN}+j]);const r=WCModel.simulate(x,{...opt,fit:FIT});
+for(let k=0;k<${S_OUT};k++)out[i*${S_OUT}+k]=r[OUTK[k]];}postMessage({out,id},[out.buffer]);};`;
+  const N = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
+  const ws = Array.from({ length: N }, () => new Worker(URL.createObjectURL(new Blob([wsrc], { type: "text/javascript" }))));
+  let seq = 0;
+  return { name: "CPU", res: 40, run(arr, n) {
+    const per = Math.ceil(n / N), jobs = [];
+    for (let w = 0; w < N; w++) {
+      const a = w * per, b = Math.min(n, a + per); if (a >= b) continue;
+      const id = ++seq, sub = arr.slice(a * S_IN, b * S_IN);
+      jobs.push(new Promise(res => { const h = e => { if (e.data.id === id) { ws[w].removeEventListener("message", h); res([a, e.data.out]); } }; ws[w].addEventListener("message", h); ws[w].postMessage({ arr: sub, n: b - a, opt: MODEL_OPT, id }); }));
+    }
+    return Promise.all(jobs).then(parts => { const out = new Float32Array(n * S_OUT); for (const [a, o] of parts) out.set(o, a * S_OUT); return out; });
+  } };
+}
+// the map and the stored-design batch share one engine; runs are serialized
+let queue = Promise.resolve();
+const runEngine = (arr, n) => (queue = queue.then(() => engine.run(arr, n)));
+function schedule() { dirty = true; if (!busy) compute(); updateReadout(); }
+async function compute() {
+  if (!engine) return;
+  busy = true; dirty = false;
+  const nx = engine.res, ny = engine.res, t0 = performance.now();
+  const gd = gridDesigns(nx, ny);
+  const out = await runEngine(gd.arr, nx * ny);
+  grid = { nx, ny, out, ok: gd.ok, esW: gd.esW, arcS: gd.arcS, xKey: state.xKey, yKey: state.yKey, ms: performance.now() - t0 };
+  render();
+  busy = false;
+  if (dirty) compute();
+}
+
+/* ======================= sweep map ======================= */
+const VIR = [[68, 1, 84], [72, 40, 120], [62, 74, 137], [49, 104, 142], [38, 130, 142], [31, 158, 137], [53, 183, 121], [110, 206, 88], [181, 222, 43], [253, 231, 37]];
+function vir(t) { t = Math.min(1, Math.max(0, t)) * (VIR.length - 1); const i = Math.min(VIR.length - 2, Math.floor(t)), u = t - i; return VIR[i].map((c, k) => Math.round(c + (VIR[i + 1][k] - c) * u)); }
+const virCSS = "linear-gradient(90deg," + VIR.map((c, i) => `rgb(${c}) ${(i / (VIR.length - 1) * 100).toFixed(0)}%`).join(",") + ")";
+const cv = $("#map"), ctx = cv.getContext("2d");
+const M = { l: 84, r: 14, t: 12, b: 46 };
+function niceTicks(lo, hi, n = 6) { const st0 = (hi - lo) / n, p = 10 ** Math.floor(Math.log10(st0)), f = st0 / p, st = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p; const t = []; for (let v = Math.ceil(lo / st) * st; v <= hi + 1e-9 * st; v += st) t.push(+v.toPrecision(10)); return t; }
+function logTicks(lo, hi) { const t = []; for (let e = Math.floor(Math.log10(lo)); e <= Math.ceil(Math.log10(hi)); e++) for (const m of [1, 2, 5]) { const v = m * 10 ** e; if (v >= lo * 0.999 && v <= hi * 1.001) t.push(v); } return t; }
+const pTicks = p => p.log ? logTicks(p.lo, p.hi) : niceTicks(p.lo, p.hi, 5);
+function cellOut(i) { const o = new Array(S_OUT); for (let k = 0; k < S_OUT; k++) o[k] = grid.out[i * S_OUT + k]; return o; }
+const cellEx = i => ({ esW: grid.esW[i], arcS: grid.arcS[i] });
+function metricGrid() {
+  const m = MK[state.metric], n = grid.nx * grid.ny, vals = new Float32Array(n);
+  for (let i = 0; i < n; i++) vals[i] = grid.ok[i] ? m.f(cellOut(i), cellEx(i)) : NaN;
+  return vals;
+}
+const arcAt = i => Math.min(grid.out[i * S_OUT + O.arc_margin], grid.arcS[i]);
+function render() {
+  if (!grid) return;
+  const w = cv.parentElement.clientWidth, h = Math.round(Math.min(Math.max(w * 0.58, 300), 600)), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const pw = w - M.l - M.r, ph = h - M.t - M.b, { nx, ny } = grid, m = MK[state.metric];
+  const vals = metricGrid();
+  // color range: 1st-99th percentile, so a few extreme designs do not flatten the rest of the map
+  const tr = v => m.log ? Math.log10(v) : v;
+  const fin = []; for (const v of vals) if (isFinite(v) && (!m.log || v > 0)) fin.push(tr(v));
+  fin.sort((a, b) => a - b);
+  let lo = fin.length ? fin[Math.floor(0.01 * (fin.length - 1))] : Infinity, hi = fin.length ? fin[Math.ceil(0.99 * (fin.length - 1))] : -Infinity;
+  if (m.cap !== undefined) { hi = Math.min(hi, tr(m.cap)); lo = Math.min(lo, hi - 1e-6); }
+  // metrics whose deep values carry no extra meaning (arc margin -1000 vs -1: both arc) saturate at a floor
+  if (m.floor !== undefined) { lo = Math.max(lo, m.floor); hi = Math.max(hi, lo + 1e-6); }
+  if (!isFinite(lo)) { lo = 0; hi = 1; } if (hi - lo < 1e-9) { hi = lo + 1e-6; }
+  const off = document.createElement("canvas"); off.width = nx; off.height = ny;
+  const ox = off.getContext("2d"), id = ox.createImageData(nx, ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+    const v = vals[j * nx + i], k = ((ny - 1 - j) * nx + i) * 4;
+    if (!isFinite(v) || (m.log && v <= 0)) { id.data[k] = id.data[k + 1] = id.data[k + 2] = 128; id.data[k + 3] = 90; continue; }
+    const c = vir((tr(v) - lo) / (hi - lo)); id.data[k] = c[0]; id.data[k + 1] = c[1]; id.data[k + 2] = c[2]; id.data[k + 3] = 255;
+  }
+  ox.putImageData(id, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  ctx.imageSmoothingEnabled = true; ctx.drawImage(off, M.l, M.t, pw, ph);
+  // contours (marching squares on the transformed metric)
+  const levels = niceTicks(lo, hi, 7).filter(v => v > lo && v < hi);
+  ctx.strokeStyle = "rgba(255,255,255,0.55)"; ctx.lineWidth = 1;
+  const X = i => M.l + (i + 0.5) / nx * pw, Y = j => M.t + ph - (j + 0.5) / ny * ph;
+  ctx.beginPath();
+  for (const L of levels) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const a = tr(vals[j * nx + i]) - L, b = tr(vals[j * nx + i + 1]) - L, c = tr(vals[(j + 1) * nx + i + 1]) - L, d = tr(vals[(j + 1) * nx + i]) - L;
+    if (![a, b, c, d].every(isFinite)) continue;
+    const pts = [];
+    if ((a > 0) !== (b > 0)) pts.push([X(i + a / (a - b)), Y(j)]);
+    if ((b > 0) !== (c > 0)) pts.push([X(i + 1), Y(j + b / (b - c))]);
+    if ((c > 0) !== (d > 0)) pts.push([X(i + 1 - c / (c - d)), Y(j + 1)]);
+    if ((d > 0) !== (a > 0)) pts.push([X(i), Y(j + 1 - d / (d - a))]);
+    if (pts.length >= 2) { ctx.moveTo(...pts[0]); ctx.lineTo(...pts[1]); if (pts.length === 4) { ctx.moveTo(...pts[2]); ctx.lineTo(...pts[3]); } }
+  }
+  ctx.stroke();
+  if (state.arc) {
+    ctx.save(); ctx.beginPath();
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (arcAt(j * nx + i) < 0) ctx.rect(M.l + i / nx * pw, M.t + ph - (j + 1) / ny * ph, pw / nx + 0.5, ph / ny + 0.5);
+    ctx.clip(); ctx.strokeStyle = css("--hatch"); ctx.lineWidth = 1.2; ctx.beginPath();
+    for (let s = -ph; s < pw; s += 7) { ctx.moveTo(M.l + s, M.t + ph); ctx.lineTo(M.l + s + ph, M.t); }
+    ctx.stroke(); ctx.restore();
+  }
+  if (!grid.ok.every(v => v)) {
+    ctx.save(); ctx.beginPath();
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) if (!grid.ok[j * nx + i]) ctx.rect(M.l + i / nx * pw, M.t + ph - (j + 1) / ny * ph, pw / nx + 0.5, ph / ny + 0.5);
+    ctx.clip(); ctx.fillStyle = css("--chip"); ctx.fillRect(M.l, M.t, pw, ph); ctx.strokeStyle = css("--ink-2"); ctx.globalAlpha = 0.35; ctx.lineWidth = 1; ctx.beginPath();
+    for (let s = 0; s < pw + ph; s += 9) { ctx.moveTo(M.l + s, M.t); ctx.lineTo(M.l + s - ph, M.t + ph); }
+    ctx.stroke(); ctx.restore();
+  }
+  let bi = -1, bv = m.better === "low" ? Infinity : -Infinity;
+  if (m.better) for (let i = 0; i < nx * ny; i++) { const v = vals[i]; if (!isFinite(v) || arcAt(i) < 0) continue; if (m.better === "low" ? v < bv : v > bv) { bv = v; bi = i; } }
+  const ink2 = css("--ink-2"), rule = css("--rule"), ink = css("--ink");
+  ctx.strokeStyle = rule; ctx.strokeRect(M.l + 0.5, M.t + 0.5, pw, ph);
+  ctx.fillStyle = ink2; ctx.font = "11px " + css("--f-mono");
+  const px = PK[grid.xKey], py = PK[grid.yKey];
+  ctx.textAlign = "center";
+  for (const t of pTicks(px)) { const x = M.l + toT(px, t) * pw; ctx.fillRect(x, M.t + ph, 1, 5); ctx.fillText(+axisVal(px, t).toPrecision(3), x, M.t + ph + 17); }
+  ctx.textAlign = "right";
+  for (const t of pTicks(py)) { const y = M.t + ph - toT(py, t) * ph; ctx.fillRect(M.l - 5, y, 5, 1); ctx.fillText(+axisVal(py, t).toPrecision(3), M.l - 8, y + 4); }
+  ctx.textAlign = "center"; ctx.fillStyle = ink;
+  ctx.fillText(axisLabel(px), M.l + pw / 2, h - 10);
+  ctx.save(); ctx.translate(14, M.t + ph / 2); ctx.rotate(-Math.PI / 2); ctx.fillText(axisLabel(py), 0, 0); ctx.restore();
+  const cx = M.l + toT(px, state.u[px.k]) * pw, cy = M.t + ph - toT(py, state.u[py.k]) * ph;
+  ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 7, 0, 7); ctx.stroke();
+  ctx.strokeStyle = "#000"; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(cx, cy, 8.5, 0, 7); ctx.stroke();
+  if (bi >= 0) star(ctx, M.l + ((bi % nx) + 0.5) / nx * pw, M.t + ph - (Math.floor(bi / nx) + 0.5) / ny * ph);
+  const lg = v => m.log ? 10 ** v : v;
+  $("#legend").innerHTML = `<span>${m.n}</span><span>≤ ${m.fmt(lg(lo))} <span class="cbar" style="background:${virCSS}"></span> ≥ ${m.fmt(lg(hi))}</span>` +
+    (bi >= 0 ? `<span>★ ${m.better === "low" ? "lowest" : "highest"} without arcing: ${m.fmt(bv)}</span>` : "") +
+    `<span>◯ rail's design</span>` + (grid.ok.every(v => v) ? "" : `<span><span class="sw" style="background:var(--chip);outline:1px solid var(--ink-2)"></span>spray water &gt; air by mass: outside the validated range</span>`) + (state.arc ? `<span><span class="sw" style="background:var(--hatch)"></span>arcs (margin &lt; 0)</span>` : "") +
+    `<span>${nx}×${ny} = ${(nx * ny).toLocaleString()} runs in ${grid.ms.toFixed(0)} ms on ${engine.name}</span>`;
+  drawSlices(vals);
+}
+function star(c, x, y) { c.save(); c.translate(x, y); c.beginPath(); for (let i = 0; i < 10; i++) { const r = i % 2 ? 3.5 : 8.5, a = -Math.PI / 2 + i * Math.PI / 5; c.lineTo(r * Math.cos(a), r * Math.sin(a)); } c.closePath(); c.fillStyle = "#fff"; c.fill(); c.strokeStyle = "#000"; c.lineWidth = 1; c.stroke(); c.restore(); }
+
+function drawSlices(vals) {
+  const { nx, ny } = grid, px = PK[grid.xKey], py = PK[grid.yKey], m = MK[state.metric];
+  const ix = Math.min(nx - 1, Math.max(0, Math.floor(toT(px, state.u[px.k]) * nx))), jy = Math.min(ny - 1, Math.max(0, Math.floor(toT(py, state.u[py.k]) * ny)));
+  const rowX = Array.from({ length: nx }, (_, i) => [fromT(px, (i + 0.5) / nx), vals[jy * nx + i], arcAt(jy * nx + i) < 0]);
+  const colY = Array.from({ length: ny }, (_, j) => [fromT(py, (j + 0.5) / ny), vals[j * nx + ix], arcAt(j * nx + ix) < 0]);
+  const cap = m.cap !== undefined ? ` (capped at ${m.cap}%)` : "";
+  line($("#sx"), rowX, px, m, `${m.n.split(",")[0]} along ${px.n.toLowerCase()}${cap}`, state.u[px.k]);
+  line($("#sy"), colY, py, m, `${m.n.split(",")[0]} along ${py.n.toLowerCase()}${cap}`, state.u[py.k]);
+}
+function line(svg, pts, p, m, title, cur) {
+  svg.innerHTML = "";
+  const W = 480, H = 230, l = 52, r = 10, t = 28, b = 38, pw = W - l - r, ph = H - t - b;
+  const good = pts.filter(q => isFinite(q[1]) && (!m.log || q[1] > 0)).map(q => [q[0], Math.max(m.cap !== undefined ? Math.min(q[1], m.cap) : q[1], m.floor ?? -Infinity), q[2]]);
+  el("text", { x: 2, y: 14, class: "ttl" }, svg).textContent = title;
+  if (!good.length) { el("text", { x: l, y: t + ph / 2 }, svg).textContent = "no valid runs on this line"; return; }
+  const tr = v => m.log ? Math.log10(v) : v;
+  let lo = Math.min(...good.map(q => tr(q[1]))), hi = Math.max(...good.map(q => tr(q[1]))); if (hi - lo < 1e-9) { lo -= 0.5; hi += 0.5; }
+  const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+  const X = v => l + toT(p, v) * pw, Y = v => t + ph - (tr(v) - lo) / (hi - lo) * ph;
+  const g = el("g", {}, svg);
+  for (const v of niceTicks(lo, hi, 4)) { const y = t + ph - (v - lo) / (hi - lo) * ph; el("line", { x1: l, x2: l + pw, y1: y, y2: y, stroke: css("--rule") }, g); el("text", { x: l - 6, y: y + 3.5, "text-anchor": "end" }, g).textContent = +(m.log ? 10 ** v : v).toPrecision(3); }
+  for (const v of pTicks(p)) el("text", { x: X(v), y: t + ph + 15, "text-anchor": "middle" }, g).textContent = +axisVal(p, v).toPrecision(3);
+  el("text", { x: l + pw / 2, y: H - 4, "text-anchor": "middle" }, g).textContent = axisLabel(p);
+  for (const q of pts) if (q[2]) { const x0 = l + (toT(p, q[0]) - 0.5 / pts.length) * pw; el("rect", { x: x0, y: t, width: pw / pts.length + 0.5, height: ph, fill: css("--bad"), opacity: 0.08 }, g); }
+  const d = good.map((q, i) => (i ? "L" : "M") + X(q[0]).toFixed(1) + "," + Y(q[1]).toFixed(1)).join("");
+  el("path", { d: d + `L${X(good[good.length - 1][0]).toFixed(1)},${t + ph}L${X(good[0][0]).toFixed(1)},${t + ph}Z`, fill: css("--water"), opacity: 0.1 }, g);
+  el("path", { d, fill: "none", stroke: css("--water"), "stroke-width": 2 }, g);
+  const xc = X(cur); el("line", { x1: xc, x2: xc, y1: t, y2: t + ph, stroke: css("--ink"), "stroke-dasharray": "3 3", opacity: 0.6 }, g);
+}
+function cellAt(ev) {
+  if (!grid) return null;
+  const r = cv.getBoundingClientRect(), x = ev.clientX - r.left, y = ev.clientY - r.top, pw = r.width - M.l - M.r, ph = r.height - M.t - M.b;
+  const tx = (x - M.l) / pw, ty = 1 - (y - M.t) / ph;
+  if (tx < 0 || tx > 1 || ty < 0 || ty > 1) return null;
+  return { i: Math.min(grid.nx - 1, Math.floor(tx * grid.nx)), j: Math.min(grid.ny - 1, Math.floor(ty * grid.ny)), tx, ty, x, y };
+}
+cv.addEventListener("mousemove", ev => {
+  const c = cellAt(ev), tip = $("#tip");
+  if (!c) { tip.hidden = true; return; }
+  const i = c.j * grid.nx + c.i, o = cellOut(i), e = cellEx(i), px = PK[grid.xKey], py = PK[grid.yKey];
+  tip.innerHTML = `${px.n}: ${fmtP(px, fromT(px, c.tx))}<br>${py.n}: ${fmtP(py, fromT(py, c.ty))}<br>` +
+    ["out", "spec", "dp", "arc", "rec", "esc", "cur"].map(k => `${MK[k].n.split(",")[0]}: <b>${MK[k].fmt(MK[k].f(o, e))}</b>`).join("<br>");
+  tip.hidden = false;
+  const r = cv.getBoundingClientRect(), tw = tip.offsetWidth;
+  tip.style.left = Math.min(c.x + 14, r.width - tw - 4) + "px"; tip.style.top = (c.y + 14) + "px";
+});
+cv.addEventListener("mouseleave", () => { $("#tip").hidden = true; });
+cv.addEventListener("click", ev => {
+  const c = cellAt(ev); if (!c) return;
+  const px = PK[grid.xKey], py = PK[grid.yKey];
+  state.u[px.k] = fromT(px, c.tx); state.u[py.k] = fromT(py, c.ty); state.loaded = null;
+  syncRail(); render(); updateReadout();
+});
+
+/* ======================= readout + tube (CPU, float64) ======================= */
+function kpi(k, v, s, cls = "", target = false) { return `<div class="kpi${target ? " target" : ""}"><span class="k">${k}</span><span class="v ${cls}">${v}</span><span class="s">${s}</span></div>`; }
+let lastRun = null;
+function updateReadout() {
+  const { x, ex } = toModel(state.u), t0 = performance.now();
+  const r = WCModel.simulate(x, { ...MODEL_OPT, fit: FIT, profile: true });
+  const ms = performance.now() - t0;
+  lastRun = { x, ex, r };
+  const elecW = r.electrical_power_W + ex.esW, arc = Math.min(r.arc_margin, ex.arcS), rec = r.recovered_L_h;
+  const spec = rec > 1e-3 ? (elecW + r.fan_power_W) / rec : NaN;
+  const vin = r.vapor_in_L_h, min_ = r.mist_in_L_h, spray = x.spray_flow_L_min * 60;
+  const vout = vin * (1 - r.vapor_removed_frac), liqOut = r.liquid_escape_frac * (min_ + spray);
+  const arcWhy = arc >= 0 ? "positive = no arcing" : ex.arcS < r.arc_margin ? "electrospray voltage over sparkover" : r.spray_space_charge_kV_cm > 24 ? `spray space charge ${r.spray_space_charge_kV_cm.toPrecision(2)} kV/cm vs 24 breakdown` : "corona voltage over sparkover";
+  const corOn = r.corona_current_mA > 1e-4;
+  $("#targets").innerHTML =
+    kpi("Total water out", (100 * r.outlet_total_water_frac).toFixed(1) + "%", `liquid + vapor leaving the top, of ${(vin + min_).toFixed(1)} L/h in`, r.outlet_total_water_frac > 1 ? "bad" : "", true) +
+    kpi("Energy per liter", isFinite(spec) ? spec.toPrecision(3) + " Wh/L" : "–", isFinite(spec) ? `electric ${elecW.toFixed(1)} W + fan ${r.fan_power_W.toFixed(1)} W over ${rec.toFixed(2)} L/h` : "nothing recovered", "", true) +
+    kpi("Pressure drop", r.pressure_drop_Pa.toFixed(1) + " Pa", "tube friction + discs + spray drag", "", true) +
+    kpi("Arc margin", arc.toFixed(2), arcWhy, arc < 0 ? "bad" : arc < 0.15 ? "warn" : "", true) +
+    kpi("Field at the wall", r.wall_field_kV_cm.toFixed(2) + " kV/cm", "corona stage, vs ~24 kV/cm breakdown in humid air", "", true);
+  $("#kpis").innerHTML =
+    kpi("Recovered", rec.toFixed(2) + " L/h", "inlet water minus outlet water") +
+    kpi("Vapor removed", (100 * r.vapor_removed_frac).toFixed(1) + "%", r.vapor_ceiling_frac > 0 ? `ceiling from spray subcooling ${(100 * r.vapor_ceiling_frac).toFixed(1)}%` : "spray not colder than the air: ceiling 0") +
+    kpi("Liquid escaping", (100 * r.liquid_escape_frac).toFixed(2) + "%", `mist ${(100 * r.mist_escape_frac).toFixed(1)}% · spray ${(100 * r.spray_top_frac).toFixed(1)}%`) +
+    kpi("Corona", corOn ? r.corona_current_mA.toFixed(3) + " mA" : "off", `at ${x.corona_voltage_kV.toFixed(1)} kV, onset ${r.corona_onset_kV.toFixed(1)} kV` + (corOn ? ` · ${(100 * (1 - r.corona_current_mA / Math.max(r.corona_current_no_mist_mA, 1e-12))).toFixed(0)}% quenched by mist` : ""), corOn ? "" : "warn") +
+    (ex.es ? kpi("Electrospray", ex.es.Itot > 0 ? (ex.es.Itot * 1e6).toPrecision(3) + " µA" : "dripping", `${ex.es.regime} · ${x.spray_d_um.toPrecision(3)} µm drops · ${ex.esW.toPrecision(3)} W`) : "") +
+    kpi("Water / air", lgRatio(x).toFixed(2) + " kg/kg", lgRatio(x) > LG_MAX ? "outside the validated range (≤ 1)" : "spray mass per mass of air", lgRatio(x) > LG_MAX ? "warn" : "");
+  $("#runinfo").textContent = `one run, float64 on CPU, ${ms.toFixed(0)} ms`;
+  const totIn = vin + min_, totOut = vout + liqOut, sc = Math.max(totIn, totOut, 1e-9);
+  const seg = (v, c, t) => `<span style="width:${(100 * v / sc).toFixed(2)}%;background:${c}" title="${t}"></span>`;
+  $("#bud").innerHTML = seg(vout, "var(--water)", "vapor out") + seg(liqOut, "var(--volt)", "liquid out") + seg(Math.max(totIn - totOut, 0), "var(--good)", "recovered");
+  $("#budtxt").textContent = `in ${totIn.toFixed(1)} L/h (vapor ${vin.toFixed(1)} + mist ${min_.toFixed(2)}) · spray added ${spray.toFixed(0)} L/h`;
+  $("#budleg").innerHTML = `<span><span class="sw" style="background:var(--water)"></span>vapor out ${vout.toFixed(2)}</span><span><span class="sw" style="background:var(--volt)"></span>liquid out ${liqOut.toFixed(2)}</span><span><span class="sw" style="background:var(--good)"></span>recovered ${Math.max(totIn - totOut, 0).toFixed(2)} L/h</span>` + (totOut > totIn ? `<span style="color:var(--bad)">more water leaves than came in: spray is escaping</span>` : "");
+  drawTube(x, r);
+  renderLoaded(r, ex);
+}
+
+function drawTube(x, r) {
+  const svg = $("#tube"); svg.innerHTML = "";
+  const P = r.profile, W = 1000, l = 70, rr = 16, pw = W - l - rr, L = P.L, Ls = P.Ls, nz = P.T.length;
+  const Z = z => l + z / L * pw;
+  const D = x.tube_diameter_m, th = Math.max(26, Math.min(90, D / L * pw)), ty = 18, mid = ty + th / 2;
+  const ink2 = css("--ink-2"), water = css("--water"), volt = css("--volt"), rule = css("--rule");
+  // sections
+  el("rect", { x: Z(0), y: ty, width: Z(Ls) - Z(0), height: th, fill: water, opacity: 0.07 }, svg);
+  el("rect", { x: Z(Ls), y: ty, width: Z(L) - Z(Ls), height: th, fill: volt, opacity: 0.07 }, svg);
+  el("line", { x1: Z(0), x2: Z(L), y1: ty, y2: ty, stroke: css("--ink"), "stroke-width": 1.5 }, svg);
+  el("line", { x1: Z(0), x2: Z(L), y1: ty + th, y2: ty + th, stroke: css("--ink"), "stroke-width": 1.5 }, svg);
+  el("text", { x: (Z(0) + Z(Ls)) / 2, y: 12, "text-anchor": "middle" }, svg).textContent = `spray section ${Ls.toFixed(2)} m`;
+  el("text", { x: (Z(Ls) + Z(L)) / 2, y: 12, "text-anchor": "middle" }, svg).textContent = `corona section ${(L - Ls).toFixed(2)} m`;
+  // discs
+  const nd = Math.max(1, Math.floor((L - Ls) / x.disc_spacing_m)), hd = th * x.disc_diameter_frac / 2;
+  for (let i = 0; i < nd; i++) { const zx = Z(Ls + (i + 0.5) * x.disc_spacing_m); el("line", { x1: zx, x2: zx, y1: mid - hd, y2: mid + hd, stroke: volt, "stroke-width": nd > 80 ? 1 : 2 }, svg); }
+  el("line", { x1: Z(Ls), x2: Z(L), y1: mid, y2: mid, stroke: volt, "stroke-width": 1, opacity: 0.7 }, svg);
+  // nozzle + spray cone pointing down (left), against the air
+  if (x.spray_flow_L_min > 0) {
+    const zn = Z(x.nozzle_height_frac * Ls), len = Math.min(60, zn - Z(0));
+    el("path", { d: `M${zn},${mid} L${zn - len},${mid - th * 0.42} L${zn - len},${mid + th * 0.42} Z`, fill: water, opacity: 0.25 }, svg);
+    el("circle", { cx: zn, cy: mid, r: 4, fill: water }, svg);
+    el("text", { x: zn, y: ty + th + 13, "text-anchor": "middle" }, svg).textContent = `nozzle ${(x.nozzle_height_frac * Ls).toFixed(2)} m`;
+  }
+  // flow arrows
+  el("path", { d: `M${l - 60},${mid} L${l - 10},${mid} M${l - 18},${mid - 6} L${l - 10},${mid} L${l - 18},${mid + 6}`, stroke: ink2, fill: "none", "stroke-width": 1.5 }, svg);
+  el("text", { x: l - 62, y: mid - 9 }, svg).textContent = "air in";
+  // profiles: three rows sharing z
+  const sprayKg = x.spray_flow_L_min / 60000 * 998;
+  const rows = [
+    { t: "Vapor in the air, % of inlet vapor", y0: 140, h: 62, ser: [{ v: P.w.map(w => 100 * w / P.w_in), c: water }] },
+    { t: "Liquid carried up, % of its inflow", y0: 228, h: 62, ser: [{ v: P.mist.map(m => 100 * m / Math.max(P.mist_in, 1e-12)), c: volt, n: "mist" }].concat(sprayKg > 0 ? [{ v: P.spray.map(m => 100 * m / sprayKg), c: css("--liquid"), n: "spray carried up", dash: "4 3" }] : []) },
+    { t: "Air temperature, °C", y0: 316, h: 50, ser: [{ v: P.T, c: css("--bad") }] },
+  ];
+  const zc = k => (k + 0.5) * P.dz;
+  for (const row of rows) {
+    const all = row.ser.flatMap(s => s.v).filter(isFinite);
+    let lo = Math.min(...all), hi = Math.max(...all);
+    if (row.t.startsWith("Liquid")) { lo = 0; hi = Math.max(hi, 5); }
+    if (hi - lo < 1e-6) { lo -= 0.5; hi += 0.5; }
+    const pad = (hi - lo) * 0.1; lo = row.t.startsWith("Liquid") ? 0 : lo - pad; hi += pad;
+    const Y = v => row.y0 + row.h - (v - lo) / (hi - lo) * row.h;
+    el("text", { x: l, y: row.y0 - 7, class: "ttl" }, svg).textContent = row.t;
+    el("line", { x1: Z(Ls), x2: Z(Ls), y1: row.y0, y2: row.y0 + row.h, stroke: rule, "stroke-dasharray": "3 3" }, svg);
+    for (const v of niceTicks(lo, hi, 2)) { if (v < lo || v > hi) continue; el("line", { x1: l, x2: l + pw, y1: Y(v), y2: Y(v), stroke: rule }, svg); el("text", { x: l - 6, y: Y(v) + 3.5, "text-anchor": "end" }, svg).textContent = +v.toPrecision(4); }
+    for (const s of row.ser) {
+      const pts = [[Z(0), Y(s.v[0])]]; for (let k = 0; k < nz; k++) pts.push([Z(zc(k)), Y(s.v[k])]);
+      el("path", { d: pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + "," + p[1].toFixed(1)).join(""), fill: "none", stroke: s.c, "stroke-width": 2, "stroke-dasharray": s.dash || "none" }, svg);
+      const e = pts[pts.length - 1]; el("circle", { cx: e[0], cy: e[1], r: 3, fill: s.c }, svg);
+    }
+    if (row.ser.length > 1) { let lx = l + pw - 250; for (const s of row.ser) { el("line", { x1: lx, x2: lx + 18, y1: row.y0 - 11, y2: row.y0 - 11, stroke: s.c, "stroke-width": 2, "stroke-dasharray": s.dash || "none" }, svg); el("text", { x: lx + 22, y: row.y0 - 7 }, svg).textContent = s.n; lx += 115; } }
+  }
+  for (const v of niceTicks(0, L, 8)) el("text", { x: Z(v), y: 378, "text-anchor": "middle" }, svg).textContent = v + (v === 0 ? " m" : "");
+  $("#tubenote").textContent = (P.falling ? "Some spray drops are too heavy for the upflow and fall to the sump; their exchange shows up as the step in vapor and temperature at the nozzle. " : "") +
+    "Values are cross-section averages from the browser model's 40-cell march. The dashed line marks the start of the corona section.";
+}
+
+/* ======================= precomputed designs ======================= */
+const ROWS = DATA ? DATA.rows : [];
+const SETS = [
+  { k: "v1", n: "Fast spray + resolved corona", c: "--set-v1", d: "campaign v1: fast model for the spray, resolved electric field for the corona" },
+  { k: "rerun", n: "Fully resolved, v1 spray designs", c: "--set-rerun", d: "v1's spray designs rerun with spray CFD + resolved corona" },
+  { k: "new", n: "Fully resolved, new concepts", c: "--set-new", d: "ring, coflow, multi-tier and charged-film sprays, cooled walls" },
+];
+const SETK = Object.fromEntries(SETS.map(s => [s.k, s]));
+const FAMS = [...new Set(ROWS.map(r => r.fam))];
+const FAMNAME = { corona_only: "corona only", cold_spray: "cold spray", charged_spray: "charged spray", rain_curtain: "rain curtain", brad_variants: "Brad's variants", multi_tier: "multi-tier", ring_spray: "ring spray", coflow_spray: "coflow spray", charged_film: "charged film", cooled_wall: "cooled wall" };
+const BY_ID_V1 = {}; for (const r of ROWS) if (r.set === "v1") BY_ID_V1[r.id] = r;
+const RERUN_IDS = new Set(ROWS.filter(r => r.set === "rerun").map(r => r.id));
+for (const r of ROWS) {
+  const d = r.d;
+  r.lg = (d.spray_flow_L_min / 60) / (1.15 * d.air_flow_m3_s);
+  r.Wh = r.r.rec > 1e-3 ? (r.r.elecW + r.r.fanW + (r.r.pumpW || 0)) / r.r.rec : NaN;
+  r.WhTot = r.r.rec > 1e-3 ? (r.r.elecW + r.r.fanW + (r.r.pumpW || 0) + (r.r.recoolW || 0)) / r.r.rec : NaN;
+}
+const ds = { sets: new Set(["v1", "rerun", "new"]), fams: new Set(FAMS), hideArc: true, hideLG: false, recool: false, x: "Wh", y: "out", color: "set", pareto: true, sort: "out", sortDir: 1, sel: null };
+const RA = [
+  { k: "out", n: "Total water out", u: "%", f: r => 100 * r.r.out, g: "Results" },
+  { k: "Wh", n: "Energy per liter", u: "Wh/L", f: r => ds.recool ? r.WhTot : r.Wh, log: 1, g: "Results" },
+  { k: "dp", n: "Pressure drop", u: "Pa", f: r => r.r.dp, log: 1, g: "Results" },
+  { k: "arc", n: "Arc margin", u: "", f: r => r.r.arc, g: "Results" },
+  { k: "Ewall", n: "Field at the wall", u: "kV/cm", f: r => r.r.Ewall, g: "Results" },
+  { k: "rec", n: "Water recovered", u: "L/h", f: r => r.r.rec, g: "Results" },
+  { k: "vap", n: "Vapor removed", u: "%", f: r => 100 * r.r.vap, g: "Results" },
+  { k: "esc", n: "Liquid escaping", u: "%", f: r => 100 * r.r.esc, g: "Results" },
+  { k: "Ima", n: "Corona current", u: "mA", f: r => r.r.Ima, log: 1, g: "Results" },
+  { k: "elecW", n: "Electrical power", u: "W", f: r => r.r.elecW, log: 1, g: "Results" },
+  { k: "recoolW", n: "Spray recooling power", u: "W", f: r => r.r.recoolW ?? NaN, log: 1, g: "Results" },
+  { k: "bm_out", n: "Browser model: total water out", u: "%", f: r => r.bm ? 100 * r.bm.out : NaN, g: "Model comparison" },
+  { k: "bm_err", n: "Browser − stored: total water out", u: "pts", f: r => r.bm ? 100 * (r.bm.out - r.r.out) : NaN, g: "Model comparison" },
+  { k: "rom_out", n: "Old fast model: total water out (v1)", u: "%", f: r => r.rom ? 100 * r.rom.out : NaN, g: "Model comparison" },
+  { k: "lg", n: "Spray water / air", u: "kg/kg", f: r => r.lg, g: "Design" },
+  ...["air_flow_m3_s", "tube_diameter_m", "spray_section_length_m", "corona_section_length_m", "nozzle_height_frac", "disc_diameter_frac", "disc_spacing_m", "spray_flow_L_min", "spray_T_C", "spray_d_um", "spray_q_frac", "corona_voltage_kV"].map(k => {
+    const p = PK[k] || { n: { spray_d_um: "Drop size", spray_q_frac: "Drop charge (× Rayleigh)" }[k], u: { spray_d_um: "µm", spray_q_frac: "" }[k] };
+    return { k: "d." + k, n: p.n, u: p.cm ? "cm" : p.u, f: r => (p.cm ? 100 : 1) * r.d[k], log: ["spray_d_um", "disc_spacing_m", "air_flow_m3_s"].includes(k) ? 1 : 0, g: "Design" };
+  }),
+  { k: "d.spray_v0", n: "Spray launch speed", u: "m/s", f: r => r.d.spray_v0, log: 1, g: "Design" },
+  { k: "d.disc_thickness_mm", n: "Disc thickness", u: "mm", f: r => r.d.disc_thickness_mm, log: 1, g: "Design" },
+];
+const RK = Object.fromEntries(RA.map(a => [a.k, a]));
+function dsFiltered() {
+  return ROWS.filter(r => ds.sets.has(r.set) && ds.fams.has(r.fam) && (!ds.hideArc || r.r.arc >= 0) && (!ds.hideLG || r.lg <= LG_MAX));
+}
+function buildDesigns() {
+  if (!ROWS.length) { $("#designs").innerHTML = `<p class="note">No stored designs were bundled with this page.</p>`; return; }
+  $("#tabcount").textContent = ROWS.length.toLocaleString();
+  $("#snapnote").textContent = `Snapshot of the campaign taken ${DATA.meta.exported}. The fully resolved runs were still in progress, so more will appear in a later snapshot.`;
+  $("#setfl").innerHTML = SETS.map(s => `<label class="check" title="${s.d}"><input type="checkbox" data-set="${s.k}" checked><span class="dot" style="background:var(${s.c})"></span>${s.n}<span class="n">${ROWS.filter(r => r.set === s.k).length}</span></label>`).join("");
+  $("#setfl").querySelectorAll("input").forEach(i => i.onchange = () => { i.checked ? ds.sets.add(i.dataset.set) : ds.sets.delete(i.dataset.set); dsRender(); });
+  $("#famfl").innerHTML = FAMS.map(f => `<button type="button" data-f="${f}" aria-pressed="true">${FAMNAME[f] || f} <span style="opacity:.7">${ROWS.filter(r => r.fam === f).length}</span></button>`).join("");
+  $("#famfl").querySelectorAll("button").forEach(b => b.onclick = () => { const f = b.dataset.f; ds.fams.has(f) ? ds.fams.delete(f) : ds.fams.add(f); b.setAttribute("aria-pressed", ds.fams.has(f)); dsRender(); });
+  $("#famall").onclick = () => { const all = ds.fams.size === FAMS.length; ds.fams = new Set(all ? [] : FAMS); $("#famfl").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", !all)); dsRender(); };
+  $("#f-arc").onchange = e => { ds.hideArc = e.target.checked; dsRender(); };
+  $("#f-lg").onchange = e => { ds.hideLG = e.target.checked; dsRender(); };
+  $("#f-recool").onchange = e => { ds.recool = e.target.checked; dsRender(); };
+  for (const [id, key] of [["#dx", "x"], ["#dy", "y"]]) {
+    const s = $(id); let grp = null;
+    for (const a of RA) { if (!grp || grp.label !== a.g) { grp = document.createElement("optgroup"); grp.label = a.g; s.appendChild(grp); } const o = document.createElement("option"); o.value = a.k; o.textContent = a.n + (a.u ? ` (${a.u})` : ""); grp.appendChild(o); }
+    s.value = ds[key]; s.onchange = e => { ds[key] = e.target.value; dsRender(); };
+  }
+  const dc = $("#dc");
+  dc.innerHTML = `<option value="set">Which runs</option><option value="fam">Concept family</option>` + RA.filter(a => a.g !== "Design" || a.k === "d.spray_T_C" || a.k === "d.corona_voltage_kV").map(a => `<option value="${a.k}">${a.n}</option>`).join("");
+  dc.value = ds.color; dc.onchange = e => { ds.color = e.target.value; dsRender(); };
+  $("#dpar").onchange = e => { ds.pareto = e.target.checked; dsRender(); };
+  const best = dsFiltered().filter(r => r.set !== "v1").sort((a, b) => a.r.out - b.r.out)[0];
+  ds.sel = best ? best : ROWS[0];
+}
+const FAMCOL = ["#4e79a7", "#e15759", "#59a14f", "#b07aa1", "#f28e2b", "#76b7b2", "#edc948", "#9c755f", "#ff9da7", "#bab0ac"];
+let scatPts = [];
+const scv = $("#scat"), sctx = scv.getContext("2d"), SM = { l: 64, r: 14, t: 12, b: 44 };
+function dsRender() {
+  if (!ROWS.length || $("#designs").hidden) return;
+  const rows = dsFiltered(), ax = RK[ds.x], ay = RK[ds.y];
+  const w = scv.parentElement.clientWidth, h = Math.round(Math.min(Math.max(w * 0.55, 300), 560)), dpr = window.devicePixelRatio || 1;
+  scv.width = Math.round(w * dpr); scv.height = Math.round(h * dpr); scv.style.height = h + "px";
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0); sctx.clearRect(0, 0, w, h);
+  const pw = w - SM.l - SM.r, ph = h - SM.t - SM.b;
+  const pts = rows.map(r => ({ r, x: ax.f(r), y: ay.f(r) })).filter(p => isFinite(p.x) && isFinite(p.y) && (!ax.log || p.x > 0) && (!ay.log || p.y > 0));
+  const tr = (a, v) => a.log ? Math.log10(v) : v;
+  const ext = (a, k) => { const v = pts.map(p => tr(a, p[k])).sort((m, n) => m - n); if (!v.length) return [0, 1]; let lo = v[Math.floor(0.005 * (v.length - 1))], hi = v[Math.ceil(0.995 * (v.length - 1))]; if (hi - lo < 1e-9) { lo -= 0.5; hi += 0.5; } const pad = (hi - lo) * 0.05; return [lo - pad, hi + pad]; };
+  const [x0, x1] = ext(ax, "x"), [y0, y1] = ext(ay, "y");
+  const X = v => SM.l + (tr(ax, v) - x0) / (x1 - x0) * pw, Y = v => SM.t + ph - (tr(ay, v) - y0) / (y1 - y0) * ph;
+  const rule = css("--rule"), ink2 = css("--ink-2"), ink = css("--ink");
+  sctx.strokeStyle = rule; sctx.lineWidth = 1; sctx.fillStyle = ink2; sctx.font = "11px " + css("--f-mono");
+  const ticks = (a, lo, hi) => a.log ? logTicks(10 ** lo, 10 ** hi) : niceTicks(lo, hi, 6);
+  sctx.textAlign = "center";
+  for (const t of ticks(ax, x0, x1)) { const x = X(t); if (x < SM.l || x > SM.l + pw) continue; sctx.beginPath(); sctx.moveTo(x, SM.t); sctx.lineTo(x, SM.t + ph); sctx.stroke(); sctx.fillText(+t.toPrecision(3), x, SM.t + ph + 16); }
+  sctx.textAlign = "right";
+  for (const t of ticks(ay, y0, y1)) { const y = Y(t); if (y < SM.t || y > SM.t + ph) continue; sctx.beginPath(); sctx.moveTo(SM.l, y); sctx.lineTo(SM.l + pw, y); sctx.stroke(); sctx.fillText(+t.toPrecision(3), SM.l - 6, y + 4); }
+  sctx.textAlign = "center"; sctx.fillStyle = ink;
+  sctx.fillText(ax.n + (ax.u ? ` (${ax.u})` : ""), SM.l + pw / 2, h - 8);
+  sctx.save(); sctx.translate(13, SM.t + ph / 2); sctx.rotate(-Math.PI / 2); sctx.fillText(ay.n + (ay.u ? ` (${ay.u})` : ""), 0, 0); sctx.restore();
+  // colors
+  const cm = RK[ds.color];
+  let cLo = 0, cHi = 1;
+  if (cm) { const v = pts.map(p => tr(cm, cm.f(p.r))).filter(isFinite).sort((a, b) => a - b); if (v.length) { cLo = v[Math.floor(0.02 * (v.length - 1))]; cHi = v[Math.ceil(0.98 * (v.length - 1))]; if (cHi - cLo < 1e-9) cHi = cLo + 1; } }
+  const colorOf = r => {
+    if (ds.color === "set") return css(SETK[r.set].c);
+    if (ds.color === "fam") return FAMCOL[FAMS.indexOf(r.fam) % FAMCOL.length];
+    const v = tr(cm, cm.f(r)); if (!isFinite(v)) return ink2; const c = vir((v - cLo) / (cHi - cLo)); return `rgb(${c})`;
+  };
+  // y = x line for comparison axes
+  if ((ds.x === "bm_out" || ds.x === "rom_out") && ds.y === "out" || (ds.y === "bm_out" || ds.y === "rom_out") && ds.x === "out") {
+    const lo = Math.max(x0, y0), hi = Math.min(x1, y1); sctx.strokeStyle = ink2; sctx.setLineDash([4, 4]); sctx.beginPath(); sctx.moveTo(X(lo), Y(lo)); sctx.lineTo(X(hi), Y(hi)); sctx.stroke(); sctx.setLineDash([]);
+  }
+  sctx.save(); sctx.beginPath(); sctx.rect(SM.l, SM.t, pw, ph); sctx.clip();
+  scatPts = [];
+  for (const p of pts) {
+    const px = X(p.x), py = Y(p.y); scatPts.push({ px, py, r: p.r });
+    sctx.globalAlpha = 0.75; sctx.fillStyle = colorOf(p.r);
+    sctx.beginPath(); sctx.arc(px, py, p.r.set === "v1" ? 2.6 : 3.4, 0, 7); sctx.fill();
+  }
+  sctx.globalAlpha = 1;
+  // Pareto front: lower-better on both when both axes are "costs" (out, Wh, dp, esc), else skip
+  const lowBetter = { out: 1, Wh: 1, dp: 1, esc: 1, elecW: 1, recoolW: 1 }, highBetter = { rec: 1, vap: 1, arc: 1 };
+  let front = [];
+  const sx = lowBetter[ds.x] ? 1 : highBetter[ds.x] ? -1 : 0, sy = lowBetter[ds.y] ? 1 : highBetter[ds.y] ? -1 : 0;
+  if (ds.pareto && sx && sy) {
+    const s = pts.slice().sort((a, b) => sx * (a.x - b.x) || sy * (a.y - b.y));
+    let best = Infinity; for (const p of s) if (sy * p.y < best) { best = sy * p.y; front.push(p); }
+    sctx.strokeStyle = ink; sctx.lineWidth = 1.5; sctx.beginPath();
+    front.forEach((p, i) => { const a = X(p.x), b = Y(p.y); i ? sctx.lineTo(a, b) : sctx.moveTo(a, b); }); sctx.stroke();
+    for (const p of front) { sctx.beginPath(); sctx.arc(X(p.x), Y(p.y), 4.5, 0, 7); sctx.strokeStyle = ink; sctx.stroke(); }
+  }
+  if (ds.sel) { const p = pts.find(q => q.r === ds.sel); if (p) star(sctx, X(p.x), Y(p.y)); }
+  sctx.restore();
+  sctx.strokeStyle = rule; sctx.strokeRect(SM.l + 0.5, SM.t + 0.5, pw, ph);
+  // legend
+  let lg = "";
+  if (ds.color === "set") lg = SETS.filter(s => ds.sets.has(s.k)).map(s => `<span><span class="dot" style="background:var(${s.c})"></span> ${s.n}</span>`).join("");
+  else if (ds.color === "fam") lg = FAMS.filter(f => ds.fams.has(f)).map(f => `<span><span class="dot" style="background:${FAMCOL[FAMS.indexOf(f) % FAMCOL.length]}"></span> ${FAMNAME[f] || f}</span>`).join("");
+  else lg = `<span>${cm.n}</span><span>${+(cm.log ? 10 ** cLo : cLo).toPrecision(3)} <span class="cbar" style="background:${virCSS}"></span> ${+(cm.log ? 10 ** cHi : cHi).toPrecision(3)} ${cm.u}</span>`;
+  $("#slegend").innerHTML = lg + `<span>${pts.length.toLocaleString()} of ${ROWS.length.toLocaleString()} runs shown</span>` + (front.length ? `<span>— Pareto front: ${front.length} designs no other run beats on both axes</span>` : "") + `<span>★ selected</span>`;
+  dsTable(rows);
+  dsDetail();
+}
+function dsTable(rows) {
+  const cols = [
+    { k: "id", n: "Design", f: r => r.id, s: r => r.id },
+    { k: "set", n: "Runs", f: r => `<span class="dot" style="background:var(${SETK[r.set].c})"></span>`, s: r => r.set },
+    { k: "out", n: "Water out", f: r => (100 * r.r.out).toFixed(1) + "%", s: r => r.r.out, num: 1 },
+    { k: "Wh", n: "Wh/L", f: r => fmtN(RK.Wh.f(r)), s: r => RK.Wh.f(r), num: 1 },
+    { k: "dp", n: "Δp Pa", f: r => fmtN(r.r.dp), s: r => r.r.dp, num: 1 },
+    { k: "arc", n: "Arc margin", f: r => r.r.arc.toFixed(2), s: r => r.r.arc, num: 1 },
+    { k: "Ima", n: "Corona mA", f: r => fmtN(r.r.Ima), s: r => r.r.Ima, num: 1 },
+    { k: "rec", n: "L/h", f: r => fmtN(r.r.rec), s: r => r.r.rec, num: 1 },
+    { k: "bm", n: "Browser", f: r => r.bm ? (100 * r.bm.out).toFixed(1) + "%" : "…", s: r => r.bm ? r.bm.out : NaN, num: 1 },
+  ];
+  const col = cols.find(c => c.k === ds.sort) || cols[2];
+  const v = r => { const s = col.s(r); return typeof s === "number" && !isFinite(s) ? Infinity : s; };
+  const sorted = rows.slice().sort((a, b) => (v(a) < v(b) ? -1 : v(a) > v(b) ? 1 : 0) * ds.sortDir).slice(0, 60);
+  $("#tabletitle").textContent = `${rows.length.toLocaleString()} runs, top 60 by ${col.n.toLowerCase()}`;
+  const t = $("#dtable");
+  t.innerHTML = `<thead><tr>${cols.map(c => `<th data-k="${c.k}" class="${c.num ? "n" : ""}" ${c.k === col.k ? `aria-sort="${ds.sortDir > 0 ? "ascending" : "descending"}"` : ""}>${c.n}${c.k === col.k ? (ds.sortDir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead>` +
+    `<tbody>${sorted.map((r, i) => `<tr data-i="${ROWS.indexOf(r)}" aria-selected="${r === ds.sel}">${cols.map(c => `<td class="${c.num ? "n" : ""}">${c.f(r)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+  t.querySelectorAll("th").forEach(th => th.onclick = () => { const k = th.dataset.k; if (ds.sort === k) ds.sortDir *= -1; else { ds.sort = k; ds.sortDir = ["rec"].includes(k) ? -1 : 1; } dsTable(dsFiltered()); });
+  t.querySelectorAll("tbody tr").forEach(tr => tr.onclick = () => { ds.sel = ROWS[+tr.dataset.i]; dsRender(); });
+}
+const UNREP = [
+  ["disc_thickness_mm", v => Math.abs(v - 0.3) > 0.05, v => `disc thickness ${v.toFixed(2)} mm (browser model: 0.3 mm)`],
+  ["spray_cone_half_angle_deg", () => true, v => `cone half-angle ${v.toFixed(0)}°`],
+  ["spray_axis_angle_deg", () => true, v => `spray axis ${v.toFixed(0)}°`],
+  ["spray_n_tiers", () => true, v => `${Math.round(v)} spray tiers`],
+  ["nozzle_radial_frac", () => true, v => `nozzle ring at ${(100 * v).toFixed(0)}% of radius`],
+  ["wall_U_W_m2K", () => true, v => `cooled wall, U = ${v.toFixed(0)} W/m²K`],
+];
+function unrepresented(r) { return UNREP.filter(([k, test]) => r.d[k] !== undefined && r.d[k] !== null && test(r.d[k])).map(([k, , s]) => s(r.d[k])); }
+function dsDetail() {
+  const r = ds.sel, box = $("#detail");
+  if (!r) { box.innerHTML = `<p class="note">Click a point or a table row to inspect a design.</p>`; return; }
+  const R = r.r, s = SETK[r.set], pair = r.set === "v1" ? (RERUN_IDS.has(r.id) ? ROWS.find(q => q.set === "rerun" && q.id === r.id) : null) : r.set === "rerun" ? BY_ID_V1[r.id] : null;
+  const Wh = RK.Wh.f(r);
+  const kp = kpi("Total water out", (100 * R.out).toFixed(1) + "%", "liquid + vapor leaving the top", R.out > 1 ? "bad" : "", true) +
+    kpi("Energy per liter", isFinite(Wh) ? Wh.toPrecision(3) + " Wh/L" : "–", ds.recool ? "electric + fan + pump + recooling" : `electric + fan + pump` + (R.recoolW ? ` · recooling adds ${(R.recoolW / R.rec).toPrecision(3)}` : ""), "", true) +
+    kpi("Pressure drop", R.dp.toFixed(1) + " Pa", "", "", true) +
+    kpi("Arc margin", R.arc.toFixed(2), R.arc < 0 ? "arcs" : "no arcing", R.arc < 0 ? "bad" : "", true) +
+    kpi("Field at the wall", R.Ewall !== undefined ? R.Ewall.toFixed(2) + " kV/cm" : "–", "corona stage", "", true) +
+    kpi("Recovered", R.rec.toFixed(2) + " L/h", `vapor removed ${(100 * R.vap).toFixed(1)}% · liquid escaping ${(100 * R.esc).toFixed(2)}%`) +
+    kpi("Corona", R.Ima.toFixed(3) + " mA", R.Ima0 ? `${R.Ima0.toFixed(2)} mA without mist` : "") +
+    kpi("Browser model", r.bm ? (100 * r.bm.out).toFixed(1) + "%" : "…", r.bm ? `total water out · Δ ${(100 * (r.bm.out - R.out)).toFixed(1)} pts vs stored` : "running");
+  const p = r.d, flags = unrepresented(r);
+  const prow = (n, v) => `<tr><td>${n}</td><td class="n">${v}</td></tr>`;
+  const params = [
+    ["Air flow rate", p.air_flow_m3_s.toFixed(3) + " m³/s"], ["Tube diameter", (100 * p.tube_diameter_m).toFixed(1) + " cm"],
+    ["Spray / corona section", `${p.spray_section_length_m.toFixed(2)} m / ${p.corona_section_length_m.toFixed(2)} m`],
+    ["Nozzle position", (100 * p.nozzle_height_frac).toFixed(0) + "% up the spray section"],
+    ["Discs", `${(200 * p.tube_diameter_m / 2 * p.disc_diameter_frac).toFixed(1)} cm every ${(100 * p.disc_spacing_m).toFixed(1)} cm, ${p.disc_thickness_mm.toFixed(2)} mm thick`],
+    ["Corona", `${p.corona_voltage_kV.toFixed(1)} kV, ${p.corona_polarity < 0 ? "negative" : "positive"}`],
+    ["Spray", p.spray_flow_L_min > 0 ? `${p.spray_flow_L_min.toFixed(2)} L/min at ${p.spray_T_C.toFixed(1)} °C, ${p.spray_d_um.toPrecision(3)} µm (GSD ${(p.spray_gsd ?? 1).toFixed(1)}), launched at ${(p.spray_v0 ?? 2).toFixed(1)} m/s, charge ${p.spray_q_frac > 0 ? p.spray_q_frac.toPrecision(2) + "× Rayleigh, " + (p.spray_polarity_rel < 0 ? "opposite" : "same") + " sign" : "neutral"}` : "none"],
+    ["Spray water / air", r.lg.toFixed(2) + " kg/kg"],
+  ];
+  let cmp = "";
+  if (r.set === "v1" && r.rom) cmp += `<div>Old fast model (wrong corona onset): total water out <b>${(100 * r.rom.out).toFixed(1)}%</b>, current <b>${r.rom.Ima.toFixed(2)} mA</b>, onset ${r.rom.Von ? r.rom.Von.toFixed(1) + " kV" : "–"}.</div>`;
+  if (pair) cmp += `<div>${pair.set === "rerun" ? "Same design, fully resolved" : "Same design, fast spray + resolved corona"}: total water out <b>${(100 * pair.r.out).toFixed(1)}%</b>, vapor removed ${(100 * pair.r.vap).toFixed(1)}%, liquid escaping ${(100 * pair.r.esc).toFixed(2)}%. <button type="button" class="btn" id="gopair">Inspect it</button></div>`;
+  if (r.ss) cmp += `<div>Spray stage (CFD): air leaves it at <b>${r.ss.Tout?.toFixed(1)} °C</b>, wall film drains ${(100 * (r.ss.film || 0)).toFixed(1)}% of the inlet water${r.ss.recirc ? ", with reverse flow below the nozzle" : ""}.</div>`;
+  box.innerHTML = `<div class="rowhead"><div><span class="eyebrow">${FAMNAME[r.fam] || r.fam} · <span class="dot" style="background:var(${s.c})"></span> ${s.n}</span><h2 style="margin-top:4px">${r.id}</h2></div>
+    <span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="openSim">Open in simulator</button><button type="button" class="btn" id="rerunRes" ${r.set === "v1" ? "title=\"v1 used the fast spray model; the resolved model will differ in the spray stage\"" : ""}>Re-run at full fidelity here</button></span></div>
+    <div class="kpis">${kp}</div>
+    <div class="two"><div class="scroll"><table class="ptable"><tbody>${params.map(q => prow(...q)).join("")}</tbody></table></div>
+    <div class="val" style="margin:0;grid-template-columns:1fr">${cmp}${flags.length ? `<div><span class="flag">Not in the browser model:</span> ${flags.join("; ")}.</div>` : ""}</div></div>`;
+  $("#openSim").onclick = () => openInSim(r);
+  $("#rerunRes").onclick = () => { openInSim(r); runResolved(); setTimeout(() => $("#respanel").scrollIntoView({ behavior: "smooth" }), 50); };
+  if (pair) $("#gopair").onclick = () => { ds.sel = pair; if (!ds.sets.has(pair.set)) { ds.sets.add(pair.set); $(`#setfl input[data-set="${pair.set}"]`).checked = true; } dsRender(); };
+}
+function rowToU(r) {
+  const p = r.d, a = r.a;
+  return { ...DEFAULTS, air_flow_m3_s: p.air_flow_m3_s, tube_diameter_m: p.tube_diameter_m, spray_section_length_m: p.spray_section_length_m,
+    corona_section_length_m: p.corona_section_length_m, nozzle_height_frac: p.nozzle_height_frac, disc_diameter_frac: p.disc_diameter_frac,
+    disc_spacing_m: p.disc_spacing_m, spray_flow_L_min: p.spray_flow_L_min, spray_T_C: p.spray_T_C, spray_d_um: p.spray_d_um,
+    spray_gsd: p.spray_gsd ?? 1.5, spray_v0: p.spray_v0 ?? 2,
+    disc_thickness_mm: p.disc_thickness_mm ?? 0.3, spray_cone_half_angle_deg: p.spray_cone_half_angle_deg ?? 30, wall_U_W_m2K: p.wall_U_W_m2K ?? 0,
+    ambient_T_C: a.ambient_T_C ?? 25,
+    spray_q_frac: Math.max(p.spray_q_frac, 1e-5), corona_voltage_kV: p.corona_voltage_kV,
+    inlet_T_C: a.inlet_T_C, inlet_RH: a.inlet_RH, inlet_lwc_g_m3: a.inlet_lwc_g_m3, mist_mmd_um: a.mist_mmd_um, mist_gsd: a.mist_gsd };
+}
+function openInSim(r) {
+  state.u = rowToU(r); state.sprayMode = "atomizer"; state.supply = "V"; state.pol = r.d.corona_polarity < 0 ? -1 : 1; state.spol = r.d.spray_polarity_rel < 0 ? -1 : 1;
+  state.loaded = r; fixAxes(); syncRail(); showTab("simulate"); schedule(); scrollTo({ top: 0 });
+}
+function renderLoaded(res, ex) {
+  const b = $("#loaded"), r = state.loaded;
+  if (!r) { b.hidden = true; return; }
+  const flags = unrepresented(r), clip = PARAMS.filter(p => { const v = rowToU(r)[p.k]; return v < p.lo - 1e-9 || v > p.hi + 1e-9; });
+  b.hidden = false;
+  b.innerHTML = `<div class="rowhead"><span><span class="eyebrow">Loaded from the precomputed runs</span> <b>${r.id}</b></span><button type="button" class="btn" id="unload">Dismiss</button></div>
+    <div class="note">Stored run (${SETK[r.set].n.toLowerCase()}): total water out <b>${(100 * r.r.out).toFixed(1)}%</b>, ${r.r.Ima.toFixed(3)} mA, Δp ${r.r.dp.toFixed(1)} Pa. The browser model gives <b>${(100 * res.outlet_total_water_frac).toFixed(1)}%</b>, ${res.corona_current_mA.toFixed(3)} mA, Δp ${res.pressure_drop_Pa.toFixed(1)} Pa.
+    ${flags.length ? ` Not in the browser model: ${flags.join("; ")}.` : ""}${r.lg > LG_MAX ? " Spray water exceeds the air by mass, outside the browser model's validated range." : ""}${clip.length ? ` Outside the sliders' range: ${clip.map(p => p.n.toLowerCase()).join(", ")}.` : ""}</div>`;
+  $("#unload").onclick = () => { state.loaded = null; b.hidden = true; };
+}
+async function runStored() {
+  if (!ROWS.length) return;
+  const n = ROWS.length, arr = new Float32Array(n * S_IN), t0 = performance.now();
+  ROWS.forEach((r, i) => WCGPU.packDesign(arr, i, toModel(rowToU(r), "atomizer", "V", r.d.corona_polarity, r.d.spray_polarity_rel).x));
+  const out = await runEngine(arr, n);
+  ROWS.forEach((r, i) => { r.bm = { out: out[i * S_OUT + O.outlet_total_water_frac], Ima: out[i * S_OUT + O.corona_current_mA] }; });
+  // spray carried out the top makes "total water out" several times the inlet; those designs fail in both
+  // models and only the size of the failure differs, so they are counted apart, not folded into a percentile
+  const stat = set => {
+    const rs = ROWS.filter(r => set.includes(r.set) && r.lg <= LG_MAX && isFinite(r.bm.out));
+    const both = rs.filter(r => r.bm.out > 1 && r.r.out > 1).length, rest = rs.filter(r => !(r.bm.out > 1 && r.r.out > 1));
+    const e = rest.map(r => Math.abs(r.bm.out - r.r.out)).sort((a, b) => a - b);
+    return rs.length ? { n: rs.length, both, med: e[e.length >> 1], w2: e.filter(v => v <= 0.02).length / Math.max(e.length, 1), flip: rest.filter(r => (r.bm.out > 1) !== (r.r.out > 1)).length } : null;
+  };
+  const a = stat(["v1"]), b = stat(["rerun", "new"]);
+  const line = (t, s) => s ? `<br>${t} (${s.n}): within 2 pts on <b>${(100 * s.w2).toFixed(0)}%</b>, median <b>${(100 * s.med).toFixed(1)}</b> pts. Both say spray blows out the top on ${s.both}; they disagree on whether it does on ${s.flip}.` : "";
+  $("#bmstat").innerHTML = `All ${n.toLocaleString()} stored designs through the browser model in ${(performance.now() - t0).toFixed(0)} ms (${engine.name}). Total water out, designs with water/air ≤ 1:` +
+    line("vs fast spray + resolved corona", a) + line("vs fully resolved", b) +
+    `<br>The browser model has no wall film, no wall cooling and no spray-driven recirculation, so it under-predicts vapor capture for rain curtains, charged films, charged sprays and cooled walls. Set an axis to “Browser − stored” to see where they part.`;
+  dsRender();
+  return { a, b };
+}
+
+
+/* ======================= resolved model (Web Worker) ======================= */
+let resWorker = null, resJob = 0, resT0 = 0, resLast = null;
+function resolvedInputs() {
+  // a design loaded from the precomputed runs is passed verbatim (an exact re-run); otherwise the rail
+  if (state.loaded) return { design: { ...state.loaded.d }, aux: { ...state.loaded.a, ambient_T_C: state.u.ambient_T_C }, from: state.loaded.id };
+  const { x } = toModel(state.u), u = state.u;
+  const design = { air_flow_m3_s: x.air_flow_m3_s, tube_diameter_m: x.tube_diameter_m, spray_section_length_m: x.spray_section_length_m,
+    corona_section_length_m: x.corona_section_length_m, nozzle_height_frac: x.nozzle_height_frac, disc_diameter_frac: x.disc_diameter_frac,
+    disc_spacing_m: x.disc_spacing_m, disc_thickness_mm: u.disc_thickness_mm, spray_flow_L_min: x.spray_flow_L_min, spray_T_C: x.spray_T_C,
+    spray_d_um: x.spray_d_um, spray_gsd: Math.max(x.spray_gsd, 1), spray_q_frac: x.spray_q_frac, spray_v0: x.spray_v0,
+    corona_voltage_kV: x.corona_voltage_kV, corona_polarity: x.corona_polarity, spray_polarity_rel: x.spray_polarity_rel,
+    spray_cone_half_angle_deg: u.spray_cone_half_angle_deg, wall_U_W_m2K: u.wall_U_W_m2K };
+  const aux = { inlet_T_C: x.inlet_T_C, inlet_RH: x.inlet_RH, inlet_lwc_g_m3: x.inlet_lwc_g_m3, mist_mmd_um: x.mist_mmd_um, mist_gsd: x.mist_gsd, ambient_T_C: u.ambient_T_C };
+  return { design, aux, from: null };
+}
+function resLog(t) { const el = $("#reslog"); el.textContent += t + "\n"; el.scrollTop = el.scrollHeight; }
+function runResolved() {
+  if (resWorker) resWorker.terminate();
+  resWorker = new Worker(URL.createObjectURL(new Blob([document.getElementById("res-src").textContent], { type: "text/javascript" })));
+  const job = ++resJob, inp = resolvedInputs(), preset = $("#respreset").value;
+  const fastRun = lastRun ? { r: lastRun.r, ex: lastRun.ex } : null;
+  resT0 = performance.now();
+  $("#resprog").hidden = false; $("#reslog").textContent = ""; $("#respbar").style.width = "0%";
+  $("#resrun").disabled = true; $("#rescancel").hidden = false;
+  $("#resstatus").textContent = "running: spray stage";
+  resLog(inp.from ? `re-running ${inp.from} exactly as the campaign stored it` : "running the rail's design");
+  const nPer = Math.max(1, Math.round(inp.design.corona_section_length_m / inp.design.disc_spacing_m));
+  const maxOuter = preset === "resolved" ? 80 : 40;
+  resWorker.onmessage = e => {
+    const m = e.data; if (m.id !== job) return;
+    const el = ((performance.now() - resT0) / 1e3).toFixed(0) + " s";
+    if (m.type === "progress") {
+      if (m.stage === "spray") {
+        const sp = m.spray, f = sp.spray;
+        $("#respbar").style.width = (25 * Math.min(1, (sp.outer + 1) / Math.min(maxOuter, 16))).toFixed(1) + "%";
+        $("#resstatus").textContent = `running: spray stage, outer iteration ${sp.outer + 1} · ${el}`;
+        resLog(`spray it ${sp.outer + 1}: outlet humidity ${(1e3 * sp.wOut).toFixed(3)} g/kg, flow residual ${sp.flowRes.toExponential(1)}` + (f ? `, spray to wall ${(100 * f.wall / Math.max(f.spray_in, 1e-12)).toFixed(0)}% / top ${(100 * f.top / Math.max(f.spray_in, 1e-12)).toFixed(0)}%` : ""));
+      } else {
+        $("#respbar").style.width = (25 + 75 * (m.period + 1) / nPer).toFixed(1) + "%";
+        $("#resstatus").textContent = `running: corona period ${m.period + 1} of ${nPer} · ${el}`;
+        resLog(`corona period ${m.period + 1}/${nPer}: ${(Math.abs(m.current) * 1e6).toFixed(1)} µA, ${(100 * m.collected).toFixed(1)}% of the drops collected so far`);
+      }
+    } else if (m.type === "done") {
+      $("#respbar").style.width = "100%";
+      $("#resstatus").textContent = `done in ${el}`;
+      resLog(`done in ${el}`);
+      resLast = { ...m.result, inp, fastRun, preset, seconds: (performance.now() - resT0) / 1e3 };
+      finishResolved();
+    } else if (m.type === "error") {
+      $("#resstatus").textContent = `failed: ${m.message}`; resLog("error: " + m.message); finishResolved(true);
+    }
+  };
+  resWorker.postMessage({ type: "run", id: job, design: inp.design, aux: inp.aux, preset, seed: 0 });
+}
+function finishResolved(failed) {
+  $("#resrun").disabled = false; $("#rescancel").hidden = true;
+  if (resWorker) { resWorker.terminate(); resWorker = null; }
+  if (!failed && resLast) renderResolved();
+}
+$("#resrun").onclick = runResolved;
+$("#rescancel").onclick = () => { resJob++; $("#resstatus").textContent = "cancelled"; finishResolved(true); };
+
+function renderResolved() {
+  const R = resLast, m = R.metrics;
+  $("#resout").hidden = false;
+  const stored = R.inp.from ? ROWS.find(r => r.id === R.inp.from && r.set !== "v1") || ROWS.find(r => r.id === R.inp.from) : null;
+  const fr = R.fastRun ? R.fastRun.r : null, fex = R.fastRun ? R.fastRun.ex : null;
+  const fastSpec = fr && fr.recovered_L_h > 1e-3 ? (fr.electrical_power_W + fex.esW + fr.fan_power_W) / fr.recovered_L_h : NaN;
+  const rows = [
+    ["Total water out", 100 * m.outlet_total_water_frac, fr && 100 * fr.outlet_total_water_frac, stored && 100 * stored.r.out, v => v.toFixed(2) + "%"],
+    ["Energy per liter (electric + fan)", m.specific_energy_Wh_L, fastSpec, stored && stored.r.spec, v => v.toPrecision(3) + " Wh/L"],
+    ["… adding pump and spray recooling", m.specific_energy_total_Wh_L, null, stored && stored.r.specTot, v => v.toPrecision(3) + " Wh/L"],
+    ["Pressure drop", m.pressure_drop_Pa, fr && fr.pressure_drop_Pa, stored && stored.r.dp, v => v.toFixed(2) + " Pa"],
+    ["Arc margin", m.arc_margin, fr && Math.min(fr.arc_margin, fex.arcS), stored && stored.r.arc, v => v.toFixed(3)],
+    ["Field at the wall", m.wall_field_kV_cm, fr && fr.wall_field_kV_cm, stored && stored.r.Ewall, v => v.toFixed(3) + " kV/cm"],
+    ["Water recovered", m.recovered_L_h, fr && fr.recovered_L_h, stored && stored.r.rec, v => v.toFixed(3) + " L/h"],
+    ["Vapor removed", 100 * m.vapor_removed_frac, fr && 100 * fr.vapor_removed_frac, stored && 100 * stored.r.vap, v => v.toFixed(2) + "%"],
+    ["Liquid escaping", 100 * m.liquid_escape_frac, fr && 100 * fr.liquid_escape_frac, stored && 100 * stored.r.esc, v => v.toFixed(3) + "%"],
+    ["Corona current", m.corona_current_mA, fr && fr.corona_current_mA, stored && stored.r.Ima, v => v.toFixed(4) + " mA"],
+    ["… without mist", m.corona_current_no_mist_mA, fr && fr.corona_current_no_mist_mA, stored && stored.r.Ima0, v => v.toFixed(4) + " mA"],
+    ["Electrical power", m.electrical_power_W, fr && fr.electrical_power_W + fex.esW, stored && stored.r.elecW, v => v.toFixed(2) + " W"],
+    ["Mist quenching of the corona", 100 * m.quenching_frac, null, stored && stored.r.quench != null ? 100 * stored.r.quench : null, v => v.toFixed(1) + "%"],
+    ["Water balance closure", m.water_balance_residual, null, null, v => v.toExponential(1)],
+  ];
+  const cell = (v, f) => v == null || !isFinite(v) ? "<td class=\"n d\">–</td>" : `<td class="n">${f(v)}</td>`;
+  $("#rescmp").innerHTML = `<thead><tr><th></th><th class="n">Resolved, here</th><th class="n">Fast model</th>${stored ? `<th class="n">Stored run (${SETK[stored.set].n.toLowerCase()})</th>` : ""}</tr></thead><tbody>` +
+    rows.map(([n, a, b, c, f]) => `<tr><td>${n}</td>${cell(a, f)}${cell(b, f)}${stored ? cell(c, f) : ""}</tr>`).join("") + "</tbody>";
+  const lin = R.corona ? R.corona.linear : null;
+  $("#resnote").textContent = `Spray stage ${m.cfd_s.toFixed(1)} s (${R.sprayDiag.nOuter} outer iterations, water closure ${R.sprayDiag.waterResidual.toExponential(1)}, ` +
+    `${R.sprayDiag.recirculating ? "with reverse flow" : "no reverse flow"}); corona ${m.ehd_s.toFixed(1)} s over ${R.corona ? R.corona.currents.length : 0} periods` +
+    (lin ? ` (${lin.newton ? lin.newton.factorizations : 0} Newton factorizations)` : "") + `. ` +
+    (R.inp.from ? "The stored run used the same code in Python with its own random numbers, so spray-trace and droplet totals differ by Monte Carlo noise." : "Not every rail input exists in the campaign data; this is a new design.");
+  fillResField(); drawResMap(); drawCorMap(); drawPeriods();
+}
+const RES_FIELDS = [
+  { k: "T", n: "Air temperature, °C", f: F => F.T },
+  { k: "S", n: "Saturation ratio", f: F => F.S },
+  { k: "w", n: "Humidity, g/kg", f: F => F.w.map(x => 1e3 * x) },
+  { k: "sprayLiq", n: "Spray liquid, g/m³", f: F => F.sprayLiq ? F.sprayLiq.map(x => 1e3 * x) : null },
+  { k: "u", n: "Axial air velocity, m/s", f: F => F.u },
+  { k: "l", n: "Fog, g/kg", f: F => F.l.map(x => 1e3 * x) },
+];
+function fillResField() {
+  const s = $("#resfield"); if (s.options.length) return;
+  RES_FIELDS.forEach(f => { const o = document.createElement("option"); o.value = f.k; o.textContent = f.n; s.appendChild(o); });
+  s.onchange = drawResMap; $("#corfield").onchange = drawCorMap;
+}
+/** r-z field of an axisymmetric tube: z left (inlet) to right, r mirrored about the axis, cells drawn at true size. */
+function rzMap(canvas, F, nr, nz, rf, zf, opts = {}) {
+  const w = canvas.parentElement.clientWidth, Rt = rf[nr], L = zf[nz];
+  const h = Math.max(140, Math.min(320, Math.round(w * Math.max(0.18, Math.min(1.1, 2 * Rt / L)))));
+  const dpr = devicePixelRatio || 1; canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); canvas.style.height = h + "px";
+  const c = canvas.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+  const ml = 34, mr = 6, mt = 6, mb = 18, pw = w - ml - mr, ph = h - mt - mb;
+  // range from area-weighted percentiles: a graded grid packs most cells into the edge region,
+  // so plain cell-count percentiles would put the whole scale inside the singular corner
+  const fin = [];
+  for (let i = 0; i < nr; i++) for (let j = 0; j < nz; j++) {
+    const v = F[i * nz + j]; if (!isFinite(v) || (opts.log && !(v > 0))) continue;
+    fin.push([opts.log ? Math.log10(v) : v, (rf[i + 1] - rf[i]) * (zf[j + 1] - zf[j])]);
+  }
+  fin.sort((a, b) => a[0] - b[0]);
+  const wq = q => { let tot = 0; for (const x of fin) tot += x[1]; let acc = 0; for (const x of fin) { acc += x[1]; if (acc >= q * tot) return x[0]; } return fin[fin.length - 1][0]; };
+  let lo = wq(0.01), hi = opts.max ? fin[fin.length - 1][0] : wq(0.995);
+  if (opts.lo !== undefined) lo = opts.lo; if (hi - lo < 1e-12) hi = lo + 1e-12;
+  const X = z => ml + z / L * pw, Y = r => mt + ph / 2 - r / Rt * ph / 2, Y2 = r => mt + ph / 2 + r / Rt * ph / 2;
+  for (let i = 0; i < nr; i++) for (let j = 0; j < nz; j++) {
+    let v = F[i * nz + j]; if (!isFinite(v)) continue;
+    if (opts.log) v = Math.log10(Math.max(v, 1e-30));
+    const col = vir((v - lo) / (hi - lo)); c.fillStyle = `rgb(${col})`;
+    const x0 = X(zf[j]), x1 = X(zf[j + 1]);
+    c.fillRect(x0, Y(rf[i + 1]), x1 - x0 + 0.6, Y(rf[i]) - Y(rf[i + 1]) + 0.6);
+    c.fillRect(x0, Y2(rf[i]), x1 - x0 + 0.6, Y2(rf[i + 1]) - Y2(rf[i]) + 0.6);
+  }
+  if (opts.overlay) opts.overlay(c, X, Y, Y2);
+  c.strokeStyle = css("--ink"); c.lineWidth = 1.5; c.beginPath(); c.moveTo(ml, mt); c.lineTo(ml + pw, mt); c.moveTo(ml, mt + ph); c.lineTo(ml + pw, mt + ph); c.stroke();
+  c.fillStyle = css("--ink-2"); c.font = "10.5px " + css("--f-mono"); c.textAlign = "center";
+  for (const t of niceTicks(0, L, 6)) c.fillText((opts.zScale ? +(t * opts.zScale).toPrecision(3) : +t.toPrecision(3)) + (t === 0 ? (opts.zUnit || " m") : ""), X(t), h - 4);
+  c.textAlign = "right"; c.fillText((opts.rScale ? (Rt * opts.rScale).toPrecision(2) : (100 * Rt).toFixed(0)) + (opts.rUnit || " cm"), ml - 4, mt + 9); c.fillText("axis", ml - 4, mt + ph / 2 + 3);
+  return { lo, hi };
+}
+function drawResMap() {
+  if (!resLast) return;
+  const F = resLast.fields, fd = RES_FIELDS.find(f => f.k === $("#resfield").value) || RES_FIELDS[0], arr = fd.f(F);
+  if (!arr) { $("#resmapleg").textContent = "no spray in this design"; $("#resmap").getContext("2d").clearRect(0, 0, 9999, 9999); return; }
+  const nz = F.nz, zf = new Float64Array(nz + 1);
+  for (let j = 1; j < nz; j++) zf[j] = 0.5 * (F.zc[j - 1] + F.zc[j]);
+  zf[nz] = 2 * F.zc[nz - 1] - zf[nz - 1];
+  const Ls = resLast.inp.design.spray_section_length_m;
+  const { lo, hi } = rzMap($("#resmap"), arr, F.nr, nz, F.rf, zf, { log: fd.k === "sprayLiq", overlay: (c, X, Y, Y2) => {
+    c.setLineDash([4, 3]); c.strokeStyle = "rgba(255,255,255,0.8)"; c.beginPath(); c.moveTo(X(Ls), Y(F.rf[F.nr])); c.lineTo(X(Ls), Y2(F.rf[F.nr])); c.stroke(); c.setLineDash([]);
+  } });
+  const fmt = v => fd.k === "sprayLiq" ? (10 ** v).toPrecision(2) : (+v.toPrecision(4)).toString();
+  $("#resmapleg").innerHTML = `<span>${fd.n}</span><span>${fmt(lo)} <span class="cbar" style="background:${virCSS}"></span> ${fmt(hi)}</span><span>dashed: start of the corona section, which this stage resolves too (no field there)</span>`;
+}
+function drawCorMap() {
+  if (!resLast || !resLast.corona) { $("#cormapleg").textContent = resLast ? "no corona stage (nothing reached it)" : ""; return; }
+  const d = resLast.inp.design, R = d.tube_diameter_m / 2, cell = resLast.corona.cell;
+  // rebuild the unit-cell grid exactly as the solver did (ehd.graded_faces)
+  const tier = resLast.preset === "resolved" ? { e: 10, hc: 1e-3, g: 1.12 } : { e: 8, hc: 2e-3, g: 1.2 };
+  const re = d.disc_thickness_mm * 1e-3 / 2, hf = re / tier.e, rd = d.disc_diameter_frac * R, s = d.disc_spacing_m;
+  const rf = gradedFacesJS(0, R, [rd - re, rd, rd + re], hf, tier.hc, tier.g), zf = gradedFacesJS(0, s, [s / 2 - re, s / 2, s / 2 + re], hf, tier.hc, tier.g);
+  const nr = rf.length - 1, nz = zf.length - 1;
+  if (nr * nz !== cell.Er.length) { $("#cormapleg").textContent = "grid mismatch"; return; }
+  const which = $("#corfield").value;
+  const F = which === "E" ? Float64Array.from(cell.Er, (x, k) => Math.hypot(x, cell.Ez[k]) / 1e5) : Float64Array.from(cell.rho, x => Math.abs(x) / 1.602e-19);
+  const { lo, hi } = rzMap($("#cormap"), F, nr, nz, rf, zf, { log: true, max: true, zScale: 100, zUnit: " cm", overlay: (c, X, Y, Y2) => {
+    c.fillStyle = css("--volt"); const x0 = X(s / 2 - re), x1 = X(s / 2 + re);
+    c.fillRect(x0 - 1, Y(rd), x1 - x0 + 2, Y2(rd) - Y(rd));
+  } });
+  $("#cormapleg").innerHTML = `<span>${which === "E" ? "|E|, kV/cm" : "ion density, 1/m³"} (log)</span><span>${(10 ** lo).toPrecision(2)} <span class="cbar" style="background:${virCSS}"></span> ${(10 ** hi).toPrecision(2)}</span><span>amber: the disc, ${(200 * rd).toFixed(1)} cm, ${d.disc_thickness_mm.toFixed(2)} mm thick</span>`;
+}
+function gradedFacesJS(lo, hi, fine, hF, hC, gr) {
+  const pts = fine.filter(p => lo <= p && p <= hi).sort((a, b) => a - b);
+  const target = x => { if (!pts.length) return hC; let d = Infinity; for (const p of pts) d = Math.min(d, Math.abs(p - x)); return Math.min(hF + (gr - 1) * d, hC); };
+  const f = [lo]; let x = lo;
+  while (x < hi) { let h = target(x); h = Math.min(h, target(x + h)); x = Math.min(x + h, hi); f.push(x); }
+  const n = f.length; if (n > 2 && f[n - 1] - f[n - 2] < 0.3 * (f[n - 2] - f[n - 3])) f.splice(n - 2, 1);
+  return Float64Array.from(f);
+}
+function drawPeriods() {
+  const svg = $("#resper"); svg.innerHTML = "";
+  if (!resLast || !resLast.corona) return;
+  const C = resLast.corona, cl = resLast.classes, P = C.periods.length;
+  const W = 760, H = 220, l = 56, r = 56, t = 26, b = 34, pw = W - l - r, ph = H - t - b;
+  el("text", { x: 2, y: 14, class: "ttl" }, svg).textContent = "Corona section, period by period: current (bars) and drops collected so far (line)";
+  const cur = C.currents.map(x => Math.abs(x) * 1e6), cmax = Math.max(...cur, Math.abs(C.noMistCurrent) * 1e6) * 1.1;
+  const nf = cl.nflow.reduce((a, b) => a + b, 0);
+  let acc = 0; const coll = C.periods.map(p => (acc += p.wall.reduce((a, b) => a + b, 0)) / nf);
+  const X = i => l + (i + 0.5) / P * pw, bw = Math.max(2, pw / P * 0.6);
+  const g = el("g", {}, svg);
+  for (const v of niceTicks(0, cmax, 4)) { const y = t + ph - v / cmax * ph; el("line", { x1: l, x2: l + pw, y1: y, y2: y, stroke: css("--rule") }, g); el("text", { x: l - 6, y: y + 3.5, "text-anchor": "end" }, g).textContent = +v.toPrecision(3); }
+  for (const v of [0, 0.25, 0.5, 0.75, 1]) el("text", { x: l + pw + 6, y: t + ph - v * ph + 3.5 }, g).textContent = (100 * v).toFixed(0) + "%";
+  el("text", { x: 14, y: t + ph / 2, transform: `rotate(-90 14 ${t + ph / 2})`, "text-anchor": "middle" }, g).textContent = "µA per period";
+  const y0 = t + ph - Math.abs(C.noMistCurrent) * 1e6 / cmax * ph;
+  el("line", { x1: l, x2: l + pw, y1: y0, y2: y0, stroke: css("--volt"), "stroke-dasharray": "4 3" }, g);
+  el("text", { x: l + pw - 2, y: y0 - 4, "text-anchor": "end" }, g).textContent = "without mist";
+  cur.forEach((v, i) => el("rect", { x: X(i) - bw / 2, y: t + ph - v / cmax * ph, width: bw, height: v / cmax * ph, fill: css("--volt"), opacity: 0.75 }, g));
+  el("path", { d: coll.map((v, i) => (i ? "L" : "M") + X(i).toFixed(1) + "," + (t + ph - v * ph).toFixed(1)).join(""), fill: "none", stroke: css("--water"), "stroke-width": 2 }, g);
+  coll.forEach((v, i) => el("circle", { cx: X(i), cy: t + ph - v * ph, r: 2.5, fill: css("--water") }, g));
+  for (let i = 0; i < P; i += Math.max(1, Math.ceil(P / 12))) el("text", { x: X(i), y: H - 16, "text-anchor": "middle" }, g).textContent = i + 1;
+  el("text", { x: l + pw / 2, y: H - 2, "text-anchor": "middle" }, g).textContent = "disc period (bottom to top)";
+}
+
+/* ======================= tabs ======================= */
+function showTab(t) {
+  for (const k of ["simulate", "designs"]) { $("#" + k).hidden = k !== t; $("#tab-" + k).setAttribute("aria-selected", k === t); }
+  try { history.replaceState(null, "", "#" + t); } catch (e) { /* hash is a convenience */ }
+  if (t === "designs") dsRender(); else render();
+}
+$("#tab-simulate").onclick = () => showTab("simulate");
+$("#tab-designs").onclick = () => showTab("designs");
+
+/* ======================= validation ======================= */
+async function selfCheck() {
+  const n = 64, arr = new Float32Array(n * S_IN), xs = [];
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  while (xs.length < n) {
+    const u = {}; for (const p of PARAMS) u[p.k] = fromT(p, rnd());
+    const { x } = toModel(u, "atomizer", "V", rnd() < 0.5 ? -1 : 1, rnd() < 0.5 ? -1 : 1);
+    if (lgRatio(x) > LG_MAX) continue; WCGPU.packDesign(arr, xs.length, x); xs.push(x);
+  }
+  const out = await runEngine(arr, n);
+  const d = xs.map((x, i) => Math.abs(out[i * S_OUT] - WCModel.simulate(x, { ...MODEL_OPT, fit: FIT }).outlet_total_water_frac)).sort((a, b) => a - b);
+  return { med: d[n >> 1], p90: d[Math.floor(0.9 * n)], max: d[n - 1] };
+}
+function fillValidation(chk) {
+  $("#val").innerHTML = `
+  <div><b>${engine.name === "GPU" ? "GPU (float32) vs CPU (float64)" : "CPU engine"}</b>, checked just now on 64 random designs: total water out differs by a median of <b>${chk.med.toExponential(1)}</b>, p90 <b>${chk.p90.toExponential(1)}</b>, max <b>${chk.max.toExponential(1)}</b>.</div>
+  <div><b>This port vs. the Python fast model</b> on the 1,050 campaign v1 designs (lognormal atomizer spray, fast-model corona, water/air ≤ 1): total water out median error <b>5.5e-5</b>, p90 <b>1.6e-3</b>.</div>
+  <div><b>Refit corona vs. the resolved electric model</b> on 55 pilot designs: corona on or off matches <b>55/55</b>. Total water out median error <b>8e-4</b>, p90 <b>2.6e-3</b>. Current median ratio <b>1.18</b>. Fine-mist designs are under-quenched, with current up to about 5× too high.</div>
+  <div><b>Brad's geometry</b> (30 cm tube, 9 cm discs, 2 g/m³ of 15 µm mist): onset <b>32.8 kV</b> (resolved 33.0–33.5). Current at 35 / 40 / 46 kV is <b>0.135 / 0.649 / 1.43 mA</b> (resolved 0.134 / 0.669 / 1.46).</div>
+  <div><b>Against the fully resolved runs</b> (spray CFD + wall film + resolved corona), see the precomputed tab: the browser model has no wall film, so it misses the extra condensation of sprays that land on the wall, and it treats strongly counterflowing sprays as well mixed.</div>`;
+}
+
+/* ======================= boot ======================= */
+buildRail(); buildSelects(); syncRail(); updateReadout(); buildDesigns();
+if (location.hash === "#designs") showTab("designs");
+(async () => {
+  const chips = $("#chips");
+  try { engine = await gpuEngine(); } catch (e) { engine = cpuEngine(); chips.innerHTML = `<span class="chip warn">WebGPU unavailable (${e.message}): sweeps run on CPU at ${engine.res}×${engine.res}</span>`; }
+  await compute();
+  const chk = await selfCheck(); fillValidation(chk);
+  const ok = chk.p90 < 1e-2;
+  chips.innerHTML = (engine.name === "GPU" ? `<span class="chip ok">WebGPU · ${engine.res}² sweep</span>` : chips.innerHTML) +
+    `<span class="chip ${ok ? "ok" : "warn"}">${engine.name} vs float64: p90 Δ ${chk.p90.toExponential(1)}</span><span class="chip">corona fitted to 264 resolved solves</span>`;
+  await runStored();
+})();
+addEventListener("resize", () => { render(); dsRender(); if (resLast) { drawResMap(); drawCorMap(); } });
+const rerender = () => { render(); dsRender(); if (lastRun) drawTube(lastRun.x, lastRun.r); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", rerender);
+new MutationObserver(rerender).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+// stored-design hover
+scv.addEventListener("mousemove", ev => {
+  const rc = scv.getBoundingClientRect(), x = ev.clientX - rc.left, y = ev.clientY - rc.top, tip = $("#stip");
+  let best = null, bd = 64; for (const p of scatPts) { const d = (p.px - x) ** 2 + (p.py - y) ** 2; if (d < bd) { bd = d; best = p; } }
+  if (!best) { tip.hidden = true; scv.style.cursor = ""; return; }
+  const r = best.r; scv.style.cursor = "pointer";
+  tip.innerHTML = `<b>${r.id}</b> · ${SETK[r.set].n}<br>total water out ${(100 * r.r.out).toFixed(1)}%<br>${isFinite(RK.Wh.f(r)) ? RK.Wh.f(r).toPrecision(3) + " Wh/L" : "no recovery"} · Δp ${r.r.dp.toFixed(1)} Pa<br>arc margin ${r.r.arc.toFixed(2)} · ${r.r.Ima.toFixed(2)} mA` + (r.bm ? `<br>browser model ${(100 * r.bm.out).toFixed(1)}%` : "");
+  tip.hidden = false; const tw = tip.offsetWidth; tip.style.left = Math.min(x + 14, rc.width - tw - 4) + "px"; tip.style.top = (y + 14) + "px";
+  scv._hover = r;
+});
+scv.addEventListener("mouseleave", () => { $("#stip").hidden = true; scv._hover = null; });
+scv.addEventListener("click", () => { if (scv._hover) { ds.sel = scv._hover; dsRender(); } });
+</script>
