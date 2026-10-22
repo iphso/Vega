@@ -1070,8 +1070,9 @@ function resolvedInputs() {
 }
 function resLog(t) { const el = $("#reslog"); el.textContent += t + "\n"; el.scrollTop = el.scrollHeight; }
 function runResolved() {
-  if (resWorker) resWorker.terminate();
-  resWorker = new Worker(URL.createObjectURL(new Blob([document.getElementById("res-src").textContent], { type: "text/javascript" })));
+  // one worker for the page's lifetime (dropped only on cancel or error): it keeps its
+  // factorization pool and whatever that pool has learned about this machine
+  if (!resWorker) resWorker = new Worker(URL.createObjectURL(new Blob([document.getElementById("res-src").textContent], { type: "text/javascript" })));
   const job = ++resJob, inp = resolvedInputs(), preset = $("#respreset").value;
   const fastRun = lastRun ? { r: lastRun.r, ex: lastRun.ex } : null;
   resT0 = performance.now();
@@ -1099,7 +1100,7 @@ function runResolved() {
       $("#respbar").style.width = "100%";
       $("#resstatus").textContent = `done in ${el}`;
       resLog(`done in ${el}`);
-      resLast = { ...m.result, inp, fastRun, preset, threads: m.threads || 1, seconds: (performance.now() - resT0) / 1e3 };
+      resLast = { ...m.result, inp, fastRun, preset, threads: m.pool ? m.pool.workersUsed || 1 : m.threads || 1, poolVerdict: m.pool ? m.pool.verdict : null, seconds: (performance.now() - resT0) / 1e3 };
       finishResolved();
     } else if (m.type === "error") {
       $("#resstatus").textContent = `failed: ${m.message}`; resLog("error: " + m.message); finishResolved(true);
@@ -1109,7 +1110,7 @@ function runResolved() {
 }
 function finishResolved(failed) {
   $("#resrun").disabled = false; $("#rescancel").hidden = true;
-  if (resWorker) { resWorker.terminate(); resWorker = null; }
+  if (failed && resWorker) { resWorker.terminate(); resWorker = null; }
   if (!failed && resLast) renderResolved();
 }
 $("#resrun").onclick = runResolved;
@@ -1143,7 +1144,7 @@ function renderResolved() {
   const lin = R.corona ? R.corona.linear : null;
   $("#resnote").textContent = `Spray stage ${m.cfd_s.toFixed(1)} s (${R.sprayDiag.nOuter} outer iterations, water closure ${R.sprayDiag.waterResidual.toExponential(1)}, ` +
     `${R.sprayDiag.recirculating ? "with reverse flow" : "no reverse flow"}); corona ${m.ehd_s.toFixed(1)} s over ${R.corona ? R.corona.currents.length : 0} periods` +
-    (lin ? ` (${lin.newton ? lin.newton.factorizations : 0} Newton factorizations, ${R.threads > 1 ? `factored on ${R.threads} workers` : "factored in one thread"})` : "") + `. ` +
+    (lin ? ` (${lin.newton ? lin.newton.factorizations : 0} Newton factorizations, ${R.threads > 1 ? `factored on ${R.threads} workers` : "factored in one thread"}${R.poolVerdict ? `, pool: ${R.poolVerdict}` : ""})` : "") + `. ` +
     (R.inp.from ? "The stored run used the same code in Python with its own random numbers, so spray-trace and droplet totals differ by Monte Carlo noise." : "Not every rail input exists in the campaign data; this is a new design.");
   fillResField(); drawResMap(); drawCorMap(); drawPeriods();
 }
