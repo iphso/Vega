@@ -1100,7 +1100,7 @@ function runResolved() {
       $("#respbar").style.width = "100%";
       $("#resstatus").textContent = `done in ${el}`;
       resLog(`done in ${el}`);
-      resLast = { ...m.result, inp, fastRun, preset, threads: m.pool ? m.pool.workersUsed || 1 : m.threads || 1, poolVerdict: m.pool ? m.pool.verdict : null, seconds: (performance.now() - resT0) / 1e3 };
+      resLast = { ...m.result, inp, fastRun, preset, threads: m.pool ? m.pool.workersUsed || 1 : m.threads || 1, pool: m.pool || null, seconds: (performance.now() - resT0) / 1e3 };
       finishResolved();
     } else if (m.type === "error") {
       $("#resstatus").textContent = `failed: ${m.message}`; resLog("error: " + m.message); finishResolved(true);
@@ -1116,6 +1116,13 @@ function finishResolved(failed) {
 $("#resrun").onclick = runResolved;
 $("#rescancel").onclick = () => { resJob++; $("#resstatus").textContent = "cancelled"; finishResolved(true); };
 
+// workersUsed is the most the pool ever ran, its trial included
+function factoredNote(R) {
+  const p = R.pool;
+  if (p && p.verdict === "in place") return R.threads > 1 ? `factored in one thread: a ${R.threads}-worker pool measured ${p.measuredSpeedup.toFixed(1)}×, not worth it here` : "factored in one thread";
+  if (p && p.verdict === "pending" && R.threads > 1) return `factored on up to ${R.threads} workers, still measuring whether they pay`;
+  return R.threads > 1 ? `factored on ${R.threads} workers${p && p.measuredSpeedup ? `, ${p.measuredSpeedup.toFixed(1)}× over one thread` : ""}` : "factored in one thread";
+}
 function renderResolved() {
   const R = resLast, m = R.metrics;
   $("#resout").hidden = false;
@@ -1144,7 +1151,7 @@ function renderResolved() {
   const lin = R.corona ? R.corona.linear : null;
   $("#resnote").textContent = `Spray stage ${m.cfd_s.toFixed(1)} s (${R.sprayDiag.nOuter} outer iterations, water closure ${R.sprayDiag.waterResidual.toExponential(1)}, ` +
     `${R.sprayDiag.recirculating ? "with reverse flow" : "no reverse flow"}); corona ${m.ehd_s.toFixed(1)} s over ${R.corona ? R.corona.currents.length : 0} periods` +
-    (lin ? ` (${lin.newton ? lin.newton.factorizations : 0} Newton factorizations, ${R.threads > 1 ? `factored on ${R.threads} workers` : "factored in one thread"}${R.poolVerdict ? `, pool: ${R.poolVerdict}` : ""})` : "") + `. ` +
+    (lin ? ` (${lin.newton ? lin.newton.factorizations : 0} Newton factorizations, ${factoredNote(R)})` : "") + `. ` +
     (R.inp.from ? "The stored run used the same code in Python with its own random numbers, so spray-trace and droplet totals differ by Monte Carlo noise." : "Not every rail input exists in the campaign data; this is a new design.");
   fillResField(); drawResMap(); drawCorMap(); drawPeriods();
 }
