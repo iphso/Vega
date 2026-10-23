@@ -1,0 +1,39 @@
+FoamFile
+{
+    format      ascii;
+    class       volScalarField;
+    location    "0/solid";
+    object      T;
+}
+
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform 293.15;
+
+boundaryField
+{
+    liquid
+    {
+        type            externalWallHeatFluxTemperature;
+        h               uniform 300;
+        Ta              uniform 363.15;
+        thicknessLayers ();
+        kappaLayers     ();
+        kappaMethod     solidThermo;
+        value           uniform 293.15;
+    }
+    ambient
+    {
+        type            externalWallHeatFluxTemperature;
+        h               uniform 15;
+        Ta              uniform 293.15;
+        thicknessLayers ();
+        kappaLayers     ();
+        kappaMethod     solidThermo;
+        value           uniform 293.15;
+    }
+    sides
+    {
+        type            empty;
+    }
+}

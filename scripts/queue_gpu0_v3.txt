@@ -1,0 +1,22 @@
+# Second-generation NAE-seeded lane, mining the original 48-config NAE pilot
+# sweep (output/nae_pilot/results.jsonl) more thoroughly than the first pass
+# did -- p3_v4d_nae_seed_gpu1 only ever used the single lowest-qi seed
+# (mirror_ratio_target=0.25 -> measured mr=0.347). Re-sorting that same
+# 19-converged-row result set by measured mirror_ratio instead of qi shows
+# the mirror_ratio_target=0.15 configs land much closer to the P3 threshold
+# than the target=0.25 one did: nfp=2/aspect_ratio=8/target=0.15 measures at
+# mr=0.258 -- closer to the 0.25 wall than anything found anywhere in this
+# project by gradient search (0.48-0.69) or the target=0.25 NAE seed's own
+# ALM push (0.347->0.435 so far). Mechanistic reason, not a fluke:
+# generate_nae's mirror_ratio argument is a first-order analytic target, not
+# what the full VMEC++ equilibrium actually realizes -- there's a systematic
+# gap between requested and measured mr, and dialing the request LOWER than
+# the true threshold compensates for that gap. qi is worse here (0.023 vs
+# 0.0095) but qi is exactly the axis the sibling qi-attack lane already
+# knows how to push; the missing piece was ever landing this close to the
+# mirror_ratio wall in the first place. Same corrected recipe as
+# p3_v4e_qi_attack_gpu0 (minimize mirror_ratio, hard-constrain
+# qi<=0.0003162 plus vacuum_well/flux_compression/iota) -- anchor is the
+# only thing that differs. Launched on GPU0, which is now fully free after
+# retiring p4_halfsiren_v1 (see EXPERIMENT_LOG.md, 2026-09-14 stall audit).
+p3_v4f_nae2_nfp2ar8_gpu0|run_grounded_walk_v4.sh|MAX_ROUNDS=3000 MAX_RETRAINS=40 RETRAIN_EPOCHS=60 BASE_SPLIT=bootstrap_live SCORER_ARCH=half_siren|--scorer-tag reg_half_siren_big_soap_full_s0 --nfp 2 --n-fibers 15 --alm-inner-steps 20 --lr 0.01 --anchor-x-file output/nae_seed2_nfp2_ar8_anchor.npy --anchor-jitter 0.03 --minimize edge_magnetic_mirror_ratio --obj-ramp-start 0.3 --obj-ramp-end 0.05 --stall-retrain-rounds 15 --seed 29 --constraint abs(edge_rotational_transform_over_n_field_periods)>=0.25 --constraint qi<=0.0003162 --constraint flux_compression_in_regions_of_bad_curvature<=0.9 --constraint vacuum_well>=0.0

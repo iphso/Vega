@@ -1,0 +1,3 @@
+liquidCouplingFvPatchScalarField.C
+
+LIB = $(FOAM_LIBBIN)/libliquidCoupling

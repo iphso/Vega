@@ -1,0 +1,22 @@
+# Continuation queue for GPU1, post-vacation review (2026-09-11): resuming
+# the single best lineage from the vacation sweep -- p2_halfsiren_v1_gpu1_seed1
+# is the only slot that found a candidate satisfying 3 of 5 P3 constraints at
+# once (qi, vacuum_well, flux_compression all pass; edge_mirror_ratio and
+# edge_rotational_transform are the remaining gap). Its z.pt/rho.pt/y.pt
+# already encode that fiber's exact position -- this is a true continuation,
+# not a fresh anchor. MAX_ROUNDS/MAX_RETRAINS raised for the same reason as
+# gpu0's queue: depth on the lead, not breadth.
+#
+# 2026-09-12: this remains the best-performing lane by a wide margin (647 of
+# 10,410 real pool rows at 4/5 constraints, vs. 177/11,030 for p4 and
+# 19/1,805 for the now-retired v2 variant -- see EXPERIMENT_LOG.md). It was
+# about to hit its original 20-retrain cap, so manually relaunched as a true
+# continuation with budget raised again (MAX_ROUNDS=3000, MAX_RETRAINS=40)
+# rather than let it stop. This line is for watchdog crash-restart only.
+p2_halfsiren_v1_gpu1_seed1|run_grounded_walk_gpu1.sh|MAX_ROUNDS=3000 MAX_RETRAINS=40 RETRAIN_EPOCHS=60 BASE_SPLIT=bootstrap_live SCORER_ARCH=half_siren|--scorer-tag reg_half_siren_big_soap_full_s0 --nfp 2 --n-fibers 30 --alm-inner-steps 20 --lr 0.01 --obj-ramp-start 0.3 --obj-ramp-end 0.05 --stall-retrain-rounds 15 --seed 1 --constraint abs(edge_rotational_transform_over_n_field_periods)>=0.25 --constraint edge_magnetic_mirror_ratio<=0.25 --constraint flux_compression_in_regions_of_bad_curvature<=0.9 --constraint vacuum_well>=0.0 --constraint qi<=0.0003162
+
+# RETIRED 2026-09-14: same finding as queue_gpu0.txt -- worst
+# normalized-constraint-violation frozen since ~30% through this run's
+# 17,200-row real pool, 813+ rounds with zero further progress on the metric
+# that actually matters. Manually killed; FAILED marker written. GPU1's base
+# lane is now free (gpu1v3's NAE-seed push still runs colocated on GPU1).

@@ -1,0 +1,150 @@
+1642 designs -> /home/sl8rv/Projects/Vega/viewer/public/data/watercap/designs.json
+98 scenes wanted, 88 to build
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: invalid value encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+scene cold_spray-0243 76.1 s
+scene cold_spray-0316 72.3 s
+scene cold_spray-0032 54.0 s
+scene cold_spray-0168 71.4 s
+scene cold_spray-0300 63.9 s
+scene cold_spray-0240 60.4 s
+scene cold_spray-0047 51.2 s
+scene cold_spray-0187 44.0 s
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+scene cold_spray-0107 80.7 s
+scene cold_spray-0180 38.9 s
+scene cold_spray-0218 70.8 s
+scene rain_curtain-0118 81.4 s
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+scene rain_curtain-0086 183.2 s
+scene rain_curtain-0061 161.4 s
+scene rain_curtain-0014 38.8 s
+scene rain_curtain-0046 62.2 s
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+scene rain_curtain-0067 238.8 s
+scene rain_curtain-0013 122.4 s
+scene rain_curtain-0104 234.9 s
+scene rain_curtain-0070 69.6 s
+scene rain_curtain-0121 154.6 s
+scene rain_curtain-0007 172.1 s
+scene corona_only-0020 18.1 s
+scene corona_only-0363 35.7 s
+scene brad_variants-0039 16.9 s
+scene corona_only-0212 15.9 s
+scene corona_only-0299 20.8 s
+scene corona_only-0043 30.1 s
+scene corona_only-0235 29.4 s
+scene corona_only-0308 20.1 s
+scene brad_variants-0020 16.2 s
+scene corona_only-0203 40.5 s
+scene corona_only-0180 8.7 s
+scene charged_spray-0063 22.9 s
+scene charged_spray-0081 17.8 s
+scene charged_film-0086 39.0 s
+scene charged_spray-0135 22.8 s
+scene charged_film-0115 18.3 s
+scene charged_film-0077 38.5 s
+scene charged_film-0030 30.1 s
+scene charged_spray-0019 47.1 s
+scene charged_film-0014 46.0 s
+scene charged_spray-0168 35.8 s
+scene charged_spray-0060 31.0 s
+scene ring_spray-0086 48.2 s
+scene ring_spray-0102 44.7 s
+scene ring_spray-0029 26.1 s
+scene ring_spray-0078 49.7 s
+scene ring_spray-0030 48.2 s
+scene ring_spray-0085 32.9 s
+scene ring_spray-0094 38.2 s
+scene ring_spray-0048 34.1 s
+scene ring_spray-0059 150.3 s
+scene ring_spray-0038 50.6 s
+scene ring_spray-0122 35.3 s
+scene cooled_wall-0050 87.4 s
+scene cooled_wall-0001 85.8 s
+scene cooled_wall-0083 80.4 s
+scene cooled_wall-0067 190.0 s
+scene cooled_wall-0070 51.6 s
+scene cooled_wall-0027 50.8 s
+scene cooled_wall-0018 75.7 s
+scene cooled_wall-0049 75.2 s
+scene cooled_wall-0074 47.7 s
+scene cooled_wall-0054 51.1 s
+scene cooled_wall-0076 42.4 s
+scene coflow_spray-0063 126.1 s
+scene coflow_spray-0081 61.7 s
+scene coflow_spray-0026 60.7 s
+scene coflow_spray-0098 58.2 s
+scene coflow_spray-0066 59.3 s
+scene coflow_spray-0017 87.1 s
+scene coflow_spray-0090 32.5 s
+scene coflow_spray-0119 169.3 s
+scene coflow_spray-0082 76.2 s
+scene coflow_spray-0060 69.7 s
+scene coflow_spray-0127 166.4 s
+scene multi_tier-0113 72.7 s
+scene multi_tier-0031 59.8 s
+scene multi_tier-0057 67.5 s
+scene multi_tier-0098 53.6 s
+scene multi_tier-0066 40.8 s
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+scene multi_tier-0049 157.0 s
+scene multi_tier-0114 70.8 s
+scene multi_tier-0087 27.6 s
+scene multi_tier-0074 56.8 s
+scene multi_tier-0020 51.0 s
+scene multi_tier-0122 33.5 s

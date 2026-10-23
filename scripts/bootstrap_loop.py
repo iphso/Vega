@@ -345,6 +345,13 @@ def main():
     p.add_argument("--timeout-seconds", type=float, default=45.0)
     p.add_argument("--checkpoint-every", type=int, default=200)
     p.add_argument("--seed", type=int, default=0)
+    p.add_argument("--well-extra-x", action="append", default=[],
+                    help="extra real-data X.npy (e.g. output/bootstrap_seed_<tag>/X.npy from "
+                         "ngopt_to_pool.py) folded into every generation's VAE retrain via train_vae.py's "
+                         "own --extra-x, on top of whatever this lineage's own pool_dir/X.npy has "
+                         "accumulated. Unlike pool_dir/X.npy this never grows on its own -- it's a fixed "
+                         "outside data source, same real-only role as --base-vae-tag's anchor sampling "
+                         "but folded into training instead of just sampled from at inference.")
     args = p.parse_args()
 
     rng = np.random.default_rng(args.seed)
@@ -407,7 +414,9 @@ def main():
         gen_vae_tag = f"{args.tag}_gen{g}"
         extra_x_args = []
         if (pool_dir / "X.npy").exists():
-            extra_x_args = ["--extra-x", str(pool_dir / "X.npy")]
+            extra_x_args += ["--extra-x", str(pool_dir / "X.npy")]
+        for wx in args.well_extra_x:
+            extra_x_args += ["--extra-x", wx]
         train_cmd = [
             sys.executable, "scripts/train_vae.py",
             "--latent-dim", str(latent_dim), "--hidden", str(hidden),

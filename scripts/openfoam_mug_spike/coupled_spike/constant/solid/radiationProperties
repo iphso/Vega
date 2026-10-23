@@ -1,0 +1,15 @@
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "constant/solid";
+    object      radiationProperties;
+}
+
+radiationModel  none;
+
+absorptionEmissionModel none;
+
+scatterModel    none;
+
+sootModel       none;

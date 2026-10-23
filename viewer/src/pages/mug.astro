@@ -167,7 +167,10 @@
           <a href="/">Stellarators</a>
           <a href="/airfoil">Airfoils</a>
           <a href="/torax">TORAX</a>
-          <a href="/mug" class="active">Mug</a>
+          <a href="/mug" class="active">Mug (v1)</a>
+          <a href="/mug-v2">Mug (v2)</a>
+          <a href="/bracket">Bracket</a>
+          <a href="/photonics">Photonics</a>
         </nav>
         <div id="subtitle">loading…</div>
 
@@ -176,9 +179,13 @@
           <label for="umapColorBy">Color by</label>
           <select id="umapColorBy"></select>
           <div class="btn-row"><button id="umapRecomputeBtn">recompute</button></div>
+          <label style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:12px; color:var(--text-dim); cursor:pointer;">
+            <input type="checkbox" id="umapAuto" checked style="width:auto;" />
+            auto-recompute when filters change
+          </label>
           <div id="umapStatus"></div>
           <div id="umapLegend"><span id="umapLegendMin"></span><span class="bar"></span><span id="umapLegendMax"></span></div>
-          <div id="hint">Points are up to 800 randomly sampled from the current filtered set, positioned by similarity across the 4 target metrics. Click a point to inspect it.</div>
+          <div id="hint">Points are up to 800 randomly sampled from the current filtered set, positioned by similarity across the 5 target metrics. Click a point to inspect it.</div>
         </div>
         <div id="umapCanvasWrap">
           <canvas id="umapCanvas"></canvas>
@@ -197,7 +204,7 @@
           <div class="candidate-meta">
             <span class="pill">row <b id="globalRow">–</b></span>
             <span class="pill">r_rim <b id="rRimVal">–</b> mm</span>
-            <span class="pill">lid <b id="lidVal">–</b>%</span>
+            <span class="pill">liquid <b id="volVal">–</b> mL</span>
             <span class="pill">mass <b id="massVal">–</b> kg</span>
           </div>
         </div>
@@ -235,6 +242,7 @@
           <div class="polar-stat"><div class="k">mass (kg)</div><div class="v" id="polarMass">–</div></div>
           <div class="polar-stat"><div class="k">touch @ 60s</div><div class="v" id="polarTouch">–</div></div>
           <div class="polar-stat"><div class="k">handle @ 60s</div><div class="v" id="polarHandle">–</div></div>
+          <div class="polar-stat"><div class="k">liquid vol (L)</div><div class="v" id="polarVolume">–</div></div>
         </div>
       </div>
     </div>
@@ -261,12 +269,13 @@
     import { METRIC_INFO } from '../lib/metricInfo';
 
     const PHYSICS_URL = import.meta.env.PUBLIC_MUG_PHYSICS_URL || 'http://localhost:8093';
+    // §59: 9-dim single-wall/lidless parameterization -- no more
+    // t_gap_mm/insulation_material_idx/lid_coverage_frac/t_lid_mm/
+    // lid_material_idx at all (mug_oracle.py's PARAM_NAMES).
     const PARAM_NAMES = [
       'r_base_mm', 'r_mid_mm', 'r_rim_mm',
       't_wall_rim_mm', 't_wall_base_mm', 'struct_material_idx',
-      't_gap_mm', 'insulation_material_idx',
       'handle_length_mm', 'handle_diameter_mm', 'handle_material_idx',
-      'lid_coverage_frac', 't_lid_mm', 'lid_material_idx',
     ];
     // Fixed absolute color scale (ambient .. fill temperature) rather than a
     // per-frame min/max -- keeps the 3D shape's colors directly comparable
@@ -277,13 +286,34 @@
     // §53 user feedback: material_idx values weren't labeled anywhere, so
     // there was no way to tell what a design was actually made of. These
     // are the exact same named tables (name, k) as thermal_mug_spike.py's
-    // STRUCTURAL_MATERIALS/INSULATION_MATERIALS/HANDLE_MATERIALS, in the
-    // same order (sorted by conductivity ascending) -- kept here just for
-    // display, not re-deriving any physics.
-    const STRUCTURAL_MATERIALS = ['plastic', 'glass', 'ceramic', 'steel'];
-    const INSULATION_MATERIALS = ['vacuum', 'aerogel', 'air_gap', 'foam'];
-    const HANDLE_MATERIALS = ['silicone_rubber', 'wood', 'plastic_grip', 'ceramic', 'steel'];
-    // lid_material_idx reuses STRUCTURAL_MATERIALS too (mug_oracle.py)
+    // STRUCTURAL_MATERIALS/HANDLE_MATERIALS, in the same order (sorted by
+    // conductivity ascending) -- kept here just for display, not
+    // re-deriving any physics. §59: no more INSULATION_MATERIALS -- the
+    // single-wall reset dropped the insulation layer entirely. §62: grew
+    // from 4/5 generic category buckets to 20/15 specific real materials
+    // each, per direct user request -- keep this list byte-for-byte in
+    // sync with thermal_mug_spike.py's own tables (name AND order both
+    // matter, since `idx` here is a raw array position, not a lookup key).
+    // §73: filtered from 20 down to 11 -- every remaining material is
+    // something real drinkware is actually made of BARE (direct,
+    // sustained contact with ~90C liquid). Removed: polystyrene/
+    // abs_plastic (not food-grade for hot contact), acrylic_pmma (heat-
+    // deflection temp at/below this domain's own liquid temp), melamine_
+    // resin (explicit hot-liquid-use warnings), carbon_steel/cast_iron
+    // (no bare-metal drinkware use, rust/leaching), brass/copper/
+    // aluminum_6061 (real drinkware in these is always lined, never
+    // bare). See thermal_mug_spike.py's STRUCTURAL_MATERIALS for the
+    // full reasoning -- this array must stay in the SAME order.
+    const STRUCTURAL_MATERIALS = [
+      'polypropylene', 'nylon_pa6', 'soda_lime_glass', 'earthenware',
+      'borosilicate_glass', 'stoneware', 'fused_silica_glass', 'porcelain',
+      'bone_china', 'stainless_steel_304', 'titanium_grade2',
+    ];
+    const HANDLE_MATERIALS = [
+      'natural_rubber', 'bamboo', 'neoprene', 'walnut', 'oak', 'epdm_rubber',
+      'maple', 'beech', 'silicone_rubber', 'abs_grip', 'polypropylene_grip',
+      'tpe_grip', 'stoneware', 'stainless_steel_304', 'aluminum_6061',
+    ];
 
     function materialLabel(idx, names) {
       const i = Math.max(0, Math.min(names.length - 1, idx));
@@ -302,17 +332,34 @@
     // physically honest place transparency belongs -- everything else
     // stays opaque, unlike the pre-§54 "see-through cutaway" version).
     const STRUCTURAL_COLORS = [
-      [230, 220, 190, 1.0],  // plastic
-      [205, 227, 232, 0.55], // glass
-      [245, 242, 235, 1.0],  // ceramic
-      [180, 185, 190, 1.0],  // steel
+      [230, 220, 190, 1.0],  // polypropylene -- warm opaque plastic (was §54's generic "plastic")
+      [235, 230, 210, 1.0],  // nylon_pa6 -- cream engineering plastic
+      [205, 227, 232, 0.55], // soda_lime_glass -- was §54's generic "glass"
+      [195, 140, 100, 1.0],  // earthenware -- unglazed terracotta
+      [210, 230, 235, 0.60], // borosilicate_glass -- clearer/lower-tint than soda-lime
+      [200, 190, 175, 1.0],  // stoneware -- grayish-tan fired clay
+      [220, 235, 240, 0.50], // fused_silica_glass -- very clear quartz glass
+      [248, 245, 240, 1.0],  // porcelain -- bright white ceramic
+      [250, 248, 242, 1.0],  // bone_china -- finer, slightly brighter than porcelain
+      [190, 195, 198, 1.0],  // stainless_steel_304
+      [150, 150, 155, 1.0],  // titanium_grade2 -- characteristic dull dark-gray metal
     ];
     const HANDLE_COLORS = [
-      [45, 45, 48, 1.0],     // silicone_rubber
-      [150, 105, 65, 1.0],   // wood
-      [205, 145, 95, 1.0],   // plastic_grip
-      [245, 242, 235, 1.0],  // ceramic
-      [180, 185, 190, 1.0],  // steel
+      [40, 38, 36, 1.0],     // natural_rubber -- dark brown/black
+      [195, 170, 120, 1.0],  // bamboo -- light tan
+      [35, 35, 38, 1.0],     // neoprene -- near-black synthetic rubber
+      [90, 60, 40, 1.0],     // walnut -- dark brown hardwood
+      [170, 130, 80, 1.0],   // oak -- warm medium brown (was §54's generic "wood")
+      [45, 45, 48, 1.0],     // epdm_rubber -- was §54's generic "silicone_rubber" slot
+      [205, 175, 130, 1.0],  // maple -- pale gold hardwood
+      [190, 150, 105, 1.0],  // beech -- light reddish-brown
+      [55, 55, 60, 1.0],     // silicone_rubber -- common dark food-grade grip color
+      [225, 225, 220, 1.0],  // abs_grip -- off-white plastic
+      [230, 220, 190, 1.0],  // polypropylene_grip -- was §54's generic "plastic_grip"
+      [60, 60, 65, 1.0],     // tpe_grip -- soft-touch dark gray elastomer
+      [200, 190, 175, 1.0],  // stoneware -- matches STRUCTURAL_COLORS' entry, same material
+      [190, 195, 198, 1.0],  // stainless_steel_304 -- matches STRUCTURAL_COLORS' entry
+      [210, 212, 215, 1.0],  // aluminum_6061 -- matches STRUCTURAL_COLORS' entry
     ];
     const LIQUID_COLOR = [110, 72, 40, 1.0]; // a generic hot-beverage brown -- not a "material," so not indexed
 
@@ -332,7 +379,7 @@
     const indexEl = document.getElementById('index');
     const globalRowEl = document.getElementById('globalRow');
     const rRimValEl = document.getElementById('rRimVal');
-    const lidValEl = document.getElementById('lidVal');
+    const volValEl = document.getElementById('volVal');
     const massValEl = document.getElementById('massVal');
     const matchLabelEl = document.getElementById('matchLabel');
     const matchFillEl = document.getElementById('matchFill');
@@ -355,6 +402,7 @@
     const umapCanvasWrap = document.getElementById('umapCanvasWrap');
     const umapColorByEl = document.getElementById('umapColorBy');
     const umapStatusEl = document.getElementById('umapStatus');
+    const umapAutoEl = document.getElementById('umapAuto');
     const umapLegendMinEl = document.getElementById('umapLegendMin');
     const umapLegendMaxEl = document.getElementById('umapLegendMax');
     const umapLegendEl = document.getElementById('umapLegend');
@@ -376,6 +424,7 @@
     const polarMassEl = document.getElementById('polarMass');
     const polarTouchEl = document.getElementById('polarTouch');
     const polarHandleEl = document.getElementById('polarHandle');
+    const polarVolumeEl = document.getElementById('polarVolume');
 
     const SOURCE_COLORS = { bootstrap: '#5b9dff' };
     let sourceCardEls = {};
@@ -387,6 +436,16 @@
     let viewRange = [];
     let filters = [];
     let filteredIndices = [];
+    // §61: the bootstrap source is chunked (see export_mug_viewer_data.py) --
+    // chunk 0 loads with everything else; more chunks are fetched lazily,
+    // only when a filter narrows the working set below `meta.bootstrap_
+    // target`. `trueSourceCounts` (the REAL full-pool size per source, vs.
+    // `offsets[code].count` which is just what's currently loaded) is what
+    // makes the "N of TOTAL match" label honest from the very first paint.
+    let loadedChunks = 0;
+    let topUpInFlight = false;
+    let bootstrapCode = null;
+    let trueSourceCounts = {};
     let histCanvases = [];
     let handleLabels = [];
     let currentValues = [];
@@ -415,13 +474,28 @@
         const count = meta.source_counts[name];
         offsets[code] = { start, count, name };
         start += count;
+        if (name === 'bootstrap') bootstrapCode = code;
       }
       offsets[-1] = { start: 0, count: meta.n, name: 'all sources' };
+
+      // §61: `offsets[code].count` is just what's currently loaded (chunk 0
+      // only, at this point); `trueSourceCounts` is the REAL full-pool size
+      // per source, known upfront from meta.json regardless of how much
+      // ends up loaded. Only `bootstrap` (the chunked source) ever differs
+      // from its own `source_counts` entry -- everything else is already
+      // complete in chunk 0.
+      trueSourceCounts = { ...meta.source_counts };
+      if (bootstrapCode !== null) {
+        const othersFixed = Object.entries(meta.source_counts)
+          .filter(([name]) => name !== 'bootstrap')
+          .reduce((sum, [, v]) => sum + v, 0);
+        trueSourceCounts.bootstrap = meta.n_total - othersFixed;
+      }
 
       sourceEl.innerHTML = '';
       const allOpt = document.createElement('option');
       allOpt.value = -1;
-      allOpt.textContent = `all sources (${meta.n.toLocaleString()})`;
+      allOpt.textContent = `all sources (${(meta.n_total ?? meta.n).toLocaleString()})`;
       sourceEl.appendChild(allOpt);
       sourceRanges = [];
       sourceCardsEl.innerHTML = '';
@@ -430,7 +504,7 @@
         const { name, count } = offsets[code];
         const opt = document.createElement('option');
         opt.value = code;
-        opt.textContent = `${name} (${count.toLocaleString()})`;
+        opt.textContent = `${name} (${trueSourceCounts[name].toLocaleString()})`;
         sourceEl.appendChild(opt);
         sourceRanges.push({ code, name, start: offsets[code].start, count });
 
@@ -444,13 +518,19 @@
         sourceCardEls[code] = { root: card, countEl: card.querySelector('.count') };
       }
 
+      // §61: target_range comes from the FULL pool (computed at export
+      // time), not scanned from whatever chunk happens to be loaded --
+      // stays correct and stable even before any top-up ever runs.
       for (let t = 0; t < meta.y_cols; t++) {
-        let mn = Infinity, mx = -Infinity;
-        for (let r = 0; r < meta.n; r++) {
-          const v = Y[r * meta.y_cols + t];
-          if (v < mn) mn = v;
-          if (v > mx) mx = v;
-        }
+        const [mn, mx] = meta.target_range ? meta.target_range[t] : (() => {
+          let lo = Infinity, hi = -Infinity;
+          for (let r = 0; r < meta.n; r++) {
+            const v = Y[r * meta.y_cols + t];
+            if (v < lo) lo = v;
+            if (v > hi) hi = v;
+          }
+          return [lo, hi];
+        })();
         targetRange.push({ min: mn, max: mx });
         viewRange.push({ min: mn, max: mx });
         filters.push({ min: mn, max: mx });
@@ -544,7 +624,7 @@
       viewRange[t] = { ...targetRange[t] };
       filters[t] = { ...targetRange[t] };
       positionHandles(t);
-      recomputeFiltered();
+      onFilterChanged();
     }
 
     function makeLabelEditable(labelEl, t, which) {
@@ -574,7 +654,7 @@
     function setFilter(t, min, max) {
       filters[t] = { min: Math.min(min, max), max: Math.max(min, max) };
       positionHandles(t);
-      recomputeFiltered();
+      onFilterChanged();
     }
 
     function setupDrag(canvas, t) {
@@ -612,7 +692,7 @@
         filters[t] = { min: Math.min(next.min, next.max), max: Math.max(next.min, next.max) };
         viewRange[t] = { ...filters[t] };
         positionHandles(t);
-        recomputeFiltered();
+        onFilterChanged();
         dragging = null;
       }
       canvas.addEventListener('mousedown', (e) => {
@@ -634,7 +714,7 @@
         viewRange[t] = { ...targetRange[t] };
         positionHandles(t);
       }
-      recomputeFiltered();
+      onFilterChanged();
     });
 
     function sourceScope() { return offsets[Number(sourceEl.value)]; }
@@ -661,11 +741,88 @@
       lastCounts = hist;
       for (let t = 0; t < yCols; t++) drawHistogram(t, hist[t]);
       const frac = count ? filteredIndices.length / count : 0;
-      matchLabelEl.innerHTML = `<b>${filteredIndices.length.toLocaleString()}</b> of ${count.toLocaleString()} match`;
+      // §61: the denominator is the REAL full-pool size for the current
+      // scope (trueSourceCounts/meta.n_total), not just how much happens
+      // to be loaded -- honest from the first paint. The fill bar still
+      // reflects loaded-vs-matched (not true-total-vs-matched), so an
+      // unfiltered view reads as a full bar instead of a near-empty one
+      // before any top-up has ever run.
+      const scopeCode = Number(sourceEl.value);
+      const trueTotal = scopeCode === -1 ? meta.n_total : trueSourceCounts[offsets[scopeCode].name];
+      matchLabelEl.innerHTML = `<b>${filteredIndices.length.toLocaleString()}</b> of ${trueTotal.toLocaleString()} match`;
       matchFillEl.style.width = `${(frac * 100).toFixed(1)}%`;
       indexEl.max = Math.max(0, filteredIndices.length - 1);
       if (Number(indexEl.value) >= filteredIndices.length) indexEl.value = 0;
       renderCandidate();
+    }
+
+    // Direct user request: dragging/typing/resetting a filter range should
+    // also refresh the UMAP map, not just the match count/histograms --
+    // previously it only updated on a separate manual "recompute" click, so
+    // the scatter could silently go stale relative to the active filter.
+    // Every UI action that changes a filter calls THIS (not recomputeFiltered()
+    // directly), so top-up and the UMAP refresh both happen exactly once per
+    // user action, however many chunks top-up ends up needing internally --
+    // recomputeFiltered() itself stays a plain, side-effect-free filter pass
+    // so topUpLoop() can call it repeatedly without compounding UMAP cost
+    // (an earlier version called computeUMAP() from inside recomputeFiltered()
+    // itself, which meant a filter needing 19 chunks re-ran the whole UMAP
+    // embedding 19 times in a row and visibly froze the tab -- caught live,
+    // not shipped).
+    async function onFilterChanged() {
+      recomputeFiltered();
+      await topUpLoop();
+      // `umapPoints` guards the initial page-load call (before computeUMAP()
+      // has ever run) from double-computing; the checkbox is the "at least
+      // gives the option to" -- on by default, off if a user finds the
+      // recompute too disruptive while exploring.
+      if (umapPoints && umapAutoEl.checked) computeUMAP();
+    }
+
+    // §61 direct user request: filtering down to a narrow slice should be
+    // able to "grab more to fill it in" instead of being stuck with
+    // whatever fraction of the initial sample happened to match. Loops
+    // fetching one chunk at a time (re-running the plain filter pass after
+    // each) until the target is met, the scope excludes the growable
+    // source, or the dataset is exhausted.
+    async function topUpLoop() {
+      if (bootstrapCode === null || topUpInFlight) return;
+      topUpInFlight = true;
+      try {
+        while (loadedChunks < (meta.n_chunks || 0) && filteredIndices.length < meta.bootstrap_target) {
+          const scopeCode = Number(sourceEl.value);
+          if (scopeCode !== -1 && scopeCode !== bootstrapCode) break; // scope excludes the growable source
+
+          matchLabelEl.insertAdjacentHTML('beforeend', ' <span style="color:var(--text-faint); font-size:11px;">loading more…</span>');
+          loadedChunks++;
+          const [xRes, yRes] = await Promise.all([
+            fetch(`/data/mug/X.chunk${loadedChunks}.bin`),
+            fetch(`/data/mug/Y.chunk${loadedChunks}.bin`),
+          ]);
+          const xChunk = new Float32Array(await xRes.arrayBuffer());
+          const yChunk = new Float32Array(await yRes.arrayBuffer());
+          const rows = xChunk.length / meta.x_cols;
+
+          // bootstrap is physically LAST in X/Y (export_mug_viewer_data.py
+          // -- mug has only one source, so this is trivially true, but kept
+          // consistent with airfoil/torax's own real-source-first ordering),
+          // so a plain append never disturbs any other source's own range.
+          const newX = new Float32Array(X.length + xChunk.length);
+          newX.set(X); newX.set(xChunk, X.length); X = newX;
+          const newY = new Float32Array(Y.length + yChunk.length);
+          newY.set(Y); newY.set(yChunk, Y.length); Y = newY;
+
+          offsets[bootstrapCode].count += rows;
+          offsets[-1].count += rows;
+          meta.n += rows;
+          const bootstrapRange = sourceRanges.find((r) => r.code === bootstrapCode);
+          if (bootstrapRange) bootstrapRange.count += rows; // keeps sourceCodeOf() correct for the new rows
+          subtitleEl.textContent = `${meta.n.toLocaleString()} candidates loaded`;
+          recomputeFiltered(); // plain filter pass -- no UMAP trigger per iteration
+        }
+      } finally {
+        topUpInFlight = false;
+      }
     }
 
     function drawHistogram(t, counts, opts) {
@@ -704,15 +861,24 @@
 
     // --- Mug-specific: 3D shape of revolution (frustum-based body per
     // thermal_mug_spike.py's simulate_v3, EXPERIMENT_LOG §50) + a liquid
-    // core + an optional lid disc + a handle, all colored by real surface
-    // temperature at the current point in the time slider -- plus a
-    // temperature-vs-time chart driven by the same series data.
+    // core + a handle, all colored by real surface temperature at the
+    // current point in the time slider -- plus a temperature-vs-time
+    // chart driven by the same series data. §59: no more lid -- the
+    // single-wall/lidless domain reset removed the concept entirely, not
+    // just its visibility.
     //
-    // Body geometry uses THREE.LatheGeometry over exactly the 3 profile
-    // points the physics model itself uses (r_base at z=0, r_mid at
-    // z=H/2, r_rim at z=H) -- 2 straight-line segments, matching the
-    // model's own 2-band frustum structure exactly rather than a smoothed
-    // curve that would imply more shape detail than is actually simulated.
+    // Body geometry uses THREE.LatheGeometry sampled along the SAME
+    // 2-segment (base->mid->rim) piecewise-linear profile the physics
+    // model itself uses (radius_at_height() in thermal_mug_spike.py) --
+    // but at BODY_HEIGHT_RINGS points, not just the 3 breakpoints.
+    // §57 finding: with only 3 profile points (the pre-§57 approach) the
+    // Lathe mesh has only 3 rings of vertices no matter how many axial
+    // nodes the physics itself solves -- of v3's 6 independently-solved
+    // band values, only 3 ever reached a distinct vertex. Sampling more
+    // points along an already-piecewise-linear profile doesn't change the
+    // silhouette at all, just gives enough rings to actually carry v4's
+    // real per-row temperature field (thermal_mug_spike.py's own
+    // N_AXIAL_NODES, EXPERIMENT_LOG §57) instead of losing most of it.
     //
     // §52 user feedback: a TORAX-style wedge cutaway just read as "a bite
     // taken out of the mug," not a deliberate cross-section -- a tokamak's
@@ -725,6 +891,11 @@
     // opening explicitly, so "which end is the top" doesn't rely on
     // guessing from silhouette alone.
     const LATHE_SEGMENTS = 48;
+    // Matches thermal_mug_spike.py's N_AXIAL_NODES (§57) so each ring maps
+    // 1:1 to a real simulated row -- not load-bearing if they ever drift
+    // apart (applyBodyColorsBands already interpolates over any array
+    // length), just the cleanest correspondence when they agree.
+    const BODY_HEIGHT_RINGS = 20;
 
     const m3dScene = new THREE.Scene();
     m3dScene.background = new THREE.Color(0x0c0c0e);
@@ -738,7 +909,7 @@
 
     let m3dGroup = new THREE.Group();
     m3dScene.add(m3dGroup);
-    let m3dParts = {}; // { bodyMesh, liquidMat, lidMesh, handleMesh, bottomMesh, rimRing }
+    let m3dParts = {}; // { bodyMesh, liquidMat, handleMesh, bottomMesh, rimRing }
     let m3dInitialized = false;
     let lastGeom = null;
     let currentParams = null;
@@ -746,11 +917,9 @@
     // once -- "make it look like a real mug" (material, time-invariant)
     // vs. "play the temperature forward" (thermal, animated). Rather than
     // compromise on one rendering, this is a real mode toggle: 'material'
-    // shows realistic per-material colors (a real lid is basically on/off,
-    // not a weird partial disc, so it renders full-size here); 'thermal'
-    // switches the wall to WIREFRAME (an explicit "this is a schematic,
-    // not the real object" cue) colored by the live simulated temperature,
-    // with the lid back to its literal coverage-area size.
+    // shows realistic per-material colors; 'thermal' switches the wall to
+    // WIREFRAME (an explicit "this is a schematic, not the real object"
+    // cue) colored by the live simulated temperature.
     let vizMode = 'material';
 
     // Cold-blue -> warm-yellow -> hot-red -- deliberately NOT the
@@ -773,12 +942,21 @@
       );
     }
 
-    function buildBodyGeometry(rBase, rMid, rRim, height) {
-      const points = [
-        new THREE.Vector2(Math.max(0.001, rBase), 0),
-        new THREE.Vector2(Math.max(0.001, rMid), height / 2),
-        new THREE.Vector2(Math.max(0.001, rRim), height),
-      ];
+    // JS port of thermal_mug_spike.py's radius_at_height() -- same
+    // 2-segment (base->mid->rim) piecewise-linear profile, evaluated at
+    // an arbitrary height fraction rather than just the 3 design points.
+    function radiusAtHeight(rBase, rMid, rRim, height, z) {
+      if (z <= height / 2) return rBase + (rMid - rBase) * (z / (height / 2));
+      return rMid + (rRim - rMid) * ((z - height / 2) / (height / 2));
+    }
+
+    function buildBodyGeometry(rBase, rMid, rRim, height, nRings = BODY_HEIGHT_RINGS) {
+      const points = [];
+      for (let i = 0; i <= nRings; i++) {
+        const z = (i / nRings) * height;
+        const r = radiusAtHeight(rBase, rMid, rRim, height, z);
+        points.push(new THREE.Vector2(Math.max(0.001, r), z));
+      }
       const geometry = new THREE.LatheGeometry(points, LATHE_SEGMENTS, 0, Math.PI * 2);
       // per-vertex color placeholder (grayscale until the first physics
       // response arrives) -- real per-band gradient applied properly in
@@ -788,29 +966,54 @@
       return geometry;
     }
 
-    // §56 user feedback: increasing N_WALL/N_GAP (radial mesh resolution
-    // through the wall's thickness) would never have helped this -- the
-    // body only ever had 2 real height-wise data points (rim band, base
-    // band) to show, no matter how finely either one was resolved
-    // radially. The physics itself now has N_AXIAL_BANDS=6 independent
-    // bands stacked along the height (thermal_mug_spike.py's own §56
-    // docstring), so this interpolates between 6 REAL simulated values
-    // instead of a single straight-line blend between 2.
-    function applyBodyColorsBands(geometry, height, bandTemps) {
+    // §56 raised axial resolution 2->6 bands; §57 made those bands a real
+    // COUPLED field (simulate_v4's N_AXIAL_NODES) instead of independent
+    // chains; §58 added a 2-cell (patch/bulk) azimuthal approximation for
+    // the handle's own local effect, rejected on review as not real 3D.
+    //
+    // §59: `wallOuterGrid` is now the ACTUAL 2D (axial x azimuthal) field
+    // simulate_v6 solves (`T_wall_outer`, shape [N_AXIAL_NODES][N_THETA])
+    // -- a real bilinear interpolation over height AND angle, not a blend
+    // between two coarse regions. The handle mesh always sits at local
+    // angle 0 (+X, see buildMugShape's own handleMesh.position), matching
+    // theta index 0 in the physics grid (thermal_mug_spike.py's own
+    // theta_handle_idx=0) -- same fixed convention as before, just backed
+    // by real data now instead of an approximated patch shape.
+    function applyBodyColorsGrid(geometry, height, wallOuterGrid) {
       const pos = geometry.attributes.position;
       const colorAttr = geometry.attributes.color;
-      const n = bandTemps.length;
+      const nZ = wallOuterGrid.length;
+      const nTheta = wallOuterGrid[0].length;
+      const wrap = (k) => ((k % nTheta) + nTheta) % nTheta;
       for (let i = 0; i < pos.count; i++) {
         const frac = Math.max(0, Math.min(1, pos.getY(i) / height));
-        const bandPos = frac * n - 0.5; // band i's own outer-surface sample sits at its vertical center
-        const lo = Math.max(0, Math.min(n - 1, Math.floor(bandPos)));
-        const hi = Math.max(0, Math.min(n - 1, lo + 1));
-        const t = Math.max(0, Math.min(1, bandPos - lo));
-        const temp = bandTemps[lo] + (bandTemps[hi] - bandTemps[lo]) * t;
+        const zPos = frac * nZ - 0.5; // row i's own outer-surface sample sits at its vertical center
+        const zLo = Math.max(0, Math.min(nZ - 1, Math.floor(zPos)));
+        const zHi = Math.max(0, Math.min(nZ - 1, zLo + 1));
+        const zt = Math.max(0, Math.min(1, zPos - zLo));
+
+        // angle=0 (+X) is wedge 0's own center, matching the physics grid
+        // and the handle's fixed placement -- periodic, so no clamping.
+        const angle01 = (Math.atan2(pos.getZ(i), pos.getX(i)) + 2 * Math.PI) % (2 * Math.PI);
+        const thetaPos = (angle01 / (2 * Math.PI)) * nTheta - 0.5;
+        const thetaLoRaw = Math.floor(thetaPos);
+        const thetaT = thetaPos - thetaLoRaw;
+        const thetaLo = wrap(thetaLoRaw), thetaHi = wrap(thetaLoRaw + 1);
+
+        const v00 = wallOuterGrid[zLo][thetaLo], v01 = wallOuterGrid[zLo][thetaHi];
+        const v10 = wallOuterGrid[zHi][thetaLo], v11 = wallOuterGrid[zHi][thetaHi];
+        const vLo = v00 + (v01 - v00) * thetaT;
+        const vHi = v10 + (v11 - v10) * thetaT;
+        const temp = vLo + (vHi - vLo) * zt;
+
         const c = colorForTemp(temp);
         colorAttr.setXYZ(i, c.r, c.g, c.b);
       }
       colorAttr.needsUpdate = true;
+    }
+
+    function meanRow(row) {
+      return row.reduce((a, b) => a + b, 0) / row.length;
     }
 
     function fillFlatColor(geometry, color) {
@@ -904,20 +1107,22 @@
       // Liquid core -- §53 user feedback: a plain cylinder cut through the
       // body on any non-straight (tapered/bulging) shape, since its radius
       // didn't track the actual wall profile. Fixed by using the SAME
-      // 3-point lathe profile as the body, inset by the real (wall + gap)
+      // 3-point lathe profile as the body, inset by the real wall
       // thickness at each height -- so the liquid always nests inside the
-      // body regardless of shape, AND a thicker insulation/wall genuinely
-      // shows up as a visibly thicker wall / smaller liquid volume, not
-      // just a fixed 80%-of-average-radius guess. Floors the inset at 15%
-      // of the outer radius so an extreme thick-insulation/narrow-mug
-      // combination can't invert to a negative radius. Vertically
-      // compressed to `fillFrac` of the full height (a small headspace at
-      // the rim, both a cap at the true liquid surface and a cap at the
-      // base) -- visible through the mug's own open top, no cutaway needed.
+      // body regardless of shape, AND a thicker wall genuinely shows up as
+      // a visibly thicker wall / smaller liquid volume, not just a fixed
+      // 80%-of-average-radius guess. §59: inset by wall thickness ALONE
+      // now -- no more insulation gap to add on top, since it no longer
+      // exists. Floors the inset at 15% of the outer radius so an extreme
+      // thick-wall/narrow-mug combination can't invert to a negative
+      // radius. Vertically compressed to `fillFrac` of the full height (a
+      // small headspace at the rim, both a cap at the true liquid surface
+      // and a cap at the base) -- visible through the mug's own open top,
+      // no cutaway needed.
       const fillFrac = 0.92;
-      const insetBase = (p.t_wall_base_mm + p.t_gap_mm) / 1000;
-      const insetMid = ((p.t_wall_rim_mm + p.t_wall_base_mm) / 2 + p.t_gap_mm) / 1000;
-      const insetRim = (p.t_wall_rim_mm + p.t_gap_mm) / 1000;
+      const insetBase = p.t_wall_base_mm / 1000;
+      const insetMid = (p.t_wall_rim_mm + p.t_wall_base_mm) / 2 / 1000;
+      const insetRim = p.t_wall_rim_mm / 1000;
       const rBaseIn = Math.max(rBase * 0.15, rBase - insetBase);
       const rMidIn = Math.max(rMid * 0.15, rMid - insetMid);
       const rRimIn = Math.max(rRim * 0.15, rRim - insetRim);
@@ -939,24 +1144,6 @@
       liquidGroup.add(liquidTop);
       m3dGroup.add(liquidGroup);
       m3dParts.liquidMat = liquidMat; // shared by all 3 sub-meshes -- one color update recolors the whole liquid
-
-      // Lid -- §54 user feedback: a partial-area disc doesn't look like a
-      // real lid (real lids are basically on or off, not oddly-sized
-      // pancakes). In Material view, any meaningful coverage renders as a
-      // full rim-sized lid -- a real, binary product choice. In Thermal
-      // view, the disc is still sized by the literal lid_coverage_frac
-      // area, matching what's actually being simulated in that schematic.
-      const lidCoverage = Math.max(0, Math.min(1, p.lid_coverage_frac));
-      if (lidCoverage > 0.01) {
-        const lidR = vizMode === 'material' ? rRim : rRim * Math.sqrt(lidCoverage);
-        const lidGeom = new THREE.CircleGeometry(lidR, 32);
-        const lidMat = new THREE.MeshBasicMaterial({ color: 0x888888, side: THREE.DoubleSide });
-        const lidMesh = new THREE.Mesh(lidGeom, lidMat);
-        lidMesh.rotation.x = -Math.PI / 2;
-        lidMesh.position.y = height + 0.0005;
-        m3dGroup.add(lidMesh);
-        m3dParts.lidMesh = lidMesh;
-      }
 
       // Handle -- a "D"-shaped loop (partial torus), the way a real mug
       // handle actually attaches. §53: a straight stick poking out
@@ -1006,17 +1193,16 @@
     // sync with the 2D chart, same convention as the TORAX viewer.
     function updateMugColors(series, frameIdx) {
       if (!series || !lastGeom) return;
-      const bandTemps = series.T_bands_outer[frameIdx];
-      const tLid = series.T_lid_outer[frameIdx];
+      const wallOuterGrid = series.T_wall_outer[frameIdx]; // real [N_AXIAL_NODES][N_THETA] field, §59
       const tLiq = series.T_liq[frameIdx];
 
-      applyBodyColorsBands(m3dParts.bodyMesh.geometry, lastGeom.height, bandTemps);
+      applyBodyColorsGrid(m3dParts.bodyMesh.geometry, lastGeom.height, wallOuterGrid);
       m3dParts.liquidMat.color.copy(colorForTemp(tLiq));
-      m3dParts.bottomMesh.material.color.copy(colorForTemp(bandTemps[0]));
-      m3dParts.rimRing.material.color.copy(colorForTemp(bandTemps[bandTemps.length - 1]));
-      if (m3dParts.lidMesh && tLid !== null && tLid !== undefined) {
-        m3dParts.lidMesh.material.color.copy(colorForTemp(tLid));
-      }
+      // base/rim ring can't show angular variation (one flat color each),
+      // so they use the ring-average -- same convention T_rim_outer/
+      // T_base_outer already use server-side.
+      m3dParts.bottomMesh.material.color.copy(colorForTemp(meanRow(wallOuterGrid[0])));
+      m3dParts.rimRing.material.color.copy(colorForTemp(meanRow(wallOuterGrid[wallOuterGrid.length - 1])));
       applyHandleColors(m3dParts.handleMesh.geometry, series.T_handle_profile[frameIdx]);
     }
 
@@ -1044,19 +1230,12 @@
           m.opacity = struct.opacity;
         });
         m3dParts.liquidMat.color.setRGB(LIQUID_COLOR[0] / 255, LIQUID_COLOR[1] / 255, LIQUID_COLOR[2] / 255);
-        if (m3dParts.lidMesh) {
-          const lid = rgbaToThree(materialColorRGBA(p.lid_material_idx, STRUCTURAL_COLORS));
-          m3dParts.lidMesh.material.color.copy(lid.color);
-          m3dParts.lidMesh.material.transparent = lid.opacity < 1;
-          m3dParts.lidMesh.material.opacity = lid.opacity;
-        }
         fillFlatColor(m3dParts.handleMesh.geometry, rgbaToThree(materialColorRGBA(p.handle_material_idx, HANDLE_COLORS)).color);
       } else {
         bodyMat.wireframe = true;
         bodyMat.transparent = false;
         bodyMat.opacity = 1;
         [m3dParts.bottomMesh.material, m3dParts.rimRing.material].forEach((m) => { m.transparent = false; m.opacity = 1; });
-        if (m3dParts.lidMesh) { m3dParts.lidMesh.material.transparent = false; m3dParts.lidMesh.material.opacity = 1; }
         if (currentSeries) updateMugColors(currentSeries, Number(timeSlider.value));
       }
     }
@@ -1072,7 +1251,10 @@
           ? `<span>colored by real material — switch to Thermal to play the simulated temperature forward</span>`
           : `<span class="swatch"><span>cool</span></span><span class="bar"></span><span>hot (wireframe wall; surface temp at the current time)</span>`;
       }
-      if (currentParams) buildMugShape(currentParams); // rebuild -- lid size differs by mode
+      // §59: no more lid, so nothing about the built geometry itself
+      // differs by mode anymore -- applying the mode's look in place is
+      // enough, no need to rebuild the whole shape from scratch.
+      applyVizMode();
       resizeMug3d();
     }
 
@@ -1096,7 +1278,6 @@
       { key: 'T_liq', label: 'liquid', color: '#5b9dff' },
       { key: 'T_rim_outer', label: 'rim (outer)', color: '#ffb454' },
       { key: 'T_base_outer', label: 'base (outer)', color: '#5bd88a' },
-      { key: 'T_lid_outer', label: 'lid (outer)', color: '#c76bff' },
       { key: 'T_handle_tip', label: 'handle (farthest point)', color: '#ff6b6b' }, // §56: both ends now attach to the mug -- this is the loop's coolest, farthest point, not a free "tip" anymore
     ];
 
@@ -1186,12 +1367,10 @@
 
       buildMugShape(p);
       resizeMug3d();
-      mugCaptionEl.textContent = `r_base=${p.r_base_mm.toFixed(1)}mm  r_mid=${p.r_mid_mm.toFixed(1)}mm  r_rim=${p.r_rim_mm.toFixed(1)}mm  ·  lid coverage=${(p.lid_coverage_frac * 100).toFixed(0)}%  ·  rim ring marks the open top; base is solid`;
+      mugCaptionEl.textContent = `r_base=${p.r_base_mm.toFixed(1)}mm  r_mid=${p.r_mid_mm.toFixed(1)}mm  r_rim=${p.r_rim_mm.toFixed(1)}mm  ·  rim ring marks the open top; base is solid`;
       mugMaterialsEl.innerHTML = [
         `<span class="pill">wall <b>${materialLabel(p.struct_material_idx, STRUCTURAL_MATERIALS)}</b></span>`,
-        `<span class="pill">insulation <b>${materialLabel(p.insulation_material_idx, INSULATION_MATERIALS)}</b></span>`,
         `<span class="pill">handle <b>${materialLabel(p.handle_material_idx, HANDLE_MATERIALS)}</b></span>`,
-        p.lid_coverage_frac > 0.01 ? `<span class="pill">lid <b>${materialLabel(p.lid_material_idx, STRUCTURAL_MATERIALS)}</b></span>` : '',
       ].join('');
       shapeStatusEl.textContent = '';
 
@@ -1216,11 +1395,12 @@
         polarMassEl.textContent = round5(bundle.targets.mass_kg);
         polarTouchEl.textContent = round5(bundle.targets.touch_temp_60s_C);
         polarHandleEl.textContent = round5(bundle.targets.handle_temp_60s_C);
+        polarVolumeEl.textContent = round5(bundle.targets.liquid_volume_L);
       } catch (e) {
         if (e.name !== 'AbortError') {
           profileStatusEl.textContent = `error: ${e.message}`;
           currentSeries = null;
-          polarTemp2hEl.textContent = polarMassEl.textContent = polarTouchEl.textContent = polarHandleEl.textContent = 'n/c';
+          polarTemp2hEl.textContent = polarMassEl.textContent = polarTouchEl.textContent = polarHandleEl.textContent = polarVolumeEl.textContent = 'n/c';
         }
       }
     }
@@ -1249,13 +1429,13 @@
       const rowStart = gi * meta.x_cols;
       globalRowEl.textContent = gi.toLocaleString();
       rRimValEl.textContent = X[rowStart + PARAM_NAMES.indexOf('r_rim_mm')].toFixed(1);
-      lidValEl.textContent = (X[rowStart + PARAM_NAMES.indexOf('lid_coverage_frac')] * 100).toFixed(0);
+      volValEl.textContent = (Y[yBase + meta.target_names.indexOf('liquid_volume_L')] * 1000).toFixed(0);
       massValEl.textContent = Y[yBase + meta.target_names.indexOf('mass_kg')].toFixed(3);
 
       updatePhysics(gi);
     }
 
-    sourceEl.addEventListener('change', () => { indexEl.value = 0; recomputeFiltered(); });
+    sourceEl.addEventListener('change', () => { indexEl.value = 0; onFilterChanged(); });
     document.getElementById('prevBtn').addEventListener('click', () => { indexEl.value = Math.max(0, Number(indexEl.value) - 1); renderCandidate(); });
     document.getElementById('nextBtn').addEventListener('click', () => { indexEl.value = Math.min(filteredIndices.length - 1, Number(indexEl.value) + 1); renderCandidate(); });
     document.getElementById('randomBtn').addEventListener('click', () => { indexEl.value = Math.floor(Math.random() * filteredIndices.length); renderCandidate(); });

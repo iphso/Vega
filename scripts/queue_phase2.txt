@@ -1,0 +1,48 @@
+# Phase 2: cross-domain bulk dataset/candidate generation, one-shot jobs
+# (not endless loops like the grounded-walk driver). Starts only once BOTH
+# GPU queues (queue_gpu0.txt/queue_gpu1.txt) are fully exhausted. All four
+# commands were smoke-tested successfully on 2026-09-01 before being queued.
+# Format: NAME|SERVICE|SCRIPT_AND_ARGS
+# mug v2 deliberately excluded -- uncommitted WIP in git status as of
+# 2026-09-01, not safe to run unattended for a week.
+airfoil_vacation_topup|train|scripts/generate_airfoil_dataset.py --target-count 250000 --out-tag airfoil_vacation_topup
+torax_vacation_topup|torax|scripts/generate_torax_dataset.py --target-count 40000 --out-tag torax_vacation_topup
+photonics_v2_vacation_topup|meep|scripts/generate_photonics_dataset.py --target-count 60000 --medium-fraction 0.15 --out-tag photonics_v2_vacation_topup
+bracket_candidates_vacation_topup|warp|scripts/bracket_generate_candidates_warp.py --n-candidates 200 --seed 123 --out-prefix bracket_vacation_candidate
+# bracket_generate_dataset_warp.py deliberately excluded: it writes straight to
+# bracket_dataset_{layout}.npz / bracket_dataset_index.json with no top-up
+# mode -- running it here would silently overwrite the real ~39k-row
+# production dataset instead of extending it. Caught 2026-09-01 before it ran.
+
+# Phase 3: retrain + real-oracle steerability eval on the expanded datasets
+# above, for the three domains whose generic train_X_{cvae,gan,diffusion}.py
+# / dataset-tag convention makes this a safe, mechanical next step. merge
+# step never touches the base *_X.npy/*_Y.npy (writes a new tag), so a bug
+# here can't damage the production dataset the way the excluded bracket job
+# could have. bracket/mug excluded (bracket has no cvae/diffusion or generic
+# steerability eval; mug is uncommitted WIP, see above). Each merge/train/
+# eval line was individually smoke-tested (tiny epoch/anchor counts) on
+# 2026-09-01 before being queued at full size.
+airfoil_merge_topup|train|scripts/merge_dataset_topup.py --base-tag airfoil --topup-tag airfoil_vacation_topup --out-tag airfoil_vacation_merged
+airfoil_retrain_cvae|train|scripts/train_airfoil_cvae.py --dataset-tag airfoil_vacation_merged --tag airfoil_cvae_vacation_s0
+airfoil_retrain_gan|train|scripts/train_airfoil_gan.py --dataset-tag airfoil_vacation_merged --tag airfoil_gan_vacation_s0
+airfoil_retrain_diffusion|train|scripts/train_airfoil_diffusion.py --dataset-tag airfoil_vacation_merged --tag airfoil_diffusion_vacation_s0
+airfoil_eval_cvae|train|scripts/steerability_generic.py --domain airfoil --model-type cvae --tag airfoil_cvae_vacation_s0 --out-tag airfoil_vacation_cvae
+airfoil_eval_gan|train|scripts/steerability_generic.py --domain airfoil --model-type gan --tag airfoil_gan_vacation_s0 --out-tag airfoil_vacation_gan
+airfoil_eval_diffusion|train|scripts/steerability_generic.py --domain airfoil --model-type diffusion --tag airfoil_diffusion_vacation_s0 --out-tag airfoil_vacation_diffusion
+
+torax_merge_topup|train|scripts/merge_dataset_topup.py --base-tag torax --topup-tag torax_vacation_topup --out-tag torax_vacation_merged
+torax_retrain_cvae|train|scripts/train_torax_cvae.py --dataset-tag torax_vacation_merged --tag torax_cvae_vacation_s0
+torax_retrain_gan|train|scripts/train_torax_gan.py --dataset-tag torax_vacation_merged --tag torax_gan_vacation_s0
+torax_retrain_diffusion|train|scripts/train_torax_diffusion.py --dataset-tag torax_vacation_merged --tag torax_diffusion_vacation_s0
+torax_eval_cvae|torax|scripts/steerability_generic.py --domain torax --model-type cvae --tag torax_cvae_vacation_s0 --out-tag torax_vacation_cvae
+torax_eval_gan|torax|scripts/steerability_generic.py --domain torax --model-type gan --tag torax_gan_vacation_s0 --out-tag torax_vacation_gan
+torax_eval_diffusion|torax|scripts/steerability_generic.py --domain torax --model-type diffusion --tag torax_diffusion_vacation_s0 --out-tag torax_vacation_diffusion
+
+photonics_merge_topup|train|scripts/merge_dataset_topup.py --base-tag photonics --topup-tag photonics_v2_vacation_topup --out-tag photonics_vacation_merged
+photonics_retrain_cvae|train|scripts/train_photonics_cvae.py --dataset-tag photonics_vacation_merged --tag photonics_cvae_vacation_s0
+photonics_retrain_gan|train|scripts/train_photonics_gan.py --dataset-tag photonics_vacation_merged --tag photonics_gan_vacation_s0
+photonics_retrain_diffusion|train|scripts/train_photonics_diffusion.py --dataset-tag photonics_vacation_merged --tag photonics_diffusion_vacation_s0
+photonics_eval_cvae|meep|scripts/eval_photonics_steerability.py --model-type cvae --tag photonics_cvae_vacation_s0 --out-tag photonics_vacation_cvae
+photonics_eval_gan|meep|scripts/eval_photonics_steerability.py --model-type gan --tag photonics_gan_vacation_s0 --out-tag photonics_vacation_gan
+photonics_eval_diffusion|meep|scripts/eval_photonics_steerability.py --model-type diffusion --tag photonics_diffusion_vacation_s0 --out-tag photonics_vacation_diffusion

@@ -500,6 +500,30 @@ def get_conditioning(domain_name, ckpt):
             worker_aux=lambda aux: {},
         )
 
+    if domain_name == "watercap":
+        # 5 continuous operating conditions (watercap_oracle.AUX_NAMES),
+        # standardized with stats a training script stores in its ckpt as
+        # aux_mean/aux_std -- airfoil's convention, generalized to a vector.
+        from watercap_oracle import AUX_NAMES
+        aux_mean, aux_std = np.asarray(ckpt["aux_mean"]), np.asarray(ckpt["aux_std"])
+
+        def cond_from_target_and_aux(target_z, aux):
+            target_t = _torch.tensor(target_z[None, :], dtype=_torch.float32)
+            a = (np.array([aux[k] for k in AUX_NAMES]) - aux_mean) / aux_std
+            return _torch.cat([target_t, _torch.tensor(a[None, :], dtype=_torch.float32)], dim=-1)
+
+        def sample_aux(rng):
+            from generate_watercap_dataset import _sample_aux
+            return _sample_aux(rng)
+
+        return Conditioning(
+            name="watercap", extra_dim=len(AUX_NAMES),
+            cond_from_target_and_aux=cond_from_target_and_aux,
+            aux_from_row=lambda row, param_dim: {k: float(row[param_dim + i]) for i, k in enumerate(AUX_NAMES)},
+            sample_aux=sample_aux,
+            worker_aux=lambda aux: dict(aux),
+        )
+
     raise ValueError(f"no Conditioning registered for domain {domain_name!r}")
 
 
@@ -707,11 +731,8 @@ def mug_domain():
     invalid input, not a solver failure). §48: PARAM_DIM went 3->8 (named
     materials + a 2-band wall profile + a real handle) after direct user
     request for a richer parameterization -- pulled from mug_oracle.py
-    directly, not hardcoded, so this adapter didn't need to change.
-    (Note: the in-progress mug_categorical/model_dim generalization -- a
-    one-hot categorical-material encoding for the generative models -- is
-    not yet committed on this branch; this adapter still matches the
-    already-shipped mug_oracle.py contract.)"""
+    directly, not hardcoded, so this adapter didn't need to change."""
+    import mug_categorical as mc
     import mug_oracle as m
     return Domain(
         name="mug_thermal",
@@ -733,6 +754,8 @@ def mug_domain():
             sanity_filter=None,  # no known-bad numerical tail found yet (unlike airfoil's cd<1e-6 or TORAX's Q_fusion tail) -- not yet stress-tested at real dataset scale
         )],
         dataset_paths=lambda out_dir: (out_dir / "mug_X.npy", out_dir / "mug_Y.npy"),
+        model_dim=mc.MODEL_DIM,  # §63: 42, not param_dim=9 -- two categorical columns one-hot-expanded for the generative models
+        from_model_space=mc.from_model_space,
     )
 
 
@@ -800,6 +823,94 @@ def photonics_domain():
         dataset_paths=lambda out_dir: (out_dir / "photonics_X.npy", out_dir / "photonics_Y.npy"),
     )
 
+
+
+# Measured (EXPERIMENT_LOG "Watercap"): 56 uniform-sampled designs per tier,
+# host CPU, 28 concurrent processes. Mean, not median -- the tail (long
+# tubes, dense spray) is what a dataset run actually pays for.
+WATERCAP_LOW_COST_CREDITS = 100
+WATERCAP_LOW_COST_PROVENANCE = ("mean ~3.0s/candidate (median 1.6s, p90 5.1s), n_z=80, 6 mist bins; "
+                                 "normalized to airfoil-low's ~30ms=1 credit")
+WATERCAP_MEDIUM_COST_CREDITS = 211
+WATERCAP_MEDIUM_COST_PROVENANCE = ("mean ~6.3s/candidate (median 4.2s, p90 12.9s), n_z=200, 12 mist bins. "
+                                    "Agrees with low to median 2e-5 / max 1e-3 on outlet_total_water_frac -- "
+                                    "discretization is converged at low; the fidelity gap that matters is ROM -> CFD")
+
+# Measured on the partner-baseline geometry (30 cm tube, 15 discs of 0.3 mm),
+# host CPU, single process, 36 kV and 45 kV corona-only: coarse 32-58 s,
+# medium 152-273 s (near-onset designs cost more: more continuation levels).
+WATERCAP_EHD_COARSE_COST_CREDITS = 1500
+WATERCAP_EHD_COARSE_COST_PROVENANCE = "32-58s/candidate (8 cells/edge radius, 2 mm bulk, ~13.6k cells/period)"
+WATERCAP_EHD_COST_CREDITS = 7000
+WATERCAP_EHD_COST_PROVENANCE = ("152-273s/candidate (10 cells/edge radius, 1 mm bulk, ~39k cells/period); "
+                                 "within ~5% of 20 cells/edge radius on corona current")
+
+
+def watercap_domain():
+    """7th domain, and the first proposed by an external partner: water
+    recovery (vapor + mist) from cooling-tower exhaust in a grounded tube
+    with an electrospray stage below a corona-discharge collection stage.
+    See watercap_oracle.py's docstring for the physics and for why this is
+    a SELF-WRITTEN reduced-order model again (no accepted solver covers
+    corona ion transport + droplet charging + condensing Lagrangian spray;
+    stock OpenFOAM would need all three written as custom code).
+
+    Two OracleFunctions over the same targets: the ROM (low/medium), and
+    watercap_ehd (ehd_coarse/ehd) -- the ROM's spray stage plus StoneLab's
+    resolved corona stage. A full gas-phase CFD tier is not built and is not
+    listed.
+
+    validity_fn: arc_margin > 0 -- the FIRST domain here where validity !=
+    ok is a physical constraint rather than a numerical one. arc_margin
+    folds three limits: corona sparkover, spray-electrode sparkover, and the
+    spray cloud's own space-charge field reaching breakdown. Rows that arc
+    are still ok=True with real metrics (kept in the dataset on purpose).
+
+    aux = the 5 operating conditions (inlet T/RH/mist loading/size),
+    appended to X after PARAM_DIM like airfoil's (reynolds, alpha)."""
+    import watercap_ehd as ehd
+    import watercap_oracle as m
+    return Domain(
+        name="watercap",
+        param_dim=m.PARAM_DIM, zero_indices=m.ZERO_INDICES,
+        oracles=[Oracle(
+            name="watercap_rom",
+            target_names=m.TARGET_NAMES, log_target_names=m.LOG_TARGET_NAMES,
+            functions=[OracleFunction(
+                name="watercap_rom",
+                fidelities=[
+                    FidelityLevel("low", "low", cost_credits=WATERCAP_LOW_COST_CREDITS,
+                                   measured_from=WATERCAP_LOW_COST_PROVENANCE),
+                    FidelityLevel("medium", "medium", cost_credits=WATERCAP_MEDIUM_COST_CREDITS,
+                                   measured_from=WATERCAP_MEDIUM_COST_PROVENANCE),
+                ],
+                worker_fn=m.worker_fn, params_to_worker_args=m.params_to_worker_args,
+                harness_fit="subprocess-per-candidate",
+                harness_fit_note="measured: pure numpy/scipy, no JIT or import tax worth amortizing; ~2% of uniform "
+                                  "samples still hit an LSODA failure and ~0.4% a 30s timeout, so the killable "
+                                  "subprocess is load-bearing here, not just convention.",
+            ), OracleFunction(
+                # A genuinely different solver over the same metric namespace --
+                # the case this file's multi-function Oracle exists for: the ROM's
+                # spray stage + StoneLab's resolved, two-way coupled axisymmetric
+                # corona/droplet model for the corona stage (watercap_ehd.py).
+                name="watercap_ehd",
+                fidelities=[
+                    FidelityLevel("ehd_coarse", "ehd_coarse", cost_credits=WATERCAP_EHD_COARSE_COST_CREDITS,
+                                   measured_from=WATERCAP_EHD_COARSE_COST_PROVENANCE),
+                    FidelityLevel("ehd", "ehd", cost_credits=WATERCAP_EHD_COST_CREDITS,
+                                   measured_from=WATERCAP_EHD_COST_PROVENANCE),
+                ],
+                worker_fn=ehd.worker_fn, params_to_worker_args=ehd.params_to_worker_args,
+                harness_fit="subprocess-per-candidate",
+                harness_fit_note="minutes per call; the subprocess cost is noise. Run with fewer workers than "
+                                  "cores: each call holds a ~1e5-unknown sparse LU.",
+            )],
+            validity_fn=lambda metrics: metrics["arc_margin"] > 0,
+            sanity_filter=None,  # water_balance_residual is the candidate filter (|r| > 1e-3 in 1/275 pilot rows); not applied yet
+        )],
+        dataset_paths=lambda out_dir: (out_dir / "watercap_X.npy", out_dir / "watercap_Y.npy"),
+    )
 
 # Deprecated aliases -- kept so the six scripts that already
 # `from gym_schema import vmec_spec, airfoil_spec, torax_spec, mug_spec`

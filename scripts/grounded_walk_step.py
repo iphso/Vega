@@ -272,15 +272,25 @@ def main():
                 stall["rounds_since_improvement"] += 1
         else:
             stall = {"best": global_best, "rounds_since_improvement": 0}
-        stall_path.write_text(json.dumps(stall))
         if stall["rounds_since_improvement"] >= args.stall_retrain_rounds:
             print(f"[grounded_walk] no improvement in best-ever real violation "
                   f"({global_best:.4f}) for {stall['rounds_since_improvement']} rounds -- "
                   f"flagging for retrain (same as an accept-rate collapse).")
+            # Reset the counter itself, not just the flag -- a real bug in the
+            # first version of this code left it incrementing past the
+            # threshold forever once first crossed, so every subsequent round
+            # re-triggered a retrain immediately regardless of whether the just-
+            # refreshed surrogate had had any real chance to improve on it yet
+            # (caught directly: "for 15/16/17 rounds" printed on three
+            # consecutive rounds around a single retrain). The new model
+            # deserves its own full --stall-retrain-rounds window.
+            stall["rounds_since_improvement"] = 0
             needs_retrain_flag.touch()
             torch.save(z.cpu(), z_path)
             val_results_path.unlink()
+            stall_path.write_text(json.dumps(stall))
             return
+        stall_path.write_text(json.dumps(stall))
 
         if n_accepted == 0:
             print(f"[grounded_walk] EVERY fiber failed this round -- flagging for retrain, "

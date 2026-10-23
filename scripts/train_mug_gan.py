@@ -1,10 +1,27 @@
 """Conditional WGAN-GP for the mug domain -- reuses train_gan.py's
-Generator/Critic/gradient_penalty unchanged, n_nfp=0 (no aux -- see
+Generator/Critic/gradient_penalty UNCHANGED (n_nfp=0, no aux -- see
 train_mug_cvae.py's docstring). Data loading/normalization copied verbatim
 from train_mug_cvae.py/train_mug_diffusion.py so all three mug checkpoints
 train on identically-processed data. Same WGAN-GP hyperparameters as
 train_gan.py (n_critic=5, lr=1e-4, betas=(0.5, 0.9)) -- not tuned
 domain-specifically.
+
+§63: same categorical fix as train_mug_cvae.py (see mug_categorical.py's
+module docstring for the concrete broken-output evidence this replaces),
+adapted to WGAN-GP specifically. The Generator's raw output for a
+categorical block is unconstrained logits, but real data for that block is
+a hard one-hot (exact 0/1) -- if the Critic saw those two representations
+directly, it could trivially tell real from fake just by noticing "this
+block isn't in {0,1}," a shortcut that teaches the Generator nothing about
+which material is realistic. Fixed via `mug_categorical.
+soften_categorical_torch()`: softmax each categorical block of the
+Generator's output (differentiable, so the adversarial loss still
+backprops into it) before the Critic ever sees it, leaving BOTH real and
+fake in the same probability simplex. The Generator is pushed toward
+confident near-one-hot corners by the adversarial loss itself; the actual
+hard discrete decision is only made later, at sampling time, by
+`from_model_space()`'s argmax (steerability_generic.py / any future
+sampling code), never here during training.
 """
 import argparse
 import json
@@ -13,6 +30,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
+import mug_categorical as mc
 from train_gan import Generator, Critic, gradient_penalty
 
 OUT_DIR = Path("/work/output")
@@ -45,11 +63,17 @@ def main():
     target_names = json.loads((OUT_DIR / f"{args.dataset_tag}_target_names.json").read_text())
     n_targets = len(target_names)
 
-    coeff_dim = X.shape[1]
-    coeffs_raw = X
+    coeff_dim = mc.MODEL_DIM  # 42, not X.shape[1]=9 -- see train_mug_cvae.py
+    coeffs_model = mc.to_model_space(X)
+    cont_slice, _cat_slices = mc.model_space_slices()
 
-    coeff_mean = coeffs_raw.mean(axis=0)
-    coeff_std = coeffs_raw.std(axis=0).clip(min=1e-6)
+    cont_mean = coeffs_model[:, cont_slice].mean(axis=0)
+    cont_std = coeffs_model[:, cont_slice].std(axis=0).clip(min=1e-6)
+    coeffs_z = coeffs_model.copy()
+    coeffs_z[:, cont_slice] = (coeffs_model[:, cont_slice] - cont_mean) / cont_std
+    # categorical blocks stay exact one-hot -- real data the Critic sees
+    # must be a genuine hard corner of the simplex, the thing the
+    # Generator's own softmaxed output (below) is being pushed toward.
 
     Yt = Y.copy()
     for name in LOG_TARGET_NAMES:
@@ -59,7 +83,7 @@ def main():
     t_std = Yt.std(axis=0).clip(min=1e-6)
     targets_z = (Yt - t_mean) / t_std
 
-    coeffs = torch.tensor((coeffs_raw - coeff_mean) / coeff_std, dtype=torch.float32)
+    coeffs = torch.tensor(coeffs_z, dtype=torch.float32)
     targets = torch.tensor(targets_z, dtype=torch.float32)
     dataset = torch.utils.data.TensorDataset(coeffs, targets)
     loader = torch.utils.data.DataLoader(dataset, batch_size=args.batch, shuffle=True, drop_last=True)
@@ -70,7 +94,8 @@ def main():
     critic_opt = torch.optim.Adam(critic.parameters(), lr=args.lr, betas=(0.5, 0.9))
 
     n_params = sum(p.numel() for p in gen.parameters())
-    print(f"[{args.tag}] rows={len(dataset):,} coeff_dim={coeff_dim} n_targets={n_targets} "
+    print(f"[{args.tag}] rows={len(dataset):,} coeff_dim={coeff_dim} (7 continuous + "
+          f"{'+'.join(str(n) for _, _, n in mc.CATEGORICAL_SPECS)} one-hot) n_targets={n_targets} "
           f"latent_dim={args.latent_dim} hidden={args.hidden} n_critic={args.n_critic} "
           f"generator_params={n_params:,}")
 
@@ -83,7 +108,7 @@ def main():
 
             for _ in range(args.n_critic):
                 z = torch.randn(xb.shape[0], args.latent_dim, device=dev)
-                fake = gen(z, cond).detach()
+                fake = mc.soften_categorical_torch(gen(z, cond)).detach()
                 critic_opt.zero_grad()
                 d_loss = critic(fake, cond).mean() - critic(xb, cond).mean() \
                     + args.lambda_gp * gradient_penalty(critic, xb, fake, cond, dev)
@@ -91,7 +116,7 @@ def main():
                 critic_opt.step()
 
             z = torch.randn(xb.shape[0], args.latent_dim, device=dev)
-            fake = gen(z, cond)
+            fake = mc.soften_categorical_torch(gen(z, cond))
             gen_opt.zero_grad()
             g_loss = -critic(fake, cond).mean()
             g_loss.backward()
@@ -107,7 +132,7 @@ def main():
     torch.save({
         "generator_state_dict": gen.state_dict(),
         "latent_dim": args.latent_dim, "hidden": args.hidden, "coeff_dim": coeff_dim,
-        "coeff_mean": coeff_mean, "coeff_std": coeff_std,
+        "coeff_mean": cont_mean, "coeff_std": cont_std,
         "target_names": target_names, "log_target_names": LOG_TARGET_NAMES,
         "target_mean": t_mean, "target_std": t_std,
         "dataset_tag": args.dataset_tag,

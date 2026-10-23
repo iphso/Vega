@@ -1,0 +1,30 @@
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    object      fvSchemes;
+}
+
+ddtSchemes
+{
+}
+
+gradSchemes
+{
+}
+
+divSchemes
+{
+}
+
+laplacianSchemes
+{
+}
+
+interpolationSchemes
+{
+}
+
+snGradSchemes
+{
+}

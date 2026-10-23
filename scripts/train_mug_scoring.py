@@ -14,6 +14,16 @@ would actually reveal that, not raw RMSE alone.
 
 No LOG_TARGET_NAMES applied -- open item from §47/§48, not yet rigorously
 checked the way VMEC/airfoil's log-targets were originally identified.
+
+§63: input features one-hot-expand struct_material_idx/handle_material_idx
+(20/15 classes) instead of feeding them in as one more raw z-scored
+scalar, the same categorical-not-continuous fix as the 3 generative
+models (see mug_categorical.py). Motivated by a real, honestly-reported
+result: before this fix, `handle_temp_60s_C`'s error reduction dropped
+from §49's 90.7% (the old 5-material table) to 70.0% once the table grew
+to 15 materials -- a raw scalar index is a poor regression input for a
+15-way categorical relationship, and gets worse as the category count
+grows, exactly what a one-hot input is meant to fix.
 """
 import argparse
 import json
@@ -22,6 +32,8 @@ from pathlib import Path
 import numpy as np
 import torch
 from torch import nn
+
+import mug_categorical as mc
 
 OUT_DIR = Path("/work/output")
 CKPT_DIR = Path("/work/checkpoints")
@@ -61,8 +73,10 @@ def main():
 
     target_names = json.loads((OUT_DIR / f"{args.dataset_tag}_target_names.json").read_text())
     n_targets = len(target_names)
-    X = np.load(OUT_DIR / f"{args.dataset_tag}_X.npy")
+    X_raw = np.load(OUT_DIR / f"{args.dataset_tag}_X.npy")
     Y = np.load(OUT_DIR / f"{args.dataset_tag}_Y.npy")
+    X = mc.to_model_space(X_raw)  # 9 -> 42: material columns one-hot-expanded, see module docstring
+    cont_slice, _cat_slices = mc.model_space_slices()
 
     n = len(X)
     rng = np.random.default_rng(args.seed)
@@ -72,7 +86,12 @@ def main():
     test_idx, val_idx, train_idx = perm[:n_test], perm[n_test:n_test + n_val], perm[n_test + n_val:]
     print(f"[{args.tag}] {n:,} rows -> train={len(train_idx):,} val={len(val_idx):,} test={len(test_idx):,}")
 
-    in_mean, in_std = X[train_idx].mean(axis=0), X[train_idx].std(axis=0).clip(min=1e-6)
+    in_mean, in_std = np.zeros(X.shape[1], dtype=np.float32), np.ones(X.shape[1], dtype=np.float32)
+    in_mean[cont_slice] = X[train_idx][:, cont_slice].mean(axis=0)
+    in_std[cont_slice] = X[train_idx][:, cont_slice].std(axis=0).clip(min=1e-6)
+    # categorical (one-hot) columns keep mean=0/std=1 -- already in [0,1],
+    # z-scoring per-class would distort them by each class's own training
+    # frequency for no benefit.
     t_mean, t_std = Y[train_idx].mean(axis=0), Y[train_idx].std(axis=0).clip(min=1e-6)
 
     def make_tensors(idx):
@@ -90,8 +109,9 @@ def main():
     model = ScoringMLP(in_dim=X.shape[1], n_targets=n_targets, hidden=args.hidden, n_blocks=args.n_blocks).to(dev)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     n_params = sum(p.numel() for p in model.parameters())
-    print(f"[{args.tag}] in_dim={X.shape[1]} n_targets={n_targets} hidden={args.hidden} "
-          f"n_blocks={args.n_blocks} params={n_params:,}")
+    print(f"[{args.tag}] in_dim={X.shape[1]} (7 continuous + "
+          f"{'+'.join(str(n) for _, _, n in mc.CATEGORICAL_SPECS)} one-hot) n_targets={n_targets} "
+          f"hidden={args.hidden} n_blocks={args.n_blocks} params={n_params:,}")
 
     def rmse_by_target(x, y_z):
         model.eval()

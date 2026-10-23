@@ -1,0 +1,31 @@
+1450 designs -> /home/sl8rv/Projects/Vega/viewer/public/data/watercap/designs.json
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+scene cold_spray-0157 220.2 s
+scene rain_curtain-0102 68.6 s
+scene corona_only-0276 30.2 s
+scene charged_spray-0100 49.9 s
+scene ring_spray-0096 93.3 s
+scene cooled_wall-0036 77.1 s
+scene coflow_spray-0010 81.2 s
+scene multi_tier-0042 88.0 s
+scene baseline-40kV 23.0 s
+scene disc-geometry-30kV 41.7 s

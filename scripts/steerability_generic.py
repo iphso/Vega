@@ -96,10 +96,17 @@ def load_generative_model(domain_name, model_type, tag, dev):
     n_targets = len(target_names)
     log_target_names = ckpt.get("log_target_names", spec.log_target_names)
     param_dim = spec.param_dim
+    # §63: model_dim (the generative models' own working-vector width) can
+    # differ from param_dim (the real design-vector width) -- mug's two
+    # categorical material columns are one-hot-expanded internally
+    # (model_dim=42) but the real design mug_oracle.py/worker_fn expect is
+    # still 9-wide. None (every domain but mug) means they're identical,
+    # unchanged from before this field existed.
+    model_dim = spec.model_dim or param_dim
 
     if model_type == "cvae":
         from train_cvae import CVAE
-        model = CVAE(coeff_dim=param_dim, n_targets=n_targets, latent_dim=ckpt["latent_dim"],
+        model = CVAE(coeff_dim=model_dim, n_targets=n_targets, latent_dim=ckpt["latent_dim"],
                      hidden=ckpt["hidden"], n_nfp=conditioning.extra_dim).to(dev)
         model.load_state_dict(ckpt["model_state_dict"])
         model.eval()
@@ -111,17 +118,17 @@ def load_generative_model(domain_name, model_type, tag, dev):
                 return model.decode(z, cond.repeat(k, 1)).numpy()
     elif model_type == "diffusion":
         from train_diffusion import DiffusionDenoiser, ddpm_sample, make_schedule
-        model = DiffusionDenoiser(coeff_dim=param_dim, n_targets=n_targets, hidden=ckpt["hidden"],
+        model = DiffusionDenoiser(coeff_dim=model_dim, n_targets=n_targets, hidden=ckpt["hidden"],
                                    time_embed_dim=ckpt["time_embed_dim"], n_nfp=conditioning.extra_dim).to(dev)
         model.load_state_dict(ckpt["model_state_dict"])
         model.eval()
         schedule = make_schedule(ckpt["T"], device=dev)
 
         def sample_fn(cond, k):
-            return ddpm_sample(model, cond.repeat(k, 1), schedule, coeff_dim=param_dim, device=dev).numpy()
+            return ddpm_sample(model, cond.repeat(k, 1), schedule, coeff_dim=model_dim, device=dev).numpy()
     else:
         from train_gan import Generator as GANGenerator
-        model = GANGenerator(coeff_dim=param_dim, n_targets=n_targets, latent_dim=ckpt["latent_dim"],
+        model = GANGenerator(coeff_dim=model_dim, n_targets=n_targets, latent_dim=ckpt["latent_dim"],
                               hidden=ckpt["hidden"], n_nfp=conditioning.extra_dim).to(dev)
         model.load_state_dict(ckpt["generator_state_dict"])
         model.eval()
@@ -142,7 +149,14 @@ def load_generative_model(domain_name, model_type, tag, dev):
 
 def build_candidates(sample_fn, cond, k, coeff_mean, coeff_std, zero_indices, spec, worker_aux, fidelity_name):
     decoded = sample_fn(cond, k)
-    params = decoded * coeff_std + coeff_mean
+    if spec.from_model_space is not None:
+        # §63: mug -- destandardize the continuous columns AND hard-argmax
+        # each categorical one-hot block back to a real material class,
+        # instead of the universal linear destandardize below (which would
+        # leave raw one-hot LOGITS sitting in the material columns).
+        params = spec.from_model_space(decoded, coeff_mean, coeff_std)
+    else:
+        params = decoded * coeff_std + coeff_mean
     if zero_indices:
         params[:, zero_indices] = 0.0
     return [spec.params_to_worker_args(params[i], worker_aux, fidelity_name) for i in range(k)]

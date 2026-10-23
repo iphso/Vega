@@ -1,0 +1,40 @@
+# Direct qi-attack lane, seeded from the NAE-seeded run's own best-qi
+# survivors (p3_v4d_nae_seed_gpu1 in queue_gpu1_v3.txt): 20 real points with
+# qi in 0.00199-0.00254 and edge_magnetic_mirror_ratio in 0.336-0.391 --
+# already meaningfully better mirror_ratio than any other qi-feasible point
+# in the project (0.48-0.69), but qi itself stalled ~6x over the 0.0003162
+# threshold across 88 rounds of that run's full-constraint-set ALM push. This
+# lane isolates the actual bottleneck: minimize qi directly, holding
+# mirror_ratio<=0.4 (loose -- room to move, not required to hold at its
+# current best) plus the other 3 P3 constraints (vacuum_well, flux_compression,
+# iota) that region had already mostly satisfied on its own. Question: can
+# qi be pushed down an order of magnitude from here without mirror_ratio
+# sliding back up past 0.4, or does minimizing qi directly just walk the
+# same wall back toward the 0.48-0.69 range from a different entry point?
+# New lane (not appended to queue_gpu1_v3.txt) so it runs concurrently with,
+# not queued behind, the still-running nae_seed run it's derived from --
+# GPU0 has full headroom (~5.5GB of 32GB in use by the one other GPU0 job).
+# NOTE: first launch attempt used 20 anchors with --n-fibers 15 --
+# grounded_walk_step_v4.py requires n-fibers to be a multiple of the anchor
+# count, so it exited immediately with an assertion error before any
+# rounds ran. Fixed by trimming to the best 5 anchors (still qi
+# 0.00199-0.00217, mr 0.370-0.387 -- the tightest cluster of the original
+# 20) so 15 fibers divides evenly (3 replicas each); relaunched.
+#
+# NOTE 2: second attempt repeated the exact "trivial success" bug first
+# caught on nfp=3 (see above) -- qi was left unconstrained (only
+# mirror_ratio<=0.4, vacuum_well>=0, flux_compression<=0.9, iota>=0.25),
+# every one of which the anchors already satisfied or nearly satisfied, so
+# the driver declared SUCCESS after round 1 with qi=0.00289 (no real
+# progress, same ballpark as the anchors) -- qi was never actually under
+# real pressure. Corrected: swapped the free/constrained roles to match
+# every other basin's recipe -- now MINIMIZES edge_magnetic_mirror_ratio
+# and CONSTRAINS qi<=0.0003162 (the real P3 threshold, not previously
+# enforced here) alongside vacuum_well/flux_compression/iota. The anchors
+# fail this qi constraint by ~6x, so real ALM pressure is guaranteed from
+# round 0. Question this now actually tests: starting from a basin whose
+# best-qi points already sit at mr 0.37-0.39 (materially better than every
+# other basin's 0.48-0.69), can real qi pressure be satisfied without
+# mirror_ratio sliding back up into that same 0.48-0.69 range, or does it
+# land there anyway?
+p3_v4e_qi_attack_gpu0|run_grounded_walk_v4.sh|MAX_ROUNDS=3000 MAX_RETRAINS=40 RETRAIN_EPOCHS=60 BASE_SPLIT=bootstrap_live SCORER_ARCH=half_siren|--scorer-tag reg_half_siren_big_soap_full_s0 --nfp 2 --n-fibers 15 --alm-inner-steps 20 --lr 0.01 --anchor-x-file output/nae_qi_attack_anchors.npy --anchor-jitter 0.02 --minimize edge_magnetic_mirror_ratio --obj-ramp-start 0.3 --obj-ramp-end 0.05 --stall-retrain-rounds 15 --seed 23 --constraint abs(edge_rotational_transform_over_n_field_periods)>=0.25 --constraint qi<=0.0003162 --constraint flux_compression_in_regions_of_bad_curvature<=0.9 --constraint vacuum_well>=0.0

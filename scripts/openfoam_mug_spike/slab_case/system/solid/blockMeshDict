@@ -1,0 +1,52 @@
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    object      blockMeshDict;
+}
+
+scale   1;
+
+// 3mm-thick plane slab, 60 cells through the thickness (x), 1 cell in y/z
+// (empty patches) -- a thin-wall / 1D-conduction reduction, matching
+// thermal_mug_spike.py's own thin-wall approximation (constant area, no
+// curvature term).
+vertices
+(
+    (0        0    0)
+    (0.003    0    0)
+    (0.003    0.01 0)
+    (0        0.01 0)
+    (0        0    0.01)
+    (0.003    0    0.01)
+    (0.003    0.01 0.01)
+    (0        0.01 0.01)
+);
+
+blocks
+(
+    hex (0 1 2 3 4 5 6 7) (60 1 1) simpleGrading (1 1 1)
+);
+
+edges ();
+
+boundary
+(
+    liquid
+    {
+        type    patch;
+        faces   ((0 4 7 3));
+    }
+    ambient
+    {
+        type    patch;
+        faces   ((1 2 6 5));
+    }
+    sides
+    {
+        type    empty;
+        faces   ((0 1 2 3) (4 5 6 7) (0 1 5 4) (3 2 6 7));
+    }
+);
+
+mergePatchPairs ();

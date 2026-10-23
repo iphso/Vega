@@ -47,6 +47,22 @@ services:
       - ./checkpoints:/work/checkpoints
     entrypoint: ["python3"]
 
+  openfoam:
+    # EXPERIMENT_LOG §64-65: mug's replacement oracle backend (solid
+    # conduction only for now), and -- per direct user intent -- meant to
+    # be the shared home for ANY future domain's OpenFOAM-backed oracle,
+    # not mug-specific infrastructure. No fixed entrypoint command (unlike
+    # `oracle`/`train`'s `entrypoint: ["python3"]`): callers run either a
+    # python automation script (`docker compose run openfoam python3
+    # scripts/...`) or a raw OpenFOAM utility directly
+    # (`docker compose run openfoam blockMesh -region solid`).
+    build:
+      context: .
+      dockerfile: Dockerfile.openfoam
+    volumes:
+      - ./output:/work/output
+      - ./scripts:/work/scripts
+
   oracle-x86:
     platform: linux/amd64
     build:

@@ -1,0 +1,605 @@
+---
+---
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Vega Mug v2 viewer</title>
+  <style is:global>
+    :root {
+      --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
+      --border: #2a2a30; --text: #e8e8ec; --text-dim: #8a8a94; --text-faint: #55555e;
+      --accent: #5b9dff; --accent-dim: #2a4a75; --handle: #ffb454; --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: -apple-system, "Segoe UI", system-ui, sans-serif; }
+    #app { display: flex; height: 100%; }
+    .side-pane { flex: 0 0 340px; overflow: hidden; }
+    .side-pane .pane-content { width: 100%; height: 100%; overflow-y: auto; padding: 18px; }
+    .side-pane .pane-content::-webkit-scrollbar { width: 8px; }
+    .side-pane .pane-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    #leftPane .pane-content { background: var(--panel); border-right: 1px solid var(--border); }
+    #rightPane .pane-content { background: var(--panel); border-left: 1px solid var(--border); }
+    #centerPane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; padding: 18px; gap: 14px; overflow-y: auto; }
+
+    h1 { font-size: 15px; font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+    #titleRow { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    #byline { font-size: 11px; color: var(--text-faint); letter-spacing: 0.02em; white-space: nowrap; }
+    #subtitle { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
+    .domain-nav { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+    .domain-nav a {
+      font-size: 11px; color: var(--text-dim); text-decoration: none;
+      padding: 4px 10px; border-radius: 20px; border: 1px solid var(--border);
+      background: var(--card-2); transition: color .12s, border-color .12s;
+    }
+    .domain-nav a:hover { color: var(--text); border-color: #3a3a42; }
+    .domain-nav a.active { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
+
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-top: 14px; }
+    .card:first-child { margin-top: 0; }
+    .section-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); font-weight: 600; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+
+    select, input[type=number] {
+      width: 100%; background: var(--card-2); color: var(--text); border: 1px solid var(--border);
+      border-radius: 6px; padding: 7px 8px; font-size: 13px; font-family: inherit;
+    }
+    select:focus, input:focus { outline: none; border-color: var(--accent); }
+    .btn-row { display: flex; gap: 6px; margin-top: 8px; }
+    .btn-row button { flex: 1; }
+    button {
+      background: var(--card-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px;
+      padding: 7px 10px; cursor: pointer; font-size: 13px; font-family: inherit; transition: background .12s, border-color .12s;
+    }
+    button:hover { background: #26262e; border-color: #3a3a42; }
+    button.icon { flex: 0 0 auto; width: 36px; font-weight: 600; }
+    .candidate-meta { display: flex; gap: 8px; margin-top: 10px; font-size: 11px; color: var(--text-dim); flex-wrap: wrap; }
+    .pill { background: var(--card-2); border: 1px solid var(--border); border-radius: 20px; padding: 3px 10px; }
+    .pill b { color: var(--text); font-weight: 600; }
+
+    .viz-card { flex: 0 0 auto; }
+    .viz-title { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; display: flex; justify-content: space-between; }
+    .viz-title .status { color: var(--text-faint); font-size: 11px; }
+    #mug3dWrap { width: 100%; height: 420px; position: relative; background: #0c0c0e; border-radius: 8px; overflow: hidden; }
+    #mug3dWrap canvas { display: block; width: 100% !important; height: 100% !important; }
+    .mug-caption { font-size: 11px; color: var(--text-faint); margin-top: 8px; }
+    .mug-materials { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .mug-materials .pill { font-size: 10.5px; }
+
+    .stat-row { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+    .stat { background: var(--card-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; flex: 1; min-width: 90px; }
+    .stat .k { font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; }
+    .stat .v { font-size: 15px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+    .filter-row { margin-top: 12px; }
+    .filter-row:first-child { margin-top: 0; }
+    .filter-row .label { font-size: 11.5px; color: var(--text-dim); margin-bottom: 4px; display: flex; justify-content: space-between; }
+    .filter-row .range-inputs { display: flex; gap: 6px; align-items: center; }
+    .filter-row .range-inputs input { flex: 1; }
+    .filter-row .range-inputs span { color: var(--text-faint); font-size: 11px; }
+    #matchCount { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+    #matchCount b { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div id="leftPane" class="side-pane">
+      <div class="pane-content">
+        <div id="titleRow">
+          <h1>Vega Mug v2 viewer</h1>
+          <span id="byline">made by IPH Labs</span>
+        </div>
+        <nav class="domain-nav">
+          <a href="/">Stellarators</a>
+          <a href="/airfoil">Airfoils</a>
+          <a href="/torax">TORAX</a>
+          <a href="/mug">Mug (v1)</a>
+          <a href="/mug-v2" class="active">Mug (v2)</a>
+          <a href="/bracket">Bracket</a>
+          <a href="/photonics">Photonics</a>
+        </nav>
+        <div id="subtitle">loading…</div>
+
+        <div class="card">
+          <div class="section-title">About this page</div>
+          <div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+            Free-form-deformed body + real curved-arc handle + coating + joint
+            (EXPERIMENT_LOG §70-91) -- a structurally different geometry model
+            from the original /mug page's revolve+straight-handle design, so
+            it gets its own page rather than a toggle. Targets are the
+            oracle's own final static values (no live recompute -- a real
+            OpenFOAM solve takes minutes, not something to run per UI
+            interaction).
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">Candidate</div>
+          <div class="btn-row">
+            <button class="icon" id="prevBtn">‹</button>
+            <input id="index" type="number" min="0" value="0" />
+            <button class="icon" id="nextBtn">›</button>
+            <button id="randomBtn">random</button>
+          </div>
+          <div class="candidate-meta">
+            <span class="pill">row <b id="globalRow">–</b></span>
+            <span class="pill">r_outer <b id="rOuterVal">–</b> mm</span>
+            <span class="pill">height <b id="heightVal">–</b> mm</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="centerPane">
+      <div class="card viz-card">
+        <div class="viz-title">
+          <span>3D mug (v2)</span>
+          <span class="status" id="shapeStatus"></span>
+        </div>
+        <div id="mug3dWrap"></div>
+        <div class="mug-caption" id="mugCaption"></div>
+        <div class="mug-materials" id="mugMaterials"></div>
+      </div>
+      <div class="card viz-card">
+        <div class="viz-title"><span>Oracle-measured targets</span></div>
+        <div class="stat-row">
+          <div class="stat"><div class="k">touch @ 60s</div><div class="v" id="statTouch">–</div></div>
+          <div class="stat"><div class="k">temp @ 2h</div><div class="v" id="statTemp2h">–</div></div>
+          <div class="stat"><div class="k">handle @ 60s</div><div class="v" id="statHandle">–</div></div>
+          <div class="stat"><div class="k">mass (g)</div><div class="v" id="statMass">–</div></div>
+          <div class="stat"><div class="k">liquid (mL)</div><div class="v" id="statLiquid">–</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="rightPane" class="side-pane">
+      <div class="pane-content">
+        <div class="card">
+          <div class="section-title">Filters<button class="link" id="resetAllBtn" style="background:none;border:none;color:var(--accent);font-size:11px;cursor:pointer;">reset all</button></div>
+          <div id="matchCount">matches: <b id="matchN">–</b> / <span id="matchTotal">–</span></div>
+          <div id="filters"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
+    // §91: kept literal (not fetched from feature_layout at runtime for the
+    // geometry-critical constants) so the FFD reconstruction below is
+    // self-documenting -- must match mug_openfoam_oracle_v2.py's own
+    // N_LATTICE/N_THETA_TESS/N_Z_TESS exactly, confirmed at the time of
+    // writing (§91), same "frozen fact about the data, not a live import"
+    // reasoning export_mug_v2_viewer_data.py's own PARAM_NAMES uses.
+    const N_LATTICE = [2, 2, 3];
+    const N_THETA_TESS = 24;
+    const N_Z_TESS = 16;
+    const _N_DISP = N_LATTICE[0] * N_LATTICE[1] * N_LATTICE[2] * 3; // 36
+
+    const PARAM_NAMES = (() => {
+      const names = ['r_inner_mm', 'r_outer_mm', 'height_mm'];
+      for (let i = 0; i < _N_DISP; i++) names.push(`disp_inner_mm_${i}`);
+      for (let i = 0; i < _N_DISP; i++) names.push(`disp_outer_mm_${i}`);
+      names.push('struct_material_idx', 'coating_material_idx', 'coating_thickness_mm');
+      names.push('handle_theta1', 'handle_z1_frac', 'handle_radial_offset1_mm',
+                  'handle_theta2', 'handle_z2_frac', 'handle_radial_offset2_mm',
+                  'handle_bulge_mm', 'handle_radius_mm', 'handle_material_idx', 'joint_material_idx');
+      return names;
+    })();
+    const IDX = Object.fromEntries(PARAM_NAMES.map((n, i) => [n, i]));
+
+    // Exact tables from thermal_mug_spike.py at the time of writing (§91) --
+    // same "must stay byte-for-byte in sync, name AND order" convention
+    // mug.astro's own STRUCTURAL_MATERIALS/HANDLE_MATERIALS use, just kept
+    // current here rather than frozen at an earlier section's snapshot.
+    const STRUCTURAL_MATERIALS = ["calabash_gourd", "birch_wood", "silicone_rigid", "polypropylene", "nylon_pa6", "peek_polymer", "high_density_polyethylene", "soda_lime_glass", "earthenware", "borosilicate_glass", "stoneware", "fused_silica_glass", "porcelain", "bone_china", "glass_ceramic", "zirconia_ceramic", "stainless_steel_304", "titanium_grade2", "alumina_ceramic", "pewter_leadfree", "anodized_aluminum"];
+    const HANDLE_MATERIALS = ["cork", "rattan_wrap", "natural_rubber", "leather_wrapped", "bamboo", "neoprene", "walnut", "oak", "epdm_rubber", "maple", "beech", "horn", "silicone_rubber", "abs_grip", "polypropylene_grip", "tpe_grip", "phenolic_resin", "glass_filled_nylon", "stoneware", "carbon_fiber_composite", "stainless_steel_304", "titanium_grade2", "cast_iron", "brass", "aluminum_6061", "copper", "sterling_silver"];
+    const COATING_MATERIALS = ["ceramic_glaze", "vitreous_enamel", "epoxy_resin_liner", "tin_lining", "nickel_lining", "silver_lining", "food_grade_lacquer", "beeswax_seal", "gold_lining", "shellac_finish"];
+    const JOINT_MATERIALS = ["mechanical_press_fit_dry", "silicone_gasket_clamp", "structural_epoxy_adhesive", "brazed_metal_joint", "ceramic_slip_fusion", "welded_metal_joint"];
+
+    // Not hand-curated per material (64 entries across 4 tables would be a
+    // lot of upkeep for a first version) -- a real, deterministic keyword
+    // match against genuine visual categories (glass is translucent pale
+    // blue, wood is brown, bare metal is grey/silver-toned, etc.), falling
+    // back to a stable hash-based hue so anything unmatched still gets a
+    // fixed, distinguishable (not random-every-reload) color rather than
+    // one default gray for everything.
+    function guessColor(name) {
+      const rules = [
+        [/glass/, [210, 230, 235, 0.55]],
+        [/gourd|cork|leather|horn|bamboo|rattan|birch|walnut|oak|maple|beech|wood/, [160, 120, 80, 1.0]],
+        [/porcelain|bone_china/, [248, 245, 240, 1.0]],
+        [/ceramic|earthenware|stoneware|zirconia|alumina/, [205, 190, 175, 1.0]],
+        [/gold/, [212, 175, 55, 1.0]],
+        [/silver|sterling/, [220, 220, 225, 1.0]],
+        [/copper|brass|pewter|tin/, [180, 130, 90, 1.0]],
+        [/titanium/, [140, 140, 148, 1.0]],
+        [/steel|iron|aluminum|nickel|metal|braz|weld/, [190, 195, 200, 1.0]],
+        [/rubber|neoprene|epdm|silicone/, [45, 45, 50, 1.0]],
+        [/press_fit/, [120, 120, 128, 0.8]],
+        [/epoxy|adhesive|resin|lacquer/, [200, 200, 150, 0.9]],
+        [/fusion/, [205, 190, 175, 1.0]],
+        [/gasket/, [50, 50, 55, 1.0]],
+      ];
+      for (const [re, rgba] of rules) if (re.test(name)) return rgba;
+      let h = 0;
+      for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+      const hue = h % 360;
+      const [r, g, b] = hslToRgb(hue / 360, 0.35, 0.6);
+      return [r, g, b, 1.0];
+    }
+    function hslToRgb(h, s, l) {
+      const k = (n) => (n + h * 12) % 12;
+      const a = s * Math.min(l, 1 - l);
+      const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+      return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+    }
+    function rgbaToThree(rgba) {
+      return { color: new THREE.Color(rgba[0] / 255, rgba[1] / 255, rgba[2] / 255), opacity: rgba[3] };
+    }
+    function materialLabel(idx, names) {
+      const i = Math.max(0, Math.min(names.length - 1, Math.round(idx)));
+      return names[i];
+    }
+
+    // --- FFD deform, ported directly from mug_ffd_geometry.py's ffd_deform
+    // (piecewise trilinear interpolation over a regular control lattice) ---
+    function ffdDeform(points, dispGrid, bboxMin, bboxMax) {
+      const [Nx, Ny, Nz] = [dispGrid.length, dispGrid[0].length, dispGrid[0][0].length];
+      const span = bboxMax.map((v, i) => (v - bboxMin[i]) === 0 ? 1.0 : v - bboxMin[i]);
+      const axisCoord = (val, n) => {
+        if (n === 1) return [0, 0];
+        const frac = Math.max(0, Math.min(1, val)) * (n - 1);
+        let i0 = Math.floor(frac);
+        i0 = Math.max(0, Math.min(n - 2, i0));
+        return [frac - i0, i0];
+      };
+      return points.map((p) => {
+        const s = (p[0] - bboxMin[0]) / span[0];
+        const t = (p[1] - bboxMin[1]) / span[1];
+        const u = (p[2] - bboxMin[2]) / span[2];
+        const [fs, i0] = axisCoord(s, Nx);
+        const [ft, j0] = axisCoord(t, Ny);
+        const [fu, k0] = axisCoord(u, Nz);
+        const i1 = Math.min(i0 + 1, Nx - 1), j1 = Math.min(j0 + 1, Ny - 1), k1 = Math.min(k0 + 1, Nz - 1);
+        const c = (ii, jj, kk) => dispGrid[ii][jj][kk];
+        const lerp3 = (a, b, f) => [0, 1, 2].map((d) => a[d] * (1 - f) + b[d] * f);
+        const c00 = lerp3(c(i0, j0, k0), c(i1, j0, k0), fs);
+        const c10 = lerp3(c(i0, j1, k0), c(i1, j1, k0), fs);
+        const c01 = lerp3(c(i0, j0, k1), c(i1, j0, k1), fs);
+        const c11 = lerp3(c(i0, j1, k1), c(i1, j1, k1), fs);
+        const c0 = lerp3(c00, c10, ft);
+        const c1 = lerp3(c01, c11, ft);
+        const disp = lerp3(c0, c1, fu);
+        return [p[0] + disp[0], p[1] + disp[1], p[2] + disp[2]];
+      });
+    }
+    function deformedSurfaceGrid(radius, height, dispGrid, bboxMin, bboxMax, nTheta, nZ) {
+      const pts = [];
+      for (let k = 0; k < nZ; k++) {
+        const z = (k / (nZ - 1)) * height;
+        for (let i = 0; i < nTheta; i++) {
+          const theta = (i / nTheta) * 2 * Math.PI;
+          pts.push([radius * Math.cos(theta), radius * Math.sin(theta), z]);
+        }
+      }
+      const deformed = ffdDeform(pts, dispGrid, bboxMin, bboxMax);
+      const grid = [];
+      for (let k = 0; k < nZ; k++) grid.push(deformed.slice(k * nTheta, (k + 1) * nTheta));
+      return grid;
+    }
+    function reshapeDisp(flat36) {
+      // (36,) flat mm values -> [Nx][Ny][Nz][3] nested array, matching
+      // numpy's own .reshape(N_LATTICE + (3,)) row-major order exactly.
+      const [Nx, Ny, Nz] = N_LATTICE;
+      const grid = [];
+      let idx = 0;
+      for (let i = 0; i < Nx; i++) {
+        const gy = [];
+        for (let j = 0; j < Ny; j++) {
+          const gz = [];
+          for (let k = 0; k < Nz; k++) {
+            gz.push([flat36[idx] / 1000, flat36[idx + 1] / 1000, flat36[idx + 2] / 1000]);
+            idx += 3;
+          }
+          gy.push(gz);
+        }
+        grid.push(gy);
+      }
+      return grid;
+    }
+    // A real bug found by user inspection, not a rendering-quality nitpick:
+    // the FFD math above stays in the SAME (x, y=r*sin(theta), z=height)
+    // order mug_ffd_geometry.py/mug_openfoam_oracle_v2.py's own Python
+    // uses (deliberately, to keep the ported math directly comparable) --
+    // but THREE.js is Y-up, and `pointAt` below (the handle's attach
+    // points) already converts to that (height -> Y) when constructing
+    // its Vector3s. This emit() is the ONE place that same conversion
+    // happens for the BODY mesh -- before this fix it didn't, so the body
+    // rendered with height along Z while the handle rendered with height
+    // along Y: two meshes drawn in different, 90-degree-rotated "up"
+    // conventions, sharing one scene. They were never actually
+    // misaligned in the real oracle-verified data (attach points really
+    // do sit on the real body surface, confirmed server-side by
+    // `nearest_surface_distance`) -- this was purely a client-side replay
+    // bug, confirmed by this exact fix resolving it visually.
+    function emitPoint(positions, p) { positions.push(p[0], p[2], p[1]); }
+
+    // `reverse` flips the two forward-triangle diagonals per quad -- used
+    // for the innerSurface below, whose triangles must wind the OPPOSITE
+    // way from outerSurface's (normals pointing INTO the cavity, away from
+    // the solid) for the same reason mug_ffd_geometry.build_body_stl's own
+    // `inner_tris_solid_winding` reverses its winding server-side: an
+    // inward-facing wall seen from outside a MeshStandardMaterial(side:
+    // DoubleSide) would otherwise shade with inverted (surface-normal-
+    // flipped) lighting even though both sides render.
+    function gridToBufferGeometry(grid, reverse = false) {
+      const nZ = grid.length, nT = grid[0].length;
+      const positions = [];
+      for (let k = 0; k < nZ - 1; k++) {
+        for (let i = 0; i < nT; i++) {
+          const j = (i + 1) % nT;
+          // A y<->z swap is a mirror reflection, which flips the
+          // handedness of any winding computed in the pre-swap order --
+          // reversed here (a1/b1 swapped per triangle) to compensate, so
+          // computeVertexNormals still gives OUTWARD-facing normals in
+          // THREE's actual coordinate space, not inverted-looking shading.
+          const a0 = grid[k][i], a1 = grid[k][j], b0 = grid[k + 1][i], b1 = grid[k + 1][j];
+          if (!reverse) {
+            emitPoint(positions, a0); emitPoint(positions, b1); emitPoint(positions, a1);
+            emitPoint(positions, a0); emitPoint(positions, b0); emitPoint(positions, b1);
+          } else {
+            emitPoint(positions, a0); emitPoint(positions, a1); emitPoint(positions, b1);
+            emitPoint(positions, a0); emitPoint(positions, b1); emitPoint(positions, b0);
+          }
+        }
+      }
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geom.computeVertexNormals();
+      return geom;
+    }
+    // Connects two same-n_theta rings (outer ring at a given z-level to the
+    // inner ring at that SAME z-level) into a flat annulus -- the real
+    // bottom-of-wall and rim-of-opening closures, same triangulation
+    // mug_ffd_geometry.annulus_triangles uses server-side for the actual
+    // watertight STL. Without these the wall would render as two
+    // completely disconnected shells with visible daylight between them
+    // at both the base and the rim.
+    function annulusGeometry(outerRing, innerRing, reverse = false) {
+      const n = outerRing.length;
+      const positions = [];
+      for (let i = 0; i < n; i++) {
+        const j = (i + 1) % n;
+        const a0 = outerRing[i], a1 = outerRing[j], b0 = innerRing[i], b1 = innerRing[j];
+        if (!reverse) {
+          emitPoint(positions, a0); emitPoint(positions, b1); emitPoint(positions, a1);
+          emitPoint(positions, a0); emitPoint(positions, b0); emitPoint(positions, b1);
+        } else {
+          emitPoint(positions, a0); emitPoint(positions, a1); emitPoint(positions, b1);
+          emitPoint(positions, a0); emitPoint(positions, b1); emitPoint(positions, b0);
+        }
+      }
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geom.computeVertexNormals();
+      return geom;
+    }
+
+    const subtitleEl = document.getElementById('subtitle');
+    const indexEl = document.getElementById('index');
+    const globalRowEl = document.getElementById('globalRow');
+    const rOuterValEl = document.getElementById('rOuterVal');
+    const heightValEl = document.getElementById('heightVal');
+    const filtersEl = document.getElementById('filters');
+    const matchNEl = document.getElementById('matchN');
+    const matchTotalEl = document.getElementById('matchTotal');
+
+    let X, Y, meta, filteredIndices = [];
+    const filterRanges = {}; // target name -> [min, max] currently active
+
+    async function loadData() {
+      const [metaRes, xRes, yRes] = await Promise.all([
+        fetch('/data/mug_v2/meta.json'), fetch('/data/mug_v2/X.bin'), fetch('/data/mug_v2/Y.bin'),
+      ]);
+      meta = await metaRes.json();
+      X = new Float32Array(await xRes.arrayBuffer());
+      Y = new Float32Array(await yRes.arrayBuffer());
+      subtitleEl.textContent = `${meta.n_total} accepted design${meta.n_total === 1 ? '' : 's'} (out-tag: ${meta.out_tag})`;
+      matchTotalEl.textContent = String(meta.n_total);
+      meta.target_names.forEach((name, t) => { filterRanges[name] = [...meta.target_range[t]]; });
+      buildFilterRows();
+      recomputeFiltered();
+      if (meta.n_total > 0) renderCandidate(0);
+      else { document.getElementById('shapeStatus').textContent = 'no accepted rows yet'; }
+    }
+
+    function buildFilterRows() {
+      filtersEl.innerHTML = '';
+      meta.target_names.forEach((name, t) => {
+        const [lo, hi] = meta.target_range[t];
+        const row = document.createElement('div');
+        row.className = 'filter-row';
+        row.innerHTML = `
+          <div class="label"><span>${name}</span><span>${lo.toFixed(2)} .. ${hi.toFixed(2)}</span></div>
+          <div class="range-inputs">
+            <input type="number" step="any" value="${lo}" data-target="${name}" data-bound="min" />
+            <span>to</span>
+            <input type="number" step="any" value="${hi}" data-target="${name}" data-bound="max" />
+          </div>`;
+        filtersEl.appendChild(row);
+      });
+      filtersEl.querySelectorAll('input').forEach((inp) => {
+        inp.addEventListener('change', () => {
+          const name = inp.dataset.target, bound = inp.dataset.bound;
+          const v = parseFloat(inp.value);
+          filterRanges[name][bound === 'min' ? 0 : 1] = v;
+          recomputeFiltered();
+        });
+      });
+    }
+    document.getElementById('resetAllBtn').addEventListener('click', () => {
+      meta.target_names.forEach((name, t) => { filterRanges[name] = [...meta.target_range[t]]; });
+      buildFilterRows();
+      recomputeFiltered();
+    });
+
+    function recomputeFiltered() {
+      const nT = meta.target_names.length;
+      filteredIndices = [];
+      for (let gi = 0; gi < meta.n_total; gi++) {
+        let ok = true;
+        for (let t = 0; t < nT; t++) {
+          const v = Y[gi * nT + t];
+          const [lo, hi] = filterRanges[meta.target_names[t]];
+          if (v < lo || v > hi) { ok = false; break; }
+        }
+        if (ok) filteredIndices.push(gi);
+      }
+      matchNEl.textContent = String(filteredIndices.length);
+      indexEl.max = String(Math.max(0, filteredIndices.length - 1));
+    }
+
+    let m3dScene, m3dCamera, m3dRenderer, m3dControls, m3dGroup = new THREE.Group(), m3dInitialized = false;
+    function initMug3d() {
+      const wrap = document.getElementById('mug3dWrap');
+      m3dScene = new THREE.Scene();
+      m3dScene.background = new THREE.Color(0x0c0c0e);
+      m3dCamera = new THREE.PerspectiveCamera(45, wrap.clientWidth / wrap.clientHeight, 0.001, 10);
+      m3dRenderer = new THREE.WebGLRenderer({ antialias: true });
+      m3dRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
+      wrap.appendChild(m3dRenderer.domElement);
+      m3dControls = new OrbitControls(m3dCamera, m3dRenderer.domElement);
+      m3dControls.enableDamping = true;
+      m3dScene.add(new THREE.AmbientLight(0xffffff, 0.65));
+      const dl = new THREE.DirectionalLight(0xffffff, 0.85);
+      dl.position.set(2, 3, 2);
+      m3dScene.add(dl);
+      m3dScene.add(m3dGroup);
+      (function animate() {
+        requestAnimationFrame(animate);
+        m3dControls.update();
+        m3dRenderer.render(m3dScene, m3dCamera);
+      })();
+      window.addEventListener('resize', () => {
+        m3dCamera.aspect = wrap.clientWidth / wrap.clientHeight;
+        m3dCamera.updateProjectionMatrix();
+        m3dRenderer.setSize(wrap.clientWidth, wrap.clientHeight);
+      });
+    }
+
+    function buildMugShape(p) {
+      m3dScene.remove(m3dGroup);
+      m3dGroup = new THREE.Group();
+
+      const rInner = p.r_inner_mm / 1000, rOuter = p.r_outer_mm / 1000, height = p.height_mm / 1000;
+      const maxR = Math.max(rInner, rOuter);
+      const bboxMin = [-maxR * 1.5, -maxR * 1.5, 0.0];
+      const bboxMax = [maxR * 1.5, maxR * 1.5, height];
+      const dispInner = reshapeDisp(PARAM_NAMES.slice(3, 3 + 36).map((n) => p[n]));
+      const dispOuter = reshapeDisp(PARAM_NAMES.slice(39, 39 + 36).map((n) => p[n]));
+      const outerGrid = deformedSurfaceGrid(rOuter, height, dispOuter, bboxMin, bboxMax, N_THETA_TESS, N_Z_TESS);
+      const innerGrid = deformedSurfaceGrid(rInner, height, dispInner, bboxMin, bboxMax, N_THETA_TESS, N_Z_TESS);
+
+      // §97-adjacent rendering bug found by user inspection: `dispInner`/
+      // `innerGrid` used to be computed and then never actually drawn --
+      // only the outer skin was rendered, a single infinitely-thin shell
+      // with no visible wall thickness at all. The oracle itself always
+      // modeled independent inner/outer FFD surfaces (real wall_vol/
+      // cavity_vol, real per-material thickness-plausibility gate) -- this
+      // was purely a client-side rendering gap, not a physics one. Now
+      // mirrors mug_ffd_geometry.build_body_stl's real 4-solid assembly:
+      // outerSurface + innerSurface + bottom annulus + top (rim) annulus.
+      const structColor = rgbaToThree(guessColor(materialLabel(p.struct_material_idx, STRUCTURAL_MATERIALS)));
+      const bodyMat = new THREE.MeshStandardMaterial({
+        color: structColor.color, opacity: structColor.opacity, transparent: structColor.opacity < 1,
+        side: THREE.DoubleSide, roughness: 0.55, metalness: 0.1,
+      });
+      m3dGroup.add(new THREE.Mesh(gridToBufferGeometry(outerGrid, false), bodyMat));
+      m3dGroup.add(new THREE.Mesh(gridToBufferGeometry(innerGrid, true), bodyMat));
+      m3dGroup.add(new THREE.Mesh(annulusGeometry(outerGrid[0], innerGrid[0], false), bodyMat));
+      m3dGroup.add(new THREE.Mesh(annulusGeometry(outerGrid[outerGrid.length - 1], innerGrid[innerGrid.length - 1], true), bodyMat));
+
+      // Handle: a real quadratic-Bezier arc + circular sweep, matching
+      // mug_ffd_geometry.py's bezier_path/sweep_circular_tube exactly --
+      // THREE's own QuadraticBezierCurve3 + TubeGeometry does this
+      // natively, no hand-rolled Frenet-frame sweep needed client-side.
+      const pointAt = (theta, zFrac, radialOffsetMm) => {
+        const rM = (p.r_outer_mm + radialOffsetMm) / 1000;
+        const zM = Math.max(0, Math.min(1, zFrac)) * height;
+        return new THREE.Vector3(rM * Math.cos(theta), zM, rM * Math.sin(theta));
+        // NOTE: y/z swapped vs. the Python (x,y,z) convention -- THREE.js
+        // uses Y-up, this page's whole scene (like /mug) treats height as
+        // the Y axis, so z_world -> Y and the Python y_world -> Z here.
+      };
+      const p0 = pointAt(p.handle_theta1, p.handle_z1_frac, p.handle_radial_offset1_mm);
+      const p1 = pointAt(p.handle_theta2, p.handle_z2_frac, p.handle_radial_offset2_mm);
+      const mid = p0.clone().add(p1).multiplyScalar(0.5);
+      const radialDir = new THREE.Vector3(mid.x, 0, mid.z);
+      if (radialDir.lengthSq() < 1e-12) radialDir.set(1, 0, 0); else radialDir.normalize();
+      const pm = mid.clone().addScaledVector(radialDir, p.handle_bulge_mm / 1000);
+      const curve = new THREE.QuadraticBezierCurve3(p0, pm, p1);
+      const handleRadius = Math.max(0.0005, p.handle_radius_mm / 1000);
+      const handleGeom = new THREE.TubeGeometry(curve, 24, handleRadius, 12, false);
+      const handleColor = rgbaToThree(guessColor(materialLabel(p.handle_material_idx, HANDLE_MATERIALS)));
+      const handleMat = new THREE.MeshStandardMaterial({ color: handleColor.color, roughness: 0.6, metalness: 0.1 });
+      m3dGroup.add(new THREE.Mesh(handleGeom, handleMat));
+
+      m3dScene.add(m3dGroup);
+
+      if (!m3dInitialized) {
+        const scale = Math.max(rOuter, height);
+        m3dCamera.position.set(scale * 2.4, scale * 2.6, scale * 2.4);
+        m3dControls.target.set(0, height * 0.5, 0);
+        m3dInitialized = true;
+      }
+
+      const structName = materialLabel(p.struct_material_idx, STRUCTURAL_MATERIALS);
+      const coatName = materialLabel(p.coating_material_idx, COATING_MATERIALS);
+      const handleName = materialLabel(p.handle_material_idx, HANDLE_MATERIALS);
+      const jointName = materialLabel(p.joint_material_idx, JOINT_MATERIALS);
+      document.getElementById('mugCaption').textContent =
+        `r_inner=${p.r_inner_mm.toFixed(1)}mm  r_outer=${p.r_outer_mm.toFixed(1)}mm  height=${p.height_mm.toFixed(1)}mm`;
+      document.getElementById('mugMaterials').innerHTML = [
+        `<span class="pill">body <b>${structName}</b></span>`,
+        `<span class="pill">coating <b>${coatName}</b> (${p.coating_thickness_mm.toFixed(2)}mm)</span>`,
+        `<span class="pill">handle <b>${handleName}</b></span>`,
+        `<span class="pill">joint <b>${jointName}</b></span>`,
+      ].join('');
+    }
+
+    function renderCandidate(filteredIdx) {
+      if (!filteredIndices.length) return;
+      const clamped = Math.max(0, Math.min(filteredIndices.length - 1, filteredIdx));
+      const gi = filteredIndices[clamped];
+      indexEl.value = String(clamped);
+      globalRowEl.textContent = String(gi);
+
+      const p = {};
+      PARAM_NAMES.forEach((name, i) => { p[name] = X[gi * meta.x_cols + i]; });
+      rOuterValEl.textContent = p.r_outer_mm.toFixed(1);
+      heightValEl.textContent = p.height_mm.toFixed(1);
+
+      buildMugShape(p);
+
+      const nT = meta.target_names.length;
+      const y = {};
+      meta.target_names.forEach((name, t) => { y[name] = Y[gi * nT + t]; });
+      document.getElementById('statTouch').textContent = y.touch_temp_60s_C.toFixed(1) + '°C';
+      document.getElementById('statTemp2h').textContent = y.temp_at_2h_C.toFixed(1) + '°C';
+      document.getElementById('statHandle').textContent = y.handle_temp_60s_C.toFixed(1) + '°C';
+      document.getElementById('statMass').textContent = (y.mass_kg * 1000).toFixed(0);
+      document.getElementById('statLiquid').textContent = (y.liquid_volume_L * 1000).toFixed(0);
+      document.getElementById('shapeStatus').textContent = `${clamped + 1} / ${filteredIndices.length}`;
+    }
+
+    document.getElementById('prevBtn').addEventListener('click', () => renderCandidate(Number(indexEl.value) - 1));
+    document.getElementById('nextBtn').addEventListener('click', () => renderCandidate(Number(indexEl.value) + 1));
+    document.getElementById('randomBtn').addEventListener('click', () => renderCandidate(Math.floor(Math.random() * filteredIndices.length)));
+    indexEl.addEventListener('change', () => renderCandidate(Number(indexEl.value)));
+
+    initMug3d();
+    loadData();
+  </script>
+</body>
+</html>

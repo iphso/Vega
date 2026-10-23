@@ -1,0 +1,288 @@
+462 candidates, 462 to run, 14 workers
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:139: RuntimeWarning: invalid value encountered in sqrt
+  return 8 * np.pi * np.sqrt(EPS0 * surface_tension(T_C) * a ** 3)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[1/462] 1.5 min, eta 669.0 min last=rain_curtain-0115 out=0.4696942302020865
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:139: RuntimeWarning: invalid value encountered in sqrt
+  return 8 * np.pi * np.sqrt(EPS0 * surface_tension(T_C) * a ** 3)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[21/462] 12.3 min, eta 257.6 min last=cold_spray-0297 out=4.544802415403129
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:139: RuntimeWarning: invalid value encountered in sqrt
+  return 8 * np.pi * np.sqrt(EPS0 * surface_tension(T_C) * a ** 3)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[41/462] 22.0 min, eta 225.9 min last=cold_spray-0135 out=3.204364297074464
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[61/462] 29.8 min, eta 195.8 min last=cold_spray-0193 out=2.744986244520947
+[81/462] 36.8 min, eta 172.9 min last=cold_spray-0112 out=4.49493071141108
+[101/462] 42.1 min, eta 150.6 min last=charged_spray-0106 out=0.8765420096049518
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+[121/462] 49.0 min, eta 138.0 min last=charged_spray-0075 out=0.8540589840307503
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+[141/462] 54.8 min, eta 124.8 min last=cold_spray-0225 out=4.165912521236173
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:139: RuntimeWarning: invalid value encountered in sqrt
+  return 8 * np.pi * np.sqrt(EPS0 * surface_tension(T_C) * a ** 3)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+[161/462] 61.6 min, eta 115.2 min last=rain_curtain-0099 out=spray-stage non-finite
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: invalid value encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:854: RuntimeWarning: invalid value encountered in power
+  tau = RHO_L * (2 * ai) ** 2 / (18 * MU_G * (1 + 0.15 * re ** 0.687))
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+[181/462] 70.1 min, eta 108.9 min last=cold_spray-0265 out=spray-stage non-finite
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+[201/462] 76.8 min, eta 99.7 min last=cold_spray-0065 out=spray-stage non-finite
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: invalid value encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:139: RuntimeWarning: invalid value encountered in sqrt
+  return 8 * np.pi * np.sqrt(EPS0 * surface_tension(T_C) * a ** 3)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+[221/462] 83.7 min, eta 91.3 min last=rain_curtain-0005 out=0.7234851984133871
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: invalid value encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:139: RuntimeWarning: invalid value encountered in sqrt
+  return 8 * np.pi * np.sqrt(EPS0 * surface_tension(T_C) * a ** 3)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:854: RuntimeWarning: invalid value encountered in power
+  tau = RHO_L * (2 * ai) ** 2 / (18 * MU_G * (1 + 0.15 * re ** 0.687))
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[241/462] 91.0 min, eta 83.4 min last=charged_spray-0063 out=0.7124544787719237
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:139: RuntimeWarning: invalid value encountered in sqrt
+  return 8 * np.pi * np.sqrt(EPS0 * surface_tension(T_C) * a ** 3)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:902: RuntimeWarning: invalid value encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+[261/462] 98.0 min, eta 75.5 min last=cold_spray-0238 out=0.847574243606514
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[281/462] 105.8 min, eta 68.1 min last=rain_curtain-0051 out=0.5710633775164612
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[301/462] 113.2 min, eta 60.5 min last=cold_spray-0177 out=spray-stage non-finite
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:857: RuntimeWarning: invalid value encountered in power
+  tau = RHO_L * (2 * ai) ** 2 / (18 * MU_G * (1 + 0.15 * re ** 0.687))
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[321/462] 118.4 min, eta 52.0 min last=rain_curtain-0113 out=0.8562983378016487
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:139: RuntimeWarning: invalid value encountered in sqrt
+  return 8 * np.pi * np.sqrt(EPS0 * surface_tension(T_C) * a ** 3)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+[341/462] 123.1 min, eta 43.7 min last=charged_spray-0159 out=0.870220628215071
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[361/462] 127.7 min, eta 35.7 min last=cold_spray-0149 out=2.970666900665265
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:854: RuntimeWarning: invalid value encountered in power
+  rx, ry, rz = vx[i] - ugr * cx, vy[i] - ugr * cy, vz[i] - ugz
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[381/462] 134.1 min, eta 28.5 min last=cold_spray-0032 out=0.6955424722747109
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[401/462] 138.6 min, eta 21.1 min last=charged_spray-0182 out=0.8756862770584345
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:130: RuntimeWarning: invalid value encountered in power
+  return 2.11e-5 * ((np.asarray(T_C, float) + 273.15) / 273.15) ** 1.94
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:165: RuntimeWarning: invalid value encountered in sqrt
+  s = 0.6 * np.sqrt(re)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+[421/462] 143.8 min, eta 14.0 min last=cold_spray-0048 out=16.436492228988378
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: divide by zero encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_tower.py:139: RuntimeWarning: invalid value encountered in sqrt
+  return 8 * np.pi * np.sqrt(EPS0 * surface_tension(T_C) * a ** 3)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:905: RuntimeWarning: invalid value encountered in divide
+  acc["Aw"] += np.bincount(cell, np.minimum(wdt * gv / (1 + beta), cap / (latent(T_avg) * ws_T)), ncell)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:411: MatrixRankWarning: Matrix is exactly singular
+  return spla.spsolve(M, b.ravel()).reshape(ni, nj)
+/home/sl8rv/Projects/StoneLab/src/stonelab/spray_cfd.py:685: MatrixRankWarning: Matrix is exactly singular
+  x = spla.spsolve(K, rhs)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[441/462] 147.9 min, eta 7.0 min last=charged_spray-0072 out=0.7698030565710859
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:811: MatrixRankWarning: Matrix is exactly singular
+  dx = -col * spla.spsolve((Jr @ sp.diags(col)).tocsc(), rowp * R)
+[461/462] 160.1 min, eta 0.3 min last=cold_spray-0129 out=spray-stage non-finite
+[462/462] 163.0 min, eta 0.0 min last=cold_spray-0057 out=spray-stage non-finite

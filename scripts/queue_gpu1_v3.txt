@@ -1,0 +1,54 @@
+# Fourth, colocated GPU1 lane -- a third basin for the same correlation-
+# hunting question as queue_gpu1_v2.txt's v4 runs. nfp=3 has no qi-passing
+# real point yet (15,561 real rows across its two lanes, closest miss
+# qi=0.00034 vs. the 0.0003162 threshold -- only ~7% over) but its
+# near-misses already sit at meaningfully better mirror_ratio (0.31-0.47)
+# than either the nfp=2 basin (0.53-0.56) or the nfp=4 anchor (0.48), and
+# the whole-pool qi-vs-mirror_ratio correlation is a much weaker -0.53 (vs.
+# the tight -0.95 traced along the nfp=2 ALM trajectory) -- the most
+# promising hint yet that the wall may be loosest here. Same exact recipe
+# as the nfp=2/nfp=4 v4 runs for a clean comparison (minimize
+# edge_magnetic_mirror_ratio, hold qi<=0.0003162 as the sole enforced
+# constraint) -- only the anchor basin differs. (First attempt at this used
+# --minimize qi with mirror_ratio<=0.5 as the constraint -- a mistake: that
+# constraint was already trivially satisfied at the anchors, so the driver
+# declared "success" after 1 round without ever really testing anything.
+# Reset and relaunched with the corrected, comparable recipe below.)
+# True concurrent job on GPU1, not sequenced behind gpu1v2's queue -- cheap
+# (15 fibers) and the GPU has headroom for a third job alongside the other
+# two (~15GB of 32GB in use).
+p3_v4c_correlation_gpu1|run_grounded_walk_v4.sh|MAX_ROUNDS=3000 MAX_RETRAINS=40 RETRAIN_EPOCHS=60 BASE_SPLIT=bootstrap_live SCORER_ARCH=half_siren|--scorer-tag reg_half_siren_big_soap_full_s0 --nfp 3 --n-fibers 15 --alm-inner-steps 20 --lr 0.01 --anchor-x-file output/qi_nearmiss_anchors_nfp3.npy --anchor-jitter 0.03 --minimize edge_magnetic_mirror_ratio --obj-ramp-start 0.3 --obj-ramp-end 0.05 --stall-retrain-rounds 15 --seed 13 --constraint qi<=0.0003162
+#
+# RESULT (nfp=3, above): finished in 15 rounds, real SUCCESS (qi=0.000235,
+# comfortably clears the 0.0003162 threshold) but at mirror_ratio=0.672 --
+# no better than the other basins, right in the same 0.67-0.69 range as
+# nfp=2's worst qi-safe point. Across the 221 real points explored here,
+# qi-vs-mirror_ratio correlation r=-0.87 -- close to nfp=2's -0.95. The
+# hopeful whole-pool signal (weaker correlation, better near-miss
+# mirror_ratio) did not survive direct ALM pressure. Third confirming basin:
+# every qi-feasible point found anywhere in the project (nfp=2, 3, 4) has
+# mirror_ratio in 0.48-0.69, well over the 0.25 P3 limit -- looking more like
+# a structural property of this design family than a local search-coverage
+# gap.
+#
+# Genuinely different next step, same lane: a *constructed* (not
+# gradient-discovered) seed via constellaration's near-axis-expansion (NAE)
+# method (initial_guess.generate_nae -- see scripts/nae_pilot.py), which is
+# QI-by-construction with mirror_ratio as a literal input dial rather than
+# something read off after the fact. A sweep of 48 NAE configs (real
+# VMEC++-validated, no surrogate) showed a genuinely different local
+# signature -- qi-vs-mirror_ratio correlates *positively* here (r=+0.70),
+# the opposite sign from every gradient-search basin -- confirming this
+# really is a disconnected region of coefficient space, not just another
+# sample from the same basin. Fourier coefficients are the same
+# representation on both sides (SurfaceRZFourier's r_cos/z_sin IS this
+# project's r_cos/z_sin layout, m=0..4 x n=-4..4, no resampling), so the
+# best composite NAE seed (nfp=2, aspect_ratio=6, mirror_ratio_target=0.25 ->
+# real oracle: qi=0.0095, mr=0.347, vacuum_well=-0.185, flux_compression=1.21)
+# drops straight into --anchor-x-file. Unlike every basin so far, this seed
+# has 3 (not 1) constraints open, so this run enforces the full P3 constraint
+# set and maximizes the real P3 objective, not a single-constraint free-push
+# -- the question is whether ALM pressure from this qualitatively different
+# starting point can reach full feasibility at a better mirror_ratio than
+# 0.48-0.69, or whether it converges onto the same wall from a new direction.
+p3_v4d_nae_seed_gpu1|run_grounded_walk_v4.sh|MAX_ROUNDS=3000 MAX_RETRAINS=40 RETRAIN_EPOCHS=60 BASE_SPLIT=bootstrap_live SCORER_ARCH=half_siren|--scorer-tag reg_half_siren_big_soap_full_s0 --nfp 2 --n-fibers 15 --alm-inner-steps 20 --lr 0.01 --anchor-x-file output/nae_seed_nfp2_anchor.npy --anchor-jitter 0.03 --maximize minimum_normalized_magnetic_gradient_scale_length --obj-ramp-start 0.3 --obj-ramp-end 0.05 --stall-retrain-rounds 15 --seed 19 --constraint abs(edge_rotational_transform_over_n_field_periods)>=0.25 --constraint edge_magnetic_mirror_ratio<=0.25 --constraint flux_compression_in_regions_of_bad_curvature<=0.9 --constraint vacuum_well>=0.0 --constraint qi<=0.0003162

@@ -1,0 +1,78 @@
+# Third, colocated GPU1 lane -- history: originally an A/B test of
+# proximity-biased anchoring + per-fiber death/respawn (grounded_walk_step_v2.py)
+# against the plain p2_halfsiren_v1_gpu1_seed1 control. Killed 2026-09-12 as a
+# confirmed negative result: accept rate collapsed to 3% and stayed there for
+# 15 straight rounds despite 9 retrains and 76 respawn events in only 183
+# rounds, best-ever real violation got WORSE over time (0.26 -> 0.38), and its
+# real pool's 4/5-constraint hit rate (19/1,805 = 1.05%) was worse than either
+# control lane. Full writeup in EXPERIMENT_LOG.md.
+#
+# Repurposed same day, second time: a brief seed4 (plain-recipe breadth
+# duplicate) placeholder ran here for under an hour before being swapped out
+# in favor of a quality-diversity/novelty-bonus hypothesis
+# (grounded_walk_step_v3.py) -- rewarding distance from known-good points in
+# mirror_ratio x edge_rotational_transform space, plus direct per-round
+# topology instrumentation (k-NN connected-components + nearest-neighbor
+# dispersion over the full 5-constraint archive, replacing an initial flawed
+# 2D occupancy-grid metric). Killed 2026-09-13 after 217 rounds / 13 retrains
+# as a negative result on its own terms: v3's known-good archive was MORE
+# consolidated into a single connected blob than the plain control's (3
+# components/99.7% largest vs. control's 7/99.1%), not less -- the opposite
+# of what the diversity mechanism was meant to produce. Full writeup in
+# EXPERIMENT_LOG.md.
+#
+# Repurposed a third time, same investigation, sharper target: rather than
+# generic diversity, directly attack the one correlation that's shown up
+# on EVERY qi-passing real point found anywhere in the project so far (4
+# points, 2 field-period settings, 4 lanes) -- a badly-failing
+# edge_magnetic_mirror_ratio (0.48-0.56 vs. the 0.25 limit) despite
+# mirror_ratio being easy in general (~35% of the real pool passes it).
+# grounded_walk_step_v4.py anchors fibers ONLY at the 3 known qi-passing real
+# points (--anchor-x-file, not random dataset draws; --anchor-jitter gives
+# each anchor a small cluster of nearby starts) and directly minimizes
+# edge_magnetic_mirror_ratio (already a first-class --minimize option this
+# script family supports) with ONLY qi enforced as a constraint --
+# deliberately not vacuum_well/flux_compression/edge_rotational_transform
+# yet, to isolate the two-way question before chasing the full 5/5. A quick
+# real-VMEC pilot (15 fibers, 4 rounds) before wiring this into the queue
+# already shows the tension directly and cleanly: one ALM step dropped
+# mirror_ratio from ~0.53-0.56 to 0.37-0.51 across all 15 fibers, but qi blew
+# up ~6-13x past its threshold in every one of them; over the next few
+# rounds, as the ALM multiplier pulled qi back toward feasibility, the fibers
+# that recovered the most qi margin gave back the most mirror_ratio gain
+# (best_real_violation min fell 0.21->0.13). Real, oracle-confirmed evidence
+# of a local Pareto trade-off, not a search-coverage artifact -- the open
+# question this full run is meant to answer is whether continued ALM
+# pressure can find a genuinely better point on that trade-off curve (qi
+# feasible AND mirror_ratio materially better than 0.53) or just oscillates
+# along the same curve indefinitely.
+p2_v4_correlation_gpu1|run_grounded_walk_v4.sh|MAX_ROUNDS=3000 MAX_RETRAINS=40 RETRAIN_EPOCHS=60 BASE_SPLIT=bootstrap_live SCORER_ARCH=half_siren|--scorer-tag reg_half_siren_big_soap_full_s0 --nfp 2 --n-fibers 15 --alm-inner-steps 20 --lr 0.01 --anchor-x-file output/qi_pass_anchors_nfp2.npy --anchor-jitter 0.03 --minimize edge_magnetic_mirror_ratio --obj-ramp-start 0.3 --obj-ramp-end 0.05 --stall-retrain-rounds 15 --seed 7 --constraint qi<=0.0003162
+#
+# RESULT (nfp=2, above): finished in 12 rounds, driver hit its own success
+# condition (qi satisfied, the only enforced constraint) and stopped --
+# real, not surrogate. Across the 179 real points explored, qi and
+# mirror_ratio correlate at r=-0.95: a clean, near-linear local trade-off
+# curve, mr running ~0.37 at the worst-qi end up to ~0.69 at the best-qi
+# end. The single point that cleared qi with real margin (0.000274) has
+# mirror_ratio 0.689 -- the WORST value recorded anywhere in this project,
+# well past even the original 0.53-0.56 anchors. Nothing found beats the
+# anchors on both axes at once. Read as a genuine local Pareto wall in this
+# specific nfp=2 basin, not a search-coverage gap.
+#
+# Next test, same recipe, different basin: the nfp=4 lineage's qi-passer
+# (row 908, mirror_ratio 0.484) is the only known qi-passing point anywhere
+# with a meaningfully better mirror_ratio than the nfp=2 cluster -- the one
+# hint the wall might be basin-specific rather than universal. Re-running
+# the identical single-constraint free-push from that one anchor to see
+# whether it traces a similarly steep correlation or something looser --
+# this is a genuine test of "are these Pareto walls a general property of
+# the space, or a local edge we can route around," motivated directly by
+# treating discovered walls as informative boundaries to map rather than
+# just obstacles.
+p2_v4b_correlation_nfp4_gpu1|run_grounded_walk_v4.sh|MAX_ROUNDS=3000 MAX_RETRAINS=40 RETRAIN_EPOCHS=60 BASE_SPLIT=bootstrap_live SCORER_ARCH=half_siren|--scorer-tag reg_half_siren_big_soap_full_s0 --nfp 4 --n-fibers 15 --alm-inner-steps 20 --lr 0.01 --anchor-x-file output/qi_pass_anchor_nfp4.npy --anchor-jitter 0.03 --minimize edge_magnetic_mirror_ratio --obj-ramp-start 0.3 --obj-ramp-end 0.05 --stall-retrain-rounds 15 --seed 11 --constraint qi<=0.0003162
+
+# RETIRED 2026-09-14: p2_v4b_correlation_nfp4_gpu1 already answered its own
+# question (does nfp=4 ever find a qi-passing point? no -- 0/1617 real points)
+# and plateaued (worst-violation flat since ~25% through its run). Superseded
+# by nfp=2/nfp=3/NAE-seed basins, which already confirmed the same wall more
+# informatively. Manually killed; FAILED marker written.

@@ -1,0 +1,22 @@
+# Continuation queue for GPU0, post-vacation review (2026-09-11): resuming
+# the most promising qi-passing lineage found during the vacation sweep
+# (p4_halfsiren_v1 had 1 real qi-passing candidate out of 4,142; p1/p3 had
+# zero out of 12,023+3,748 combined -- so p4 gets the follow-up runway, not
+# a fresh nfp). MAX_ROUNDS/MAX_RETRAINS raised since the point now is
+# depth on one promising lineage, not breadth across nfp values.
+#
+# 2026-09-12: hit its original 20-retrain budget cleanly (319 rounds this
+# invocation, best real violation only 0.137, no 5/5 pass -- see
+# EXPERIMENT_LOG.md). Manually relaunched as a true continuation (existing
+# z.pt/rho.pt/y.pt, not a fresh anchor) with budget raised again
+# (MAX_ROUNDS=3000, MAX_RETRAINS=40) for the same depth-over-breadth reason.
+# This line is for watchdog crash-restart only, matching the manual launch.
+p4_halfsiren_v1|run_grounded_walk.sh|MAX_ROUNDS=3000 MAX_RETRAINS=40 RETRAIN_EPOCHS=60 BASE_SPLIT=bootstrap_live SCORER_ARCH=half_siren|--scorer-tag reg_half_siren_big_soap_full_s0 --nfp 4 --n-fibers 30 --alm-inner-steps 20 --lr 0.01 --obj-ramp-start 0.3 --obj-ramp-end 0.05 --stall-retrain-rounds 15 --constraint abs(edge_rotational_transform_over_n_field_periods)>=0.25 --constraint edge_magnetic_mirror_ratio<=0.25 --constraint flux_compression_in_regions_of_bad_curvature<=0.9 --constraint vacuum_well>=0.0 --constraint qi<=0.0003162
+
+# RETIRED 2026-09-14: confirmed stalled (see EXPERIMENT_LOG.md). Worst
+# normalized-constraint-violation among any real point frozen since ~50%
+# through this run's 19,233-row real pool -- no improvement over the
+# majority of 910 rounds despite retrain cycles continuing to fire (they were
+# tracking a softer signal that kept moving, not the actual constraint wall).
+# Manually killed; FAILED marker written so the watchdog does not restart it.
+# GPU0 is now free -- no replacement queued yet.

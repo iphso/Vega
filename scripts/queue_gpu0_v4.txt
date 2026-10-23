@@ -1,0 +1,9 @@
+# Third-generation NAE-seeded lane, second GPU0 slot -- see
+# queue_gpu0_v3.txt's header for the full rationale (mining the original NAE
+# pilot sweep's mirror_ratio_target=0.15 configs, sorted by measured mr
+# instead of qi). This lane uses the second-best-mr seed found:
+# nfp=2/aspect_ratio=10/target=0.15, measured mr=0.279, qi=0.0194. Same
+# corrected recipe. Run concurrently with gpu0v3, not sequenced behind it --
+# GPU0 is fully free (both original occupants retired same day) and each
+# lane is cheap (15 fibers).
+p3_v4g_nae2_nfp2ar10_gpu0|run_grounded_walk_v4.sh|MAX_ROUNDS=3000 MAX_RETRAINS=40 RETRAIN_EPOCHS=60 BASE_SPLIT=bootstrap_live SCORER_ARCH=half_siren|--scorer-tag reg_half_siren_big_soap_full_s0 --nfp 2 --n-fibers 15 --alm-inner-steps 20 --lr 0.01 --anchor-x-file output/nae_seed2_nfp2_ar10_anchor.npy --anchor-jitter 0.03 --minimize edge_magnetic_mirror_ratio --obj-ramp-start 0.3 --obj-ramp-end 0.05 --stall-retrain-rounds 15 --seed 31 --constraint abs(edge_rotational_transform_over_n_field_periods)>=0.25 --constraint qi<=0.0003162 --constraint flux_compression_in_regions_of_bad_curvature<=0.9 --constraint vacuum_well>=0.0

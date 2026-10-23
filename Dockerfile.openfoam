@@ -1,0 +1,52 @@
+FROM openfoam/openfoam10-paraview510
+
+# EXPERIMENT_LOG §64-65: direct user course reversal on the mug domain --
+# thermal_mug_spike.py's self-written FD solver ruled out going forward,
+# replaced by OpenFOAM (real, broadly-accepted FVM solver), starting with
+# the solid-conduction-only scope (same empirical convective-coefficient
+# boundary conditions the self-written physics already used, not full
+# resolved-fluid conjugate heat transfer -- that stays a future option in
+# the SAME tool, which is why OpenFOAM was picked over a lighter
+# solid-only-FEA alternative like Elmer/CalculiX).
+#
+# Base image's own ENTRYPOINT (`/entry.sh`) does NOT forward `docker run`
+# CMD args to bash at all -- confirmed directly in the validation spike,
+# not assumed -- so anything built on it needs commands piped via stdin.
+# Overridden below with a real ENTRYPOINT so this image (and any FUTURE
+# OpenFOAM-backed oracle, not just mug's) behaves like every other
+# Dockerfile in this project: `docker compose run openfoam scripts/foo.py`
+# just works.
+
+USER root
+
+# pip for the automation glue (parametric case generation, running
+# blockMesh/chtMultiRegionFoam, parsing results) -- numpy/scipy only,
+# matching thermal_mug_spike.py's own host-side dependency footprint, no
+# torch/GPU need here. scikit-learn added for §91's worker-outcome
+# feasibility classifier (generate_mug_dataset_v2.py) -- CPU-only, small,
+# no GPU/torch pulled in.
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir numpy scipy scikit-learn
+
+WORKDIR /work
+
+COPY scripts/ /work/scripts/
+
+# §66: compile the liquidCoupling boundary-condition plugin at IMAGE BUILD
+# time (once), not per-candidate. This is the reproducible source of
+# truth for scripts/openfoam_libs/lib/libliquidCoupling.so -- see that
+# module's own header comment for why a real `wmake libso` plugin replaced
+# the originally-planned `codedMixed` runtime-compiled approach (OpenFOAM
+# refuses dynamicCode compilation entirely when running as root, and
+# per-candidate g++ invocations would have hurt dataset-generation
+# throughput anyway).
+RUN bash -c "source /opt/openfoam10/etc/bashrc \
+    && cd /work/scripts/openfoam_libs/liquidCoupling \
+    && wmake libso ."
+
+RUN printf '#!/bin/bash\nsource /opt/openfoam10/etc/bashrc\nexec "$@"\n' > /entry_fixed.sh \
+    && chmod +x /entry_fixed.sh
+
+ENTRYPOINT ["/entry_fixed.sh"]
+CMD ["/bin/bash"]

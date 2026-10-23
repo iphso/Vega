@@ -36,7 +36,7 @@ export const DOMAIN_METRICS: Record<string, string[]> = {
   ],
   airfoil: ['cl', 'cd', 'cm', 'l_over_d'],
   torax: ['Q_fusion', 'tau_E', 'H98', 'T_e_volume_avg'],
-  mug: ['temp_at_2h_C', 'mass_kg', 'touch_temp_60s_C', 'handle_temp_60s_C'],
+  mug: ['temp_at_2h_C', 'mass_kg', 'touch_temp_60s_C', 'handle_temp_60s_C', 'liquid_volume_L'],
 };
 
 export const METRIC_INFO: Record<string, MetricInfo> = {
@@ -146,25 +146,43 @@ export const METRIC_INFO: Record<string, MetricInfo> = {
     reference: 'Fusion-relevant core temperatures are typically 10–20+ keV. This project’s own ITER-baseline-geometry run (§36): T_e_volume_avg=7.2 keV (volume-AVERAGED, so noticeably below the peak core temperature a radial profile would show at its center).',
   },
 
-  // --- Mug/thermos (self-written transient conduction) ---
+  // --- Mug (self-written transient conduction) ---
+  // §59: a single-wall, lidless domain -- no insulation layer, no lid, at
+  // all. Earlier versions (through v5) modeled an insulated travel mug
+  // with a lid; that architecture was dropped entirely on direct user
+  // review, not just de-emphasized, so these descriptions reflect the
+  // reset, not the old one. §62/§63: reference ranges below are computed
+  // over the FULL real 20,160-row v6 dataset (not a small ad hoc sample)
+  // after STRUCTURAL_MATERIALS/HANDLE_MATERIALS grew from 4/5 generic
+  // category buckets to 20/15 specific real materials -- copper/
+  // aluminum's much higher conductivity than the old generic "steel"
+  // widened the hot end of several of these ranges versus the pre-§62
+  // numbers. §63 regenerated the dataset again (struct_material_idx/
+  // handle_material_idx sampled as true integer classes, not a continuous
+  // spectrum) -- the ranges below are from that final regeneration.
   temp_at_2h_C: {
-    short: 'Liquid temperature 2 hours after filling — the headline "how good is this thermos" number; higher is better.',
-    blurb: 'Liquid temperature 2 hours after filling at 90°C into a 20°C room. This is the single headline "how good is this thermos" number — it folds together wall insulation, insulation material, body size, and how sealed the lid is into one outcome.',
-    reference: 'A bare single-wall metal mug with no lid drops well below 50°C in 2h in this project’s own model (§46-48); a well-sealed, well-insulated design can still be above 80°C at the same mark (§50) — more than a 30°C spread across the sampled design space.',
+    short: 'Liquid temperature 2 hours after filling — the headline "how good is this mug" number; higher is better.',
+    blurb: 'Liquid temperature 2 hours after filling at 90°C into a 20°C room, through a single structural wall (no insulation layer, no lid — the top is always fully open). Folds together wall material, wall thickness, and body size/shape into one outcome.',
+    reference: 'The real 20,160-row v6 dataset spans about 22.0-47.4°C at 2h -- a single wall alone, with real radiative + evaporative + convective loss through an always-open top, can\'t retain heat anywhere near as long as the old (now-abandoned) insulated/lidded architecture could.',
   },
   mass_kg: {
-    short: 'Total mass of the design (wall + insulation + handle + lid) — a proxy for cost and wrist strain; lower is lighter to hold.',
-    blurb: 'Total material mass: the structural shell, the insulation layer, the handle, and the lid (when present), all summed. A proxy for both manufacturing cost and how tiring the mug is to hold and drink from ("wrist strain").',
-    reference: 'This project’s own sampled range (§50) runs from about 0.02kg (thin single-wall, tiny) up to nearly 1.35kg (thick steel shell, large body, full lid) — for reference, a typical empty ceramic mug is roughly 0.3-0.4kg.',
+    short: 'Total mass of the design (wall + handle) — a proxy for cost and wrist strain; lower is lighter to hold.',
+    blurb: 'Total material mass: the single structural wall plus the handle, summed. A proxy for both manufacturing cost and how tiring the mug is to hold and drink from ("wrist strain").',
+    reference: 'The real 20,160-row v6 dataset spans about 0.04-3.02kg (thin-walled small polystyrene cup to a thick-walled large copper mug) -- for reference, a typical empty stoneware mug is roughly 0.3-0.4kg.',
   },
   touch_temp_60s_C: {
-    short: 'Hottest outer surface temperature 60 seconds after filling — a burn-safety check for the body/lid; lower is safer.',
-    blurb: 'The hottest point on the mug’s OUTER surface (side wall or lid, whichever is worse) 60 seconds after filling. A safety-relevant, genuinely time-lagged quantity, not just "however hot the liquid is" — a well-insulated wall can stay comfortable to touch even while the liquid inside is still near-boiling.',
-    reference: 'This project’s own model (§50): with a thin, poorly-insulating design or a thin lid, this can approach 85-90°C (uncomfortably/dangerously hot); a well-insulated wall with no lid, or a thick sealed lid, can keep this in the high-20s to mid-40s°C range instead.',
+    short: 'Hottest outer surface temperature 60 seconds after filling — a burn-safety check for the body; lower is safer.',
+    blurb: 'The hottest point anywhere on the mug\'s outer wall surface 60 seconds after filling. A safety-relevant, genuinely time-lagged quantity, not just "however hot the liquid is" -- a thick, low-conductivity wall can stay far cooler to the touch than the liquid inside it, even this soon after filling.',
+    reference: 'The real 20,160-row v6 dataset spans about 20.6-80.5°C at 60s -- a thin copper or aluminum wall runs hot almost immediately, a thick stoneware or plastic wall stays much cooler.',
   },
   handle_temp_60s_C: {
     short: 'Handle-tip temperature 60 seconds after filling — a burn-safety check for the grip; lower is safer.',
-    blurb: 'Temperature at the far end of the handle (where you’d actually grip it) 60 seconds after filling — modeled as a real transient heat-conduction problem along the handle, not a shortcut, because neither a well-conductive nor a poorly-conductive handle reaches a steady temperature that fast.',
-    reference: 'This project’s own model (§48): at realistic handle lengths, every material except bare steel stays within a fraction of a degree of room temperature at 60s (76% of a 20,000-design sample) — the real reason rubber/wood grips exist; a short, thick, bare-metal handle is the one combination that gets meaningfully hot this fast.',
+    blurb: 'Temperature at the coolest point of the handle loop (the point farthest from both attachment points) 60 seconds after filling — modeled as a real transient heat-conduction problem along the handle, not a shortcut, because neither a well-conductive nor a poorly-conductive handle reaches a steady temperature that fast.',
+    reference: 'The real 20,160-row v6 dataset spans about 20.0-37.6°C at 60s (room temperature to just above it) -- at this timescale even a directly-attached handle barely warms yet, the real reason handles are usually safe to grip right after pouring.',
+  },
+  liquid_volume_L: {
+    short: 'How much liquid the design actually holds — a design that can\'t hold a meaningful amount of coffee is rejected outright, not just scored low.',
+    blurb: 'The liquid cavity\'s own volume, computed directly from the body\'s real shape (r_base/r_mid/r_rim over the mug\'s fixed height) -- not a byproduct of wall thickness, since the wall is added OUTSIDE the liquid cavity\'s own radii, not carved into it. §59: promoted from a computed-but-ignored value to a real, checked target after direct user feedback ("we care about how much liquid is in the mug... if it doesn\'t hold any coffee then it\'s kind of useless") -- designs below a minimum-viable floor (0.05L, roughly one espresso shot) are rejected as invalid, not silently included.',
+    reference: 'The real 20,160-row v6 dataset spans about 0.09-1.11L -- within the domain\'s real 15-60mm radius range, even the smallest possible straight cylinder already holds about 0.07L, comfortably clearing the 0.05L floor (confirmed directly, not assumed -- see EXPERIMENT_LOG §59).',
   },
 };

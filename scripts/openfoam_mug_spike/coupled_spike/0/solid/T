@@ -1,0 +1,45 @@
+FoamFile
+{
+    format      ascii;
+    class       volScalarField;
+    location    "0/solid";
+    object      T;
+}
+
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform 293.15;
+
+boundaryField
+{
+    liquid
+    {
+        // EXPERIMENT_LOG §66 -- compiled `liquidCoupling` BC (see
+        // scripts/openfoam_libs/liquidCoupling/) instead of a `codedMixed`
+        // inline block: dynamicCode's runtime compilation is unconditionally
+        // refused when running as root (no override -- checked the source),
+        // which is how this project's `openfoam` service runs. A real
+        // `wmake libso` plugin sidesteps that and is also compiled once at
+        // image-build time rather than once per candidate.
+        type            liquidCoupling;
+        h               300.0;
+        mLiquid         0.3;
+        cLiquid         4186.0;
+        Tliquid0        363.15;
+        value           uniform 293.15;
+    }
+    ambient
+    {
+        type            externalWallHeatFluxTemperature;
+        h               uniform 15;
+        Ta              uniform 293.15;
+        thicknessLayers ();
+        kappaLayers     ();
+        kappaMethod     solidThermo;
+        value           uniform 293.15;
+    }
+    sides
+    {
+        type            empty;
+    }
+}

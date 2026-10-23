@@ -1,0 +1,214 @@
+/home/sl8rv/.local/lib/python3.10/site-packages/scipy/stats/_qmc.py:993: UserWarning: The balance properties of Sobol' points require n to be a power of 2.
+  sample = self._random(n, workers=workers)
+1088 candidates, 1088 to run, 30 workers
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[1/1088] 0.4 min, eta 391.9 min last=corona_only-0150 ehd=0.9518983917528895
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:545: RuntimeWarning: overflow encountered in scalar divide
+  d_rho = float(np.max(np.abs(rho_new - rho)) / max(np.max(rho_new), 1e-300)) if it > 1 else 1.0
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:811: MatrixRankWarning: Matrix is exactly singular
+  dx = -col * spla.spsolve((Jr @ sp.diags(col)).tocsc(), rowp * R)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:539: MatrixRankWarning: Matrix is exactly singular
+  rho_new = np.maximum(spla.spsolve(M, b).reshape(g.nr, g.nz), 0.0)
+[21/1088] 2.5 min, eta 126.9 min last=charged_spray-0053 ehd=0.8526676406695674
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[41/1088] 7.5 min, eta 191.4 min last=cold_spray-0068 ehd=1.8863297386166886
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[61/1088] 10.3 min, eta 173.6 min last=corona_only-0097 ehd=0.9951222444502087
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[81/1088] 13.0 min, eta 161.2 min last=charged_spray-0031 ehd=0.9244862159251725
+[101/1088] 15.7 min, eta 153.8 min last=corona_only-0032 ehd=0.9519022865595054
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[121/1088] 18.9 min, eta 151.0 min last=charged_spray-0100 ehd=0.7480700950288717
+[141/1088] 21.8 min, eta 146.6 min last=corona_only-0244 ehd=0.9518969138132723
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:811: MatrixRankWarning: Matrix is exactly singular
+  dx = -col * spla.spsolve((Jr @ sp.diags(col)).tocsc(), rowp * R)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[161/1088] 24.9 min, eta 143.4 min last=cold_spray-0034 ehd=4.296074702473016
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[181/1088] 26.3 min, eta 132.0 min last=cold_spray-0275 ehd=4.602796750017712
+[201/1088] 28.6 min, eta 126.0 min last=charged_spray-0017 ehd=0.946554030049706
+[221/1088] 31.2 min, eta 122.3 min last=charged_spray-0022 ehd=0.9829000020059157
+[241/1088] 33.4 min, eta 117.4 min last=rain_curtain-0103 ehd=0.9993464409531562
+[261/1088] 35.3 min, eta 112.0 min last=cold_spray-0021 ehd=21.32900620635178
+[281/1088] 37.7 min, eta 108.3 min last=charged_spray-0109 ehd=0.8289063278280998
+[301/1088] 39.5 min, eta 103.2 min last=cold_spray-0240 ehd=0.7100985141049094
+[321/1088] 40.7 min, eta 97.3 min last=cold_spray-0106 ehd=2.100741045523547
+[341/1088] 43.1 min, eta 94.4 min last=corona_only-0243 ehd=0.9519105019468393
+[361/1088] 44.9 min, eta 90.4 min last=cold_spray-0087 ehd=10.84816061232869
+[381/1088] 46.0 min, eta 85.4 min last=charged_spray-0066 ehd=0.8130501034391546
+[401/1088] 47.5 min, eta 81.4 min last=cold_spray-0195 ehd=0.85477791910239
+[421/1088] 49.6 min, eta 78.6 min last=corona_only-0087 ehd=0.9519135499691154
+[441/1088] 51.8 min, eta 76.0 min last=cold_spray-0079 ehd=0.9197406813992267
+[461/1088] 53.8 min, eta 73.2 min last=cold_spray-0184 ehd=16.61248314829849
+[481/1088] 55.6 min, eta 70.1 min last=corona_only-0291 ehd=0.9519058901325429
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[501/1088] 57.0 min, eta 66.8 min last=corona_only-0009 ehd=0.9519128981996998
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[521/1088] 58.4 min, eta 63.6 min last=corona_only-0124 ehd=0.9612607209086326
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[541/1088] 60.0 min, eta 60.7 min last=rain_curtain-0046 ehd=0.9325789837743688
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[561/1088] 61.2 min, eta 57.5 min last=brad_variants-0019 ehd=0.9519029243288852
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[581/1088] 62.4 min, eta 54.4 min last=cold_spray-0082 ehd=9.719584131403957
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[601/1088] 63.6 min, eta 51.5 min last=brad_variants-0058 ehd=0.9519578964445012
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:811: MatrixRankWarning: Matrix is exactly singular
+  dx = -col * spla.spsolve((Jr @ sp.diags(col)).tocsc(), rowp * R)
+[621/1088] 64.6 min, eta 48.6 min last=brad_variants-0062 ehd=0.9628370981319487
+[641/1088] 66.0 min, eta 46.1 min last=cold_spray-0030 ehd=0.8409835357239059
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[661/1088] 67.5 min, eta 43.6 min last=rain_curtain-0067 ehd=0.903564878309213
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[681/1088] 69.4 min, eta 41.5 min last=corona_only-0357 ehd=0.9880943909808665
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[701/1088] 70.5 min, eta 38.9 min last=corona_only-0126 ehd=0.9519069250659798
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[721/1088] 71.8 min, eta 36.6 min last=charged_spray-0152 ehd=0.8865081258811579
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[741/1088] 73.7 min, eta 34.5 min last=corona_only-0148 ehd=0.9851624377898129
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[761/1088] 75.6 min, eta 32.5 min last=rain_curtain-0113 ehd=0.9535492104085543
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[781/1088] 76.8 min, eta 30.2 min last=corona_only-0050 ehd=0.9519035588549604
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[801/1088] 79.1 min, eta 28.3 min last=cold_spray-0262 ehd=0.5903155866607546
+[821/1088] 80.9 min, eta 26.3 min last=rain_curtain-0021 ehd=0.9704522319036691
+[841/1088] 84.0 min, eta 24.7 min last=corona_only-0189 ehd=0.9999799736799818
+[861/1088] 86.1 min, eta 22.7 min last=cold_spray-0120 ehd=8.336835195919575
+[881/1088] 89.2 min, eta 20.9 min last=corona_only-0354 ehd=0.9586283666373334
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:811: MatrixRankWarning: Matrix is exactly singular
+  dx = -col * spla.spsolve((Jr @ sp.diags(col)).tocsc(), rowp * R)
+[901/1088] 91.6 min, eta 19.0 min last=charged_spray-0124 ehd=0.9583149145470117
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:811: MatrixRankWarning: Matrix is exactly singular
+  dx = -col * spla.spsolve((Jr @ sp.diags(col)).tocsc(), rowp * R)
+[921/1088] 95.0 min, eta 17.2 min last=cold_spray-0145 ehd=13.787582197207074
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:811: MatrixRankWarning: Matrix is exactly singular
+  dx = -col * spla.spsolve((Jr @ sp.diags(col)).tocsc(), rowp * R)
+[941/1088] 97.1 min, eta 15.2 min last=charged_spray-0058 ehd=0.9401410033234913
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:811: MatrixRankWarning: Matrix is exactly singular
+  dx = -col * spla.spsolve((Jr @ sp.diags(col)).tocsc(), rowp * R)
+[961/1088] 99.0 min, eta 13.1 min last=cold_spray-0162 ehd=0.8523952216777917
+[981/1088] 101.4 min, eta 11.1 min last=charged_spray-0052 ehd=0.9925583077013911
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[1001/1088] 103.4 min, eta 9.0 min last=corona_only-0164 ehd=0.9999617330060564
+[1021/1088] 106.2 min, eta 7.0 min last=corona_only-0282 ehd=0.9996848410843747
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:545: RuntimeWarning: overflow encountered in scalar divide
+  d_rho = float(np.max(np.abs(rho_new - rho)) / max(np.max(rho_new), 1e-300)) if it > 1 else 1.0
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:811: MatrixRankWarning: Matrix is exactly singular
+  dx = -col * spla.spsolve((Jr @ sp.diags(col)).tocsc(), rowp * R)
+[1041/1088] 108.1 min, eta 4.9 min last=corona_only-0170 ehd=0.9518966219557737
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:545: RuntimeWarning: overflow encountered in scalar divide
+  d_rho = float(np.max(np.abs(rho_new - rho)) / max(np.max(rho_new), 1e-300)) if it > 1 else 1.0
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[1061/1088] 110.0 min, eta 2.8 min last=rain_curtain-0088 ehd=0.944704006791166
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd.py:539: MatrixRankWarning: Matrix is exactly singular
+  rho_new = np.maximum(spla.spsolve(M, b).reshape(g.nr, g.nz), 0.0)
+/home/sl8rv/Projects/StoneLab/src/stonelab/ehd_particles.py:97: RuntimeWarning: overflow encountered in divide
+  t0 = np.where(in_pauth, tau * qr / np.maximum(q_s - qr, 1e-300), 0.0)
+[1081/1088] 111.3 min, eta 0.7 min last=rain_curtain-0107 ehd=0.9964776865939967

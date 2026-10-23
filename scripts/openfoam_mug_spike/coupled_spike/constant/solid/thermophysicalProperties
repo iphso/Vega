@@ -1,0 +1,43 @@
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "constant/solid";
+    object      thermophysicalProperties;
+}
+
+thermoType
+{
+    type            heSolidThermo;
+    mixture         pureMixture;
+    transport       constIsoSolid;
+    thermo          eConst;
+    equationOfState rhoConst;
+    specie          specie;
+    energy          sensibleInternalEnergy;
+}
+
+mixture
+{
+    specie
+    {
+        nMoles      1;
+        molWeight   100;
+    }
+
+    transport
+    {
+        kappa   0.22;      // polypropylene, W/(m K) -- STRUCTURAL_MATERIALS[3] in thermal_mug_spike.py
+    }
+
+    thermodynamics
+    {
+        Hf      0;
+        Cv      1920;      // J/(kg K)
+    }
+
+    equationOfState
+    {
+        rho     905;       // kg/m3
+    }
+}
