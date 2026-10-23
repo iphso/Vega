@@ -1,0 +1,9 @@
+#!/bin/bash
+# Rerun:  ./Allrun        (from the host; uses Docker image openfoam/openfoam10-paraview510
+#                          or vega-openfoam, 2 MPI ranks)
+# Inside an OpenFOAM-10 environment you can instead run:  ./Allrun.foam
+cd "$(dirname "$(readlink -f "$0")")" || exit 1
+IMAGE=${IMAGE:-vega-openfoam:latest}
+docker run --rm -u "$(id -u):$(id -g)" -v "$PWD":/case -w /case \
+    --entrypoint bash "$IMAGE" -c '. /opt/openfoam10/etc/bashrc && ./Allrun.foam'
+python3 postprocess.py | tee results_summary.txt

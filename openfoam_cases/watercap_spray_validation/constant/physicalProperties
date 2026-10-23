@@ -1,0 +1,34 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM-10 | watercap spray-condenser validation case
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      physicalProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+thermoType
+{
+    type            heRhoThermo;
+    mixture         multiComponentMixture;
+    transport       sutherland;
+    thermo          janaf;
+    energy          sensibleEnthalpy;
+    equationOfState perfectGas;
+    specie          specie;
+}
+
+#include "speciesThermo"
+
+defaultSpecie     air;
+
+liquids
+{
+    H2O;
+}
+
+solids
+{}

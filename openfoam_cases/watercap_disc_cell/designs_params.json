@@ -1,0 +1,18 @@
+{
+ "cold_spray-0126": {
+  "R": 0.142478145,
+  "U": 1.996161236668239,
+  "rd": 0.07308574652657646,
+  "t": 0.0005152163135,
+  "s": 0.04657811268,
+  "source": "Vega/watercap_web/designs.json via StoneLab DiscStackSection (spike/cell.py design())"
+ },
+ "ring_spray-0017": {
+  "R": 0.19249972345,
+  "U": 2.1255595201195976,
+  "rd": 0.06255602577167192,
+  "t": 0.0003654099447,
+  "s": 0.2097591007,
+  "source": "Vega/watercap_web/designs.json via StoneLab DiscStackSection (spike/cell.py design())"
+ }
+}

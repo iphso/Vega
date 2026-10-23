@@ -1,0 +1,16 @@
+#!/bin/bash
+# Generate and run one disc-cell case in Docker (vega-openfoam:latest, OpenFOAM 10).
+#   ./Allrun CASEDIR [gen_case.py options...]
+#   e.g. ./Allrun runs/cold_M1 --design cold_spray-0126 --level 1
+#        NP=4 ./Allrun runs/cold_urans --design cold_spray-0126 --solver pimpleFoam --endTime 1.0 --np 4
+# CASEDIR is created (if it doesn't exist) by gen_case.py; an existing case is continued.
+# Steady SST: ~2-20 min serial depending on level (see README).
+set -e
+HERE="$(dirname "$(readlink -f "$0")")"
+CASE="$1"; shift
+[ -f "$CASE/system/controlDict" ] || python3 "$HERE/gen_case.py" "$CASE" "$@"
+CASE="$(readlink -f "$CASE")"
+IMAGE=${IMAGE:-vega-openfoam:latest}
+NP=${NP:-1}
+docker run --rm --cpus="${NP}" -u "$(id -u):$(id -g)" -v "$CASE":/case -w /case -e NP="$NP" \
+    --entrypoint bash "$IMAGE" -c '. /opt/openfoam10/etc/bashrc && ./Allrun.foam'

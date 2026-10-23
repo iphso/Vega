@@ -62,6 +62,17 @@
     table.params td { padding: 4px 2px; border-bottom: 1px solid var(--border); color: var(--text-dim); }
     table.params td:last-child { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
     .note { font-size: 11px; color: var(--text-faint); margin-top: 8px; line-height: 1.45; }
+    table.params input, table.params select { width: 92px; text-align: right; background: var(--card-2); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 3px 5px; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+    table.params input.edited, table.params select.edited { border-color: var(--escaped); color: var(--escaped); }
+    .compute { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+    .compute .btns { display: flex; gap: 6px; }
+    .compute button { flex: 1; font-size: 12px; padding: 7px 10px; border-radius: 7px; border: 1px solid var(--accent-dim); background: var(--accent-dim); color: var(--text); cursor: pointer; }
+    .compute button.ghost { flex: 0 0 auto; background: var(--card-2); border-color: var(--border); color: var(--text-dim); }
+    .compute button:disabled { opacity: 0.5; cursor: default; }
+    .prog { height: 4px; background: var(--card-2); border-radius: 2px; overflow: hidden; }
+    .prog div { height: 100%; width: 0; background: var(--spray); transition: width 0.4s; }
+    .parity { font-size: 11px; color: #7ee0a8; margin-top: 6px; }
+    .parity.warn { color: var(--escaped); }
   </style>
 </head>
 <body>
@@ -137,8 +148,13 @@
         <div class="note" id="tierNote"></div>
       </div>
       <div class="card">
-        <div class="section-title">Design</div>
+        <div class="section-title"><span>Design</span><span id="editCount" style="text-transform:none;letter-spacing:0;color:var(--escaped)"></span></div>
         <table class="params" id="params"></table>
+        <div class="compute">
+          <div class="btns"><button id="computeBtn">Compute full model</button><button id="resetBtn" class="ghost">reset</button></div>
+          <div class="prog"><div id="progBar"></div></div>
+          <div class="note" id="computeNote" style="margin-top:0">Runs the campaign's resolved tier (RANS spray stage + resolved corona) in this browser tab: the same Python, under Pyodide (WebAssembly). Edit any value above first to compute a new design. About 1–3 min per design; the first run also downloads the Python runtime (~30 MB).</div>
+        </div>
       </div>
     </div></div>
   </div>
@@ -163,6 +179,9 @@
       ['wall_U_W_m2K', 'wall cooling (W/m²K)', v => v.toFixed(1)],
     ];
     let data: any = null, scenes: Record<string, boolean> = {}, sel: any = null, sceneData: any = null;
+    // in-browser compute: full-precision campaign inputs, pending edits, scenes computed this session
+    let inputs: Record<string, any> = {}, edits: Record<string, number> = {}, nCustom = 0, busy = false;
+    const sceneCache: Record<string, any> = {};
     const on: Record<string, boolean> = {};
     ORDER.forEach(k => on[k] = true);
     const $ = (id: string) => document.getElementById(id) as any;
@@ -423,15 +442,130 @@
       if (o.momentum != null) items.push(['spray momentum no.', num(o.momentum, 1)]);
       $('stats').innerHTML = items.map(([k, v, c]) => `<div class="stat"><div class="k">${k}</div><div class="v ${c ?? ''}">${v}</div></div>`).join('');
       $('tierNote').textContent = d.tier === 'resolved' ? 'Resolved tier: RANS spray stage + resolved corona.'
-        : d.tier === 'ehd' ? 'EHD tier: 1D ROM spray stage + resolved corona.' : 'Scene-only design (visualization re-run).';
-      $('params').innerHTML = PARAM_LABELS.filter(([k]) => d.d[k] != null).map(([k, l, f]) => `<tr><td>${l}</td><td>${f(d.d[k])}</td></tr>`).join('');
+        : d.tier === 'ehd' ? 'EHD tier: 1D ROM spray stage + resolved corona.'
+        : d.tier === 'browser' ? `Computed in this browser (resolved tier), edited from ${d.baseId}: ${d.editNote}.`
+        : 'Scene-only design (visualization re-run).';
+      renderParams(d);
+      renderParity(d);
+      if (!busy) { $('computeNote').textContent = timeHint(d); $('progBar').style.width = '0'; }
+    }
+    function designInputs(d: any) { return { ...(inputs[d.id] ?? d.full ?? d.d) }; }
+    function renderParams(d: any) {
+      const full = designInputs(d);
+      $('params').innerHTML = PARAM_LABELS.filter(([k]) => full[k] != null).map(([k, l, f]) => {
+        const v = edits[k] ?? full[k], cls = edits[k] != null ? 'edited' : '';
+        const ctl = k === 'corona_polarity'
+          ? `<select data-k="${k}" class="${cls}"><option value="1" ${v >= 0 ? 'selected' : ''}>+</option><option value="-1" ${v < 0 ? 'selected' : ''}>−</option></select>`
+          : `<input data-k="${k}" class="${cls}" type="number" step="any" value="${+Number(v).toPrecision(5)}" title="${f(full[k])} in the campaign" />`;
+        return `<tr><td>${l}</td><td>${ctl}</td></tr>`;
+      }).join('');
+      $('params').querySelectorAll('input, select').forEach((el: any) => el.addEventListener('change', () => {
+        const k = el.dataset.k, v = parseFloat(el.value);
+        if (!isFinite(v)) return;
+        if (Math.abs(v - full[k]) <= 1e-9 * Math.max(1, Math.abs(full[k]))) delete edits[k]; else edits[k] = k === 'spray_n_tiers' ? Math.round(v) : v;
+        el.classList.toggle('edited', edits[k] != null);
+        updateComputeBtn();
+      }));
+      updateComputeBtn();
+    }
+    function updateComputeBtn() {
+      const n = Object.keys(edits).length;
+      $('editCount').textContent = n ? `${n} edited` : '';
+      ($('computeBtn') as HTMLButtonElement).disabled = busy;
+      $('computeBtn').textContent = busy ? 'Computing…' : n ? 'Compute edited design' : sceneCache[sel?.id] ? 'Recompute' : 'Compute full model';
+    }
+    function timeHint(d: any) {
+      // campaign wall time (30 solves sharing the machine) is a rough upper guide; the browser runs ~2x a lone native solve
+      const t = d?.o?.solve_s;
+      if (t == null) return 'Typical designs take 1–3 min here; the first run also downloads the Python runtime (~30 MB).';
+      const m = Math.max(1, Math.round(t / 60));
+      return t > 300 ? `Heavy design: its campaign solve took ${m} min, so expect roughly that long or more here.`
+        : `Its campaign solve took ${Math.round(t)} s; expect about 1–3 min here (+ ~30 MB runtime download on the first run).`;
+    }
+    function renderParity(d: any) {
+      let el = document.getElementById('parity');
+      if (!el) { el = document.createElement('div'); el.id = 'parity'; $('tierNote').after(el); }
+      el.className = 'parity'; el.textContent = '';
+      if (!d.browser || d.tier === 'browser') return;
+      const keys = Object.keys(d.o).filter(k => d.o[k] != null && k !== 'solve_s');
+      const same = keys.filter(k => Math.abs((d.browser[k] ?? NaN) - d.o[k]) <= 1e-4 * Math.max(1e-3, Math.abs(d.o[k])));
+      if (d.tier !== 'resolved') { el.className = 'parity warn'; el.textContent = `Recomputed at the resolved tier (the campaign used the ${d.tier} tier): recovered ${num(d.browser.recovered)} L/h vs ${num(d.o.recovered)}.`; return; }
+      el.className = same.length === keys.length ? 'parity' : 'parity warn';
+      el.textContent = same.length === keys.length ? `Recomputed in the browser: matches the campaign record on all ${keys.length} outputs.`
+        : `Recomputed in the browser: ${same.length}/${keys.length} outputs match the campaign record (${keys.filter(k => !same.includes(k)).join(', ')} differ).`;
+    }
+
+    // ------------------------------------------------------------------ in-browser compute (Pyodide worker)
+    let worker: Worker | null = null, workerReady: Promise<void> | null = null, onLine: (l: string) => void = () => {};
+    const pending: Record<number, (r: any) => void> = {};
+    let jobId = 0;
+    function getWorker() {
+      if (workerReady) return workerReady;
+      worker = new Worker('/watercap/compute-worker.js');
+      workerReady = new Promise((resolve, reject) => {
+        worker!.onmessage = (ev: MessageEvent) => {
+          const m = ev.data;
+          if (m.type === 'log') onLine(m.line);
+          else if (m.type === 'ready') resolve();
+          else if (m.type === 'result') { pending[m.id]?.(m.result); delete pending[m.id]; }
+          else if (m.type === 'error') { if (m.id != null && pending[m.id]) { pending[m.id]({ ok: false, error: m.error }); delete pending[m.id]; } else { workerReady = null; reject(new Error(m.error)); } }
+        };
+      });
+      worker.postMessage({ type: 'init', bundleUrl: '/data/watercap/pybundle.json' });
+      return workerReady;
+    }
+    function progress(frac: number, text: string) { $('progBar').style.width = `${Math.round(100 * frac)}%`; $('computeNote').textContent = text; }
+    async function compute() {
+      if (busy || !sel) return;
+      const base = sel, edited = { ...edits }, nEd = Object.keys(edited).length;
+      const design = { ...designInputs(base), ...edited };
+      const baseId = base.baseId ?? base.id;
+      const id = nEd ? `${baseId}·edit${++nCustom}` : base.id;
+      busy = true; updateComputeBtn();
+      const t0 = performance.now();
+      let stage = 'load', it = 0;
+      const tick = () => {
+        const s = ((performance.now() - t0) / 1e3).toFixed(0);
+        if (stage === 'load') progress(0.04, `Loading the Python runtime and solver… ${s} s`);
+        else if (stage === 'spray') progress(0.15 + 0.65 * Math.min(1, it / 16), `Spray stage: RANS + spray parcels, outer iteration ${it}… ${s} s`);
+        else progress(0.85, `Corona stage and drop paths… ${s} s`);
+      };
+      onLine = (l: string) => {
+        if (l.startsWith('@stage ')) stage = l.slice(7);
+        const m = /^\s+it (\d+):/.exec(l); if (m) it = +m[1] + 1;
+        tick();
+      };
+      const timer = setInterval(tick, 1000); tick();
+      try {
+        await getWorker();
+        const result: any = await new Promise(resolve => { const j = ++jobId; pending[j] = resolve; worker!.postMessage({ type: 'compute', id: j, design, row: { id, concept: base.concept } }); });
+        if (!result.ok) throw new Error(result.error);
+        const secs = ((performance.now() - t0) / 1e3).toFixed(0);
+        sceneCache[id] = result.scene; scenes[id] = true;
+        let target = base;
+        if (nEd) {
+          const lab = Object.fromEntries(PARAM_LABELS.map(([k, l]) => [k, l]));
+          target = { id, baseId, concept: base.concept, tier: 'browser', d: result.scene.d, o: result.o, full: design,
+                     editNote: Object.entries(edited).map(([k, v]) => `${lab[k] ?? k} ${+Number(designInputs(base)[k]).toPrecision(4)} → ${+Number(v).toPrecision(4)}`).join(', ') };
+          data.designs.push(target);
+          edits = {};
+        } else {
+          base.browser = result.o;
+        }
+        progress(1, `Done in ${secs} s (solver ${result.sim_seconds.toFixed(0)} s).`);
+        await select(target, true);
+      } catch (e: any) {
+        progress(0, `Compute failed: ${e.message ?? e}`);
+      } finally {
+        clearInterval(timer); busy = false; updateComputeBtn();
+      }
     }
     function renderList() {
       const key = $('sortBy').value, only = $('onlyScenes').checked;
       const dir = key === 'energy_total' || key === 'outlet' ? 1 : -1;
       const rows = data.designs.filter((d: any) => on[d.concept] && (!only || scenes[d.id]) && d.o[key] != null && (d.o.arc ?? 1) > 0)
         .sort((a: any, b: any) => dir * (a.o[key] - b.o[key])).slice(0, 120);
-      const sceneOnly = only ? data.designs.filter((d: any) => scenes[d.id] && d.tier === 'scene-only') : [];
+      const sceneOnly = data.designs.filter((d: any) => d.tier === 'browser' || (only && scenes[d.id] && d.tier === 'scene-only'));
       $('designList').innerHTML = [...sceneOnly, ...rows].map((d: any) => `<div class="row ${sel && sel.id === d.id ? 'sel' : ''}" data-id="${d.id}">
         <span><span class="chip-dot" style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${COLORS[d.concept as keyof typeof COLORS]};margin-right:6px"></span>${d.id}</span>
         <span class="num">${d.o.recovered == null ? '' : d.o.recovered.toFixed(1) + ' L/h'}</span>${scenes[d.id] ? '<span class="scene">3D</span>' : '<span></span>'}</div>`).join('');
@@ -442,16 +576,20 @@
       $('conceptChips').querySelectorAll('.chip').forEach((el: HTMLElement) => el.addEventListener('click', () => { const k = el.dataset.k!; on[k] = !on[k]; renderChips(); renderList(); drawStrip(); }));
     }
 
-    async function select(d: any) {
+    async function select(d: any, keepEdits = false) {
+      if (!keepEdits) edits = {};
       sel = d; renderStats(d); renderList(); drawStrip();
       $('sceneTitle').textContent = `Tube · ${data.concepts[d.concept]}`;
       sceneData = null;
-      if (scenes[d.id]) {
+      if (sceneCache[d.id]) {
+        sceneData = sceneCache[d.id];
+        $('sceneNote').textContent = 'Computed in this browser: spray paths from the resolved spray-stage trace (3D); mist paths traced through this design\'s resolved corona field without mist coupling.';
+      } else if (scenes[d.id]) {
         $('sceneNote').textContent = 'loading scene…';
         sceneData = await (await fetch(`/data/watercap/scenes/${d.id}.json`)).json();
         $('sceneNote').textContent = 'Spray paths: recorded from the resolved spray-stage trace (3D). Mist paths: traced through this design\'s resolved corona field without mist coupling (axisymmetric, azimuth added for display).';
       } else {
-        $('sceneNote').textContent = 'Geometry only: drop paths and fields are exported for the designs marked 3D.';
+        $('sceneNote').textContent = 'Geometry only: press "Compute full model" (right) to solve this design in the browser and see its drop paths and fields.';
       }
       buildScene(d.d, sceneData); drawFields();
     }
@@ -473,6 +611,9 @@
       $('fieldSel').addEventListener('change', drawFields);
       $('viewSel').addEventListener('change', () => setView($('viewSel').value));
       $('sortBy').addEventListener('change', renderList); $('onlyScenes').addEventListener('change', renderList);
+      $('computeBtn').addEventListener('click', compute);
+      $('resetBtn').addEventListener('click', () => { edits = {}; renderParams(sel); });
+      fetch('/data/watercap/design_inputs.json').then(r => r.json()).then(j => { inputs = j; if (sel && !busy) renderParams(sel); }).catch(() => {});
     }
     init();
   </script>

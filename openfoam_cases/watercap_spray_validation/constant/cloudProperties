@@ -1,0 +1,204 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM-10 | watercap spray-condenser validation case
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      cloudProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+type        reactingCloud;
+
+solution
+{
+    coupled         true;
+    transient       yes;
+    cellValueSourceCorrection on;
+    maxCo           0.3;
+
+    sourceTerms
+    {
+        schemes
+        {
+            rho             explicit 1;
+            U               explicit 1;
+            Yi              explicit 1;
+            h               explicit 1;
+            radiation       explicit 1;
+        }
+    }
+
+    interpolationSchemes
+    {
+        rho             cell;
+        U               cellPoint;
+        thermo:mu       cell;
+        T               cell;
+        Cp              cell;
+        thermo:kappa    cell;
+        p               cell;
+    }
+
+    integrationSchemes
+    {
+        U               Euler;
+        T               analytical;
+    }
+}
+
+constantProperties
+{
+    rho0            998.2;   // liquid water at 20 C (overridden by liquid H2O thermo)
+    T0              293.15;  // injection temperature 20 C
+    Cp0             4182;
+    constantVolume  false;
+}
+
+subModels
+{
+    particleForces
+    {
+        sphereDrag;
+        gravity;
+    }
+
+    injectionModels
+    {
+        nozzle
+        {
+            type            coneInjection;
+            SOI             0.5;          // spray starts after 0.5 s of gas-only flow
+            duration        100;
+            massTotal       3.333333333;  // 0.0333333 kg/s * 100 s  (2 L/min)
+            parcelBasisType mass;
+            parcelsPerSecond 20000;
+            flowRateProfile constant 1;
+
+            position        (0 0 1.0);
+            direction       (0 0 -1);     // downward
+            thetaInner      0;
+            thetaOuter      30;           // full cone, 30 deg half-angle
+            injectionMethod point;
+            flowType        constantVelocity;
+            Umag            10;
+
+            // Lognormal BY MASS: MMD 60 um, GSD 1.5, truncated at +/-3 sigma
+            // (17.8 - 202.5 um). With parcelBasisType mass every parcel carries
+            // equal mass, so the sampled parcel-diameter pdf IS the mass pdf.
+            sizeDistribution
+            {
+                type        general;
+                generalDistribution
+                {
+                    distribution
+                    (
+                        (1.7778e-05 3.456845e-02)
+                        (1.8893e-05 5.044439e-02)
+                        (2.0077e-05 7.197377e-02)
+                        (2.1336e-05 1.004070e-01)
+                        (2.2674e-05 1.369563e-01)
+                        (2.4096e-05 1.826538e-01)
+                        (2.5607e-05 2.381791e-01)
+                        (2.7213e-05 3.036734e-01)
+                        (2.8919e-05 3.785633e-01)
+                        (3.0733e-05 4.614222e-01)
+                        (3.2660e-05 5.499040e-01)
+                        (3.4708e-05 6.407721e-01)
+                        (3.6884e-05 7.300435e-01)
+                        (3.9197e-05 8.132466e-01)
+                        (4.1655e-05 8.857764e-01)
+                        (4.4267e-05 9.433099e-01)
+                        (4.7043e-05 9.822296e-01)
+                        (4.9993e-05 1.000000e+00)
+                        (5.3128e-05 9.954407e-01)
+                        (5.6460e-05 9.688558e-01)
+                        (6.0000e-05 9.220007e-01)
+                        (6.3762e-05 8.578903e-01)
+                        (6.7761e-05 7.804779e-01)
+                        (7.2010e-05 6.942532e-01)
+                        (7.6525e-05 6.038144e-01)
+                        (8.1324e-05 5.134728e-01)
+                        (8.6424e-05 4.269331e-01)
+                        (9.1843e-05 3.470808e-01)
+                        (9.7602e-05 2.758860e-01)
+                        (1.0372e-04 2.144160e-01)
+                        (1.1023e-04 1.629345e-01)
+                        (1.1714e-04 1.210591e-01)
+                        (1.2448e-04 8.794475e-02)
+                        (1.3229e-04 6.246704e-02)
+                        (1.4059e-04 4.338307e-02)
+                        (1.4940e-04 2.945900e-02)
+                        (1.5877e-04 1.955889e-02)
+                        (1.6873e-04 1.269693e-02)
+                        (1.7931e-04 8.059006e-03)
+                        (1.9055e-04 5.001413e-03)
+                        (2.0250e-04 3.034816e-03)
+                    );
+                }
+            }
+        }
+    }
+
+    dispersionModel stochasticDispersionRAS;
+
+    patchInteractionModel localInteraction;
+
+    heatTransferModel RanzMarshall;
+
+    compositionModel singlePhaseMixture;
+
+    phaseChangeModel liquidEvaporation;
+
+    stochasticCollisionModel none;
+
+    surfaceFilmModel none;
+
+    radiation       off;
+
+    localInteractionCoeffs
+    {
+        patches
+        (
+            walls   { type escape; }   // drops that reach the wall are removed (counted)
+            inlet   { type escape; }   // drops falling out the bottom
+            outlet  { type escape; }   // drops carried out the top
+        );
+    }
+
+    RanzMarshallCoeffs
+    {
+        BirdCorrection  off;
+    }
+
+    singlePhaseMixtureCoeffs
+    {
+        phases
+        (
+            liquid
+            {
+                H2O         1;
+            }
+        );
+    }
+
+    liquidEvaporationCoeffs
+    {
+        enthalpyTransfer enthalpyDifference;
+        activeLiquids   ( H2O );
+        condensation    true;   // default false clips the molar flux at zero
+                                // (LiquidEvaporation.C lines 213-217)
+    }
+}
+
+cloudFunctions
+{
+    patchPostProcessing1
+    {
+        type            patchPostProcessing;
+        maxStoredParcels 1000000;
+        patches         ( outlet inlet walls );
+    }
+}

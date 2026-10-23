@@ -1,0 +1,8 @@
+# case setup only: meshes, time directories, logs and post-processing are run output
+processor*/
+[1-9]*/
+0.[0-9]*/
+log.*
+postProcessing/
+polyMesh/
+*.foam.bak

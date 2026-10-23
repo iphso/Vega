@@ -51,7 +51,20 @@ def _r(v, n=4):
     return None if v is None else float(round(float(v), n))
 
 
-def collect():
+def resolved_out(q):
+    """The viewer's outcome keys from a watercap_resolved.simulate payload."""
+    return dict(outlet=q["outlet_total_water_frac"], vapor=q["vapor_removed_frac"],
+                escape=q["liquid_escape_frac"], recovered=q["recovered_L_h"],
+                energy=q["specific_energy_Wh_L"], energy_total=q["specific_energy_total_Wh_L"],
+                power=q["electrical_power_W"], current=q["corona_current_mA"],
+                quench=q.get("quenching_frac"), arc=q["arc_margin"],
+                closure=q["water_balance_residual"],
+                fog=q["spray_stage"]["fog_out_frac"], film=q["spray_stage"]["film_drain"],
+                momentum=q["momentum_number"], dp=q["pressure_drop_Pa"],
+                recool=q["recool_power_W"])
+
+
+def collect(full=None):
     """One row per design; the resolved tier wins where both exist."""
     rows = {}
     for r in wc.load("v1"):
@@ -72,19 +85,12 @@ def collect():
         for r in wc.load(rn):
             if not r.get("res_ok"):
                 continue
-            q = r["res"]
             rows[r["id"]] = dict(id=r["id"], family=r["family"], tier="resolved", design=r["design"],
-                                 out=dict(outlet=q["outlet_total_water_frac"], vapor=q["vapor_removed_frac"],
-                                          escape=q["liquid_escape_frac"], recovered=q["recovered_L_h"],
-                                          energy=q["specific_energy_Wh_L"], energy_total=q["specific_energy_total_Wh_L"],
-                                          power=q["electrical_power_W"], current=q["corona_current_mA"],
-                                          quench=q.get("quenching_frac"), arc=q["arc_margin"],
-                                          closure=q["water_balance_residual"],
-                                          fog=q["spray_stage"]["fog_out_frac"], film=q["spray_stage"]["film_drain"],
-                                          momentum=q["momentum_number"], dp=q["pressure_drop_Pa"],
-                                          recool=q["recool_power_W"]))
+                                 out=dict(resolved_out(r["res"]), solve_s=r.get("res_s")))
     out = []
     for r in rows.values():
+        if full is not None:
+            full[r["id"]] = {k: v for k, v in r["design"].items() if k not in ("id", "family")}
         c = CONCEPT[r["family"]]
         out.append(dict(id=r["id"], family=r["family"], concept=c, tier=r["tier"],
                         d={k: _r(r["design"].get(k)) for k in DESIGN_KEYS if r["design"].get(k) is not None},
@@ -186,6 +192,11 @@ def scene(job):
     t0 = time.time()
     cfd, pol_c = wr.build_cfd(c, aux, wr.RESOLVED_PRESETS["resolved_coarse"]["cfd"])
     res = cfd.solve()
+    return scene_from_solve(row, c, cfd, res, t0)
+
+
+def scene_from_solve(row, c, cfd, res, t0):
+    """Scene dict from a converged spray-stage solve (re-traced with path recording) + corona tracks."""
     spray_paths = []
     if any(j.flow_kg_s > 0 for j in cfd.inj):
         cfd.trace(np.random.default_rng(3), cfd.gauss_field(cfd.src["rhoq"]), record=90)
@@ -215,8 +226,8 @@ def scene(job):
                 spray_paths=spray_paths, fields=fields, corona=cor, seconds=round(time.time() - t0, 1))
 
 
-def curate(rows):
-    """Best (most water recovered, non-arcing, closed) design per concept + baseline + best disc geometry."""
+def curate(rows, top=1):
+    """Top-N (most water recovered, non-arcing, closed) designs per concept + baseline + best disc geometry."""
     pick = {}
     for r in rows:
         o = r["o"]
@@ -224,10 +235,8 @@ def curate(rows):
             continue
         if r["concept"] != "corona" and r["tier"] != "resolved":
             continue
-        k = r["concept"]
-        if k not in pick or o["recovered"] > pick[k]["o"]["recovered"]:
-            pick[k] = r
-    chosen = [r for r in pick.values()]
+        pick.setdefault(r["concept"], []).append(r)
+    chosen = [r for v in pick.values() for r in sorted(v, key=lambda r: -r["o"]["recovered"])[:top]]
     base = dict(wc.BRAD, corona_voltage_kV=40.0, id="baseline-40kV", family="brad_variants")
     best_disc = dict(wc.BRAD, disc_thickness_mm=0.1, disc_diameter_frac=0.6, disc_spacing_m=0.2, corona_voltage_kV=30.0,
                      id="disc-geometry-30kV", family="disc")
@@ -256,21 +265,31 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--workers", type=int, default=10)
     ap.add_argument("--designs-only", action="store_true")
+    ap.add_argument("--top", type=int, default=1, help="scenes per concept")
+    ap.add_argument("--force", action="store_true", help="rebuild scenes that already exist")
     a = ap.parse_args()
     (OUT / "scenes").mkdir(parents=True, exist_ok=True)
-    rows = collect()
+    full = {}
+    rows = collect(full)
+    # full-precision inputs, so the viewer's in-browser compute reproduces campaign records exactly
+    json.dump(full, open(OUT / "design_inputs.json", "w"), separators=(",", ":"))
     json.dump(dict(concepts=CONCEPT_NAME, designs=rows, generated=time.strftime("%Y-%m-%d %H:%M"),
                    aux=wc.BASE_AUX), open(OUT / "designs.json", "w"), separators=(",", ":"))
     print(len(rows), "designs ->", OUT / "designs.json")
     if a.designs_only:
         sys.exit(0)
-    cur = curate(rows)
-    jobs = [(r, full_design(r)) for r in cur]
+    cur = curate(rows, a.top)
+    index = [dict(id=r["id"], concept=r["concept"]) for r in cur if (OUT / "scenes" / f"{r['id']}.json").exists()]
+    todo = [r for r in cur if a.force or not (OUT / "scenes" / f"{r['id']}.json").exists()]
+    if a.force:
+        index = []
+    jobs = [(r, full_design(r)) for r in todo]
+    print(len(cur), "scenes wanted,", len(jobs), "to build", flush=True)
     from concurrent.futures import ProcessPoolExecutor
-    index = []
     with ProcessPoolExecutor(a.workers) as ex:
         for sc in ex.map(scene, jobs):
             json.dump(sc, open(OUT / "scenes" / f"{sc['id']}.json", "w"), separators=(",", ":"))
             index.append(dict(id=sc["id"], concept=sc["concept"]))
+            json.dump(index, open(OUT / "scenes" / "index.json", "w"))  # viewer picks scenes up as they land
             print("scene", sc["id"], sc["seconds"], "s", flush=True)
     json.dump(index, open(OUT / "scenes" / "index.json", "w"))

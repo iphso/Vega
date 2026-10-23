@@ -1,0 +1,19 @@
+Averaging window: 4.000 .. 6.000 s
+gas mass flow   in 0.168249  out 0.167619 kg/s
+vapour flow     in 5.940019e-03  out 5.310808e-03 kg/s
+vapor_removed_frac (outlet vs inlet) = 0.10593
+dry-air flow    in 0.162309  out 0.162308 kg/s
+humidity ratio  in 0.03660  out 0.03272 kg/kg
+mixing-cup T    in 35.000 C  out 33.094 C
+p area-avg      in 101363.30  out 101325.00 Pa; dp = 38.30 Pa (hydrostatic rho*g*L ~ 27.5 Pa)
+min Uz (instantaneous) over window: mean -8.417, lowest -9.190 m/s; max Uz mean 4.659 m/s
+spray injected in window: 0.03333 kg/s
+phase-change rate (cloud, +evap/-cond): -6.2951e-04 kg/s -> vapour removed by condensation = 0.10598 of inlet vapour
+spray leaving via outlet: 0.02617 kg/s = 0.7850 of injected
+spray leaving via inlet : 0.00000 kg/s = 0.0000 of injected
+spray leaving via walls : 0.00782 kg/s = 0.2346 of injected
+liquid mass in domain: 0.03209 -> 0.03204 kg; parcels 18897
+cumulative to t=6.000: injected 0.1833, phase change -3.4213e-03, outlet 0.1153, inlet 0.0000, walls 0.0394, in system 0.0320 kg
+parcels via outlet: 30837 parcels, 0.02618 kg/s, mass-mean T 33.07 C, mass-mean d 62.5 um, mean age 1.08 s, mean Uz 1.95 m/s
+parcels via inlet : 1 parcels, 0.00000 kg/s, mass-mean T 35.00 C, mass-mean d 30.2 um, mean age 0.60 s, mean Uz -1.39 m/s
+parcels via walls : 9209 parcels, 0.00782 kg/s, mass-mean T 33.84 C, mass-mean d 75.2 um, mean age 0.51 s, mean Uz 0.64 m/s

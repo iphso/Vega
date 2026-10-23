@@ -1,0 +1,36 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM-10 | watercap spray-condenser validation case
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       volVectorField;
+    location    "0";
+    object      U;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 1 -1 0 0 0 0];
+
+internalField   uniform (0 0 2.122);
+
+boundaryField
+{
+    inlet
+    {
+        // 0.15 m3/s, developed-pipe 1/7 power-law profile (turbulentBL)
+        type                flowRateInletVelocity;
+        volumetricFlowRate  constant 0.15;
+        profile             turbulentBL;
+        value               uniform (0 0 2.122);
+    }
+    outlet
+    {
+        type            pressureInletOutletVelocity;
+        value           uniform (0 0 0);
+    }
+    walls
+    {
+        type            noSlip;
+    }
+}

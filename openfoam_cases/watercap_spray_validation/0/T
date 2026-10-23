@@ -1,0 +1,34 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM-10 | watercap spray-condenser validation case
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       volScalarField;
+    location    "0";
+    object      T;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+dimensions      [0 0 0 1 0 0 0];
+
+internalField   uniform 308.15;
+
+boundaryField
+{
+    inlet
+    {
+        type            fixedValue;
+        value           uniform 308.15;
+    }
+    outlet
+    {
+        type            inletOutlet;
+        inletValue      uniform 308.15;
+        value           uniform 308.15;
+    }
+    walls
+    {
+        type            zeroGradient;
+    }
+}

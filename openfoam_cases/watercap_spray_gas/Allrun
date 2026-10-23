@@ -1,0 +1,12 @@
+#!/bin/bash
+# Generate and run one frozen-spray-force gas case in Docker (vega-openfoam:latest, OpenFOAM 10).
+#   ./Allrun CASEDIR --npz frozen_DESIGN.npz [--refine 1] [--scheme upwind]
+set -e
+HERE="$(dirname "$(readlink -f "$0")")"
+CASE="$1"; shift
+[ -f "$CASE/system/controlDict" ] || { python3 "$HERE/gen_case.py" "$CASE" "$@"; cp "$HERE/Allrun.foam" "$CASE/"; }
+CASE="$(readlink -f "$CASE")"
+IMAGE=${IMAGE:-vega-openfoam:latest}
+NP=${NP:-1}
+docker run --rm --cpus="${NP}" -u "$(id -u):$(id -g)" -v "$CASE":/case -w /case -e NP="$NP" \
+    --entrypoint bash "$IMAGE" -c '. /opt/openfoam10/etc/bashrc && ./Allrun.foam'

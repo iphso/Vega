@@ -1,0 +1,19 @@
+#!/bin/bash
+# Runs inside an OpenFOAM-10 environment (see ./Allrun for the Docker wrapper).
+cd "${0%/*}" || exit 1
+. $WM_PROJECT_DIR/bin/tools/RunFunctions
+NP=${NP:-2}
+runApplication blockMesh
+runApplication checkMesh
+if [ "$NP" -gt 1 ]; then
+    runApplication decomposePar -force
+    runParallel reactingFoam
+    runApplication reconstructPar -latestTime
+else
+    runApplication reactingFoam
+fi
+# Sample the time-averaged fields (fieldAverage over [averageStart, endTime])
+postProcess -latestTime -func "graphUniform(start=(0 0 0.001), end=(0 0 2.499), nPoints=250, fields=(UMean TMean H2OMean), funcName=axis_line)" > log.sample 2>&1
+for z in 0.5 1.0 2.45; do
+    postProcess -latestTime -func "graphUniform(start=(0 0 $z), end=(0.1499 0 $z), nPoints=60, fields=(UMean TMean H2OMean), funcName=radial_z$z)" >> log.sample 2>&1
+done

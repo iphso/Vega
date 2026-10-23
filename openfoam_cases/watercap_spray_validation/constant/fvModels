@@ -1,0 +1,21 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM-10 | watercap spray-condenser validation case
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      fvModels;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+buoyancyForce
+{
+    type        buoyancyForce;
+}
+clouds
+{
+    type    clouds;
+    libs    ("liblagrangianParcel.so" "liblagrangianParcelTurbulence.so");
+}

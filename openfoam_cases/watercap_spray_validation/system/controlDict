@@ -1,0 +1,126 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM-10 | watercap spray-condenser validation case
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     reactingFoam;
+
+startFrom       latestTime;
+startTime       0;
+stopAt          endTime;
+endTime         6.0;
+
+deltaT          1e-4;
+adjustTimeStep  yes;
+maxCo           0.8;
+maxDeltaT       1e-3;
+
+writeControl    adjustableRunTime;
+writeInterval   0.5;
+purgeWrite      0;
+writeFormat     ascii;
+writePrecision  10;
+writeCompression off;
+timeFormat      general;
+timePrecision   6;
+runTimeModifiable true;
+
+averageStart    4.0;   // time-averaging window = [averageStart, endTime]
+
+functions
+{
+    fieldAverage1
+    {
+        type            fieldAverage;
+        libs            ("libfieldFunctionObjects.so");
+        timeStart       $averageStart;
+        writeControl    writeTime;
+        fields
+        (
+            U       { mean on; prime2Mean off; base time; }
+            T       { mean on; prime2Mean off; base time; }
+            H2O     { mean on; prime2Mean off; base time; }
+            p       { mean on; prime2Mean off; base time; }
+            rho     { mean on; prime2Mean off; base time; }
+        );
+    }
+
+
+    inletFlux
+    {
+        type            surfaceFieldValue;
+        libs            ("libfieldFunctionObjects.so");
+        writeControl    timeStep;
+        writeInterval   5;
+        log             false;
+        writeFields     false;
+        regionType      patch;
+        name            inlet;
+        operation       sum;
+        fields          (phi);
+    }
+    outletFlux
+    {
+        $inletFlux;
+        name            outlet;
+    }
+    inletVapour
+    {
+        $inletFlux;
+        operation       sum;
+        weightField     phi;
+        fields          (H2O);
+    }
+    outletVapour
+    {
+        $inletVapour;
+        name            outlet;
+    }
+    inletT
+    {
+        $inletFlux;
+        operation       average;
+        weightField     phi;
+        fields          (T);
+    }
+    outletT
+    {
+        $inletT;
+        name            outlet;
+    }
+    inletP
+    {
+        $inletFlux;
+        operation       areaAverage;
+        fields          (p);
+    }
+    outletP
+    {
+        $inletP;
+        name            outlet;
+    }
+    minU
+    {
+        type            volFieldValue;
+        libs            ("libfieldFunctionObjects.so");
+        writeControl    timeStep;
+        writeInterval   5;
+        log             false;
+        writeFields     false;
+        regionType      all;
+        operation       min;      // component-wise min (Uz < 0 => reverse flow)
+        fields          (U T H2O);
+    }
+    maxU
+    {
+        $minU;
+        operation       max;
+    }
+}

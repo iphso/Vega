@@ -1,0 +1,83 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM-10 | watercap spray-condenser validation case
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Vertical tube R = 0.15 m, L = 2.5 m, axis = +z (up). 3D O-grid (see RESULTS.md
+// for why 3D was used instead of a 2D wedge).
+convertToMeters 1;
+
+R   0.15;
+a   0.06;           // half-width of the central square block
+c   0.1060660172;   // R/sqrt(2)
+ma  -0.06;
+mc  -0.1060660172;
+mR  -0.15;
+L   2.5;
+sq  0.066;          // mid-point bulge of the square edges (better orthogonality)
+msq -0.066;
+
+nS  12;    // cells across central square side
+nR  10;    // radial cells in outer O-grid ring
+nZ  125;   // axial cells (2 cm)
+gR  0.333; // radial grading in the ring (fine at the wall)
+
+vertices
+(
+    ($ma $ma 0) ($a $ma 0) ($a $a 0) ($ma $a 0)
+    ($mc $mc 0) ($c $mc 0) ($c $c 0) ($mc $c 0)
+    ($ma $ma $L) ($a $ma $L) ($a $a $L) ($ma $a $L)
+    ($mc $mc $L) ($c $mc $L) ($c $c $L) ($mc $c $L)
+);
+
+blocks
+(
+    hex (0 1 2 3 8 9 10 11)     ($nS $nS $nZ) simpleGrading (1 1 1)
+    hex (4 5 1 0 12 13 9 8)     ($nS $nR $nZ) simpleGrading (1 $gR 1)
+    hex (5 6 2 1 13 14 10 9)    ($nS $nR $nZ) simpleGrading (1 $gR 1)
+    hex (6 7 3 2 14 15 11 10)   ($nS $nR $nZ) simpleGrading (1 $gR 1)
+    hex (7 4 0 3 15 12 8 11)    ($nS $nR $nZ) simpleGrading (1 $gR 1)
+);
+
+edges
+(
+    arc 4 5 (0 $mR 0)    arc 5 6 ($R 0 0)    arc 6 7 (0 $R 0)    arc 7 4 ($mR 0 0)
+    arc 12 13 (0 $mR $L) arc 13 14 ($R 0 $L) arc 14 15 (0 $R $L) arc 15 12 ($mR 0 $L)
+    arc 0 1 (0 $msq 0)   arc 1 2 ($sq 0 0)   arc 2 3 (0 $sq 0)   arc 3 0 ($msq 0 0)
+    arc 8 9 (0 $msq $L)  arc 9 10 ($sq 0 $L) arc 10 11 (0 $sq $L) arc 11 8 ($msq 0 $L)
+);
+
+boundary
+(
+    inlet
+    {
+        type patch;
+        faces
+        (
+            (0 3 2 1) (4 0 1 5) (5 1 2 6) (6 2 3 7) (7 3 0 4)
+        );
+    }
+    outlet
+    {
+        type patch;
+        faces
+        (
+            (8 9 10 11) (12 13 9 8) (13 14 10 9) (14 15 11 10) (15 12 8 11)
+        );
+    }
+    walls
+    {
+        type wall;
+        faces
+        (
+            (4 5 13 12) (5 6 14 13) (6 7 15 14) (7 4 12 15)
+        );
+    }
+);

@@ -1,275 +1,304 @@
 <meta charset="utf-8">
-<title>Watercap Workbench</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Water Capture Tube</title>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/"}}</script>
 <style>
-/* Layout: instrument bench with two benches behind tabs. Simulate: left rail of inputs grouped like the
-   partner's list, right the targets, the tube, and a GPU sweep map. Designs: filters, scatter, table, detail.
-   Color: water = blue, electric = amber, stored-run sets = slate / blue / teal, maps = viridis; neutrals lean slate. */
+/* Design explorer for the water-capture tube. Vega's look: near-black ground, quiet panels, small
+   uppercase section titles, the 3D model of the design front and center. Water = blue, spray = teal,
+   electric = amber, escaping = orange. */
 :root {
-  --bg: #eef1f4; --panel: #ffffff; --ink: #142029; --ink-2: #4a5864; --rule: #d3dae0; --chip: #e5eaee;
-  --water: #1f6fb2; --volt: #b86a00; --good: #2c7a4b; --bad: #b3382c; --hatch: rgba(179,56,44,0.55);
-  --set-v1: #6f7f8c; --set-rerun: #1f6fb2; --set-new: #11806f; --liquid: #6a8fb0;
-  --f-display: "Barlow Condensed", "Arial Narrow", sans-serif;
-  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
-  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
-  color-scheme: light;
+  --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
+  --ink: #e8e8ec; --ink-2: #8a8a94; --ink-3: #55555e; --rule: #2a2a30; --chip: #202027;
+  --water: #5b9dff; --water-dim: #2a4a75; --spray: #3ccfb4; --volt: #ffb547; --esc: #ff9a4d;
+  --good: #7ee0a8; --bad: #ff8a7a; --hatch: rgba(255,138,122,0.5);
+  --set-v1: #8a8a94; --set-rerun: #5b9dff; --set-new: #3ccfb4; --liquid: #3ccfb4;
+  --f-display: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-body: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --radius: 10px;
+  color-scheme: dark;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
-  --bg: #0f151a; --panel: #172027; --ink: #e2e8ed; --ink-2: #9aa9b5; --rule: #29353f; --chip: #212c34;
-  --water: #5aa9e8; --volt: #f0a53a; --good: #5cc28a; --bad: #ef7b6e; --hatch: rgba(239,123,110,0.6);
-  --set-v1: #8c9aa6; --set-rerun: #5aa9e8; --set-new: #4cc3b4; --liquid: #8fb3d4; color-scheme: dark; } }
-:root[data-theme="dark"] {
-  --bg: #0f151a; --panel: #172027; --ink: #e2e8ed; --ink-2: #9aa9b5; --rule: #29353f; --chip: #212c34;
-  --water: #5aa9e8; --volt: #f0a53a; --good: #5cc28a; --bad: #ef7b6e; --hatch: rgba(239,123,110,0.6);
-  --set-v1: #8c9aa6; --set-rerun: #5aa9e8; --set-new: #4cc3b4; --liquid: #8fb3d4; color-scheme: dark; }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { background: var(--bg); color: var(--ink); font: 400 14.5px/1.5 var(--f-body); }
-.wrap { max-width: 1440px; margin: 0 auto; padding-block: 22px 60px;
-  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 18px; }
-header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between; }
-h1 { font: 700 clamp(30px, 4.5vw, 44px)/1 var(--f-display); margin: 0; letter-spacing: 0.01em; text-wrap: balance; }
-h2 { font: 600 20px/1.1 var(--f-display); margin: 0; letter-spacing: 0.02em; text-wrap: balance; }
-h3 { font: 600 16px/1.2 var(--f-display); margin: 0; letter-spacing: 0.03em; }
-.sub { margin: 6px 0 0; color: var(--ink-2); max-width: 82ch; }
-.chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { font: 500 11.5px/1 var(--f-mono); padding: 6px 8px; border-radius: 4px; background: var(--chip); color: var(--ink-2); }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 400 13.5px/1.5 var(--f-body); }
+.app { max-width: 1680px; margin: 0 auto; padding: 14px max(16px, env(safe-area-inset-left, 0px)) 48px max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 14px; }
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; }
+.brand h1 { font: 600 15px/1.2 var(--f-display); margin: 0; letter-spacing: 0.01em; }
+.brand span { font-size: 12px; color: var(--ink-2); }
+h2 { font: 600 11px/1.2 var(--f-body); text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); margin: 0; }
+h3 { font: 600 13px/1.2 var(--f-body); margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 11px/1 var(--f-mono); padding: 5px 8px; border-radius: 12px; background: var(--chip); color: var(--ink-2); border: 1px solid var(--rule); }
 .chip.ok { color: var(--good); } .chip.warn { color: var(--volt); } .chip.err { color: var(--bad); }
-.tabs { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; background: var(--panel); }
-.tabs button { font: 600 17px/1 var(--f-display); letter-spacing: 0.04em; padding: 10px 16px; background: transparent; color: var(--ink-2); border: 0; border-right: 1px solid var(--rule); cursor: pointer; }
-.tabs button:last-child { border-right: 0; }
-.tabs button[aria-selected="true"] { background: var(--ink); color: var(--panel); }
-.tabs button span { font: 500 11px/1 var(--f-mono); letter-spacing: 0; opacity: 0.75; margin-left: 6px; }
-.bench { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start; }
-@media (max-width: 980px) { .bench { grid-template-columns: 1fr; } }
-.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 14px; min-width: 0; }
-.rail { display: grid; gap: 16px; }
+.tabs { display: inline-flex; gap: 4px; }
+.tabs button { font: 500 12px/1 var(--f-body); padding: 7px 13px; border-radius: 16px; border: 1px solid var(--rule); background: var(--card-2); color: var(--ink-2); cursor: pointer; }
+.tabs button[aria-selected="true"] { color: var(--water); border-color: var(--water-dim); background: var(--water-dim); color: var(--ink); }
+.tabs button span { opacity: 0.6; margin-left: 5px; font-variant-numeric: tabular-nums; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); padding: 14px; min-width: 0; }
+.card { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 10px 12px; }
+/* explore: rail | 3D stage | outcome */
+.explore { display: grid; grid-template-columns: 300px minmax(0, 1fr) 290px; gap: 14px; align-items: start; }
+@media (max-width: 1240px) { .explore { grid-template-columns: 280px minmax(0, 1fr); } .explore .side { grid-column: 1 / -1; } }
+@media (max-width: 860px) { .explore { grid-template-columns: 1fr; } }
+.rail { display: grid; gap: 16px; max-height: calc(100vh - 80px); overflow-y: auto; position: sticky; top: 12px; }
+@media (max-width: 860px) { .rail { position: static; max-height: none; } }
 .group { display: grid; gap: 9px; }
-.ghead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; border-bottom: 1px solid var(--rule); padding-bottom: 4px; flex-wrap: wrap; }
-.sl { display: grid; gap: 2px; }
-.sl label { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
-.sl label b { font: 500 12.5px/1.3 var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
+.ghead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sl { display: grid; gap: 1px; }
+.sl label { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+.sl label b { font: 500 12px/1.3 var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
 .sl.onaxis label b { color: var(--water); }
 .sl input { width: 100%; accent-color: var(--water); margin: 0; }
-.sl.onaxis input { opacity: 0.35; }
-.sl .hint { font-size: 11.5px; color: var(--ink-2); line-height: 1.35; }
-.derived { font: 400 12px/1.45 var(--f-mono); color: var(--ink-2); background: var(--chip); border-radius: 4px; padding: 7px 9px; }
-.derived b { color: var(--ink); font-weight: 500; }
-.toggles { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 13px; align-items: center; }
-.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 5px; overflow: hidden; vertical-align: middle; }
-.seg button { font: 500 12px/1 var(--f-mono); padding: 7px 9px; background: var(--panel); color: var(--ink); border: 0; border-right: 1px solid var(--rule); cursor: pointer; }
-.seg button:last-child { border-right: 0; }
-.seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
-button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--water); outline-offset: 2px; }
-.presets { display: flex; flex-wrap: wrap; gap: 6px; }
-.presets button, .btn { font: 500 12px/1.2 var(--f-body); padding: 6px 9px; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); cursor: pointer; text-align: left; }
-.presets button:hover, .btn:hover { border-color: var(--water); }
-.btn.primary { background: var(--water); border-color: var(--water); color: var(--panel); font-weight: 600; }
-.main { display: grid; gap: 18px; min-width: 0; }
-.mapbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
-.mapbar label { font: 500 11px/1 var(--f-mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
-select { font: 400 13px var(--f-body); padding: 5px 6px; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink); max-width: 230px; }
+.sl.onaxis input { opacity: 0.4; }
+.sl .hint { font-size: 11px; color: var(--ink-3); line-height: 1.35; }
+.derived { font: 400 11px/1.45 var(--f-mono); color: var(--ink-3); padding: 2px 0; }
+.derived b { color: var(--ink-2); font-weight: 500; }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 12.5px; align-items: center; color: var(--ink-2); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; vertical-align: middle; background: var(--card-2); }
+.seg button { font: 500 11px/1 var(--f-body); padding: 5px 9px; background: transparent; color: var(--ink-2); border: 0; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--water-dim); color: var(--ink); }
+button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--water); outline-offset: 2px; }
+.presets { display: flex; flex-wrap: wrap; gap: 5px; }
+.presets button, .btn { font: 500 11.5px/1.2 var(--f-body); padding: 5px 9px; border-radius: 14px; border: 1px solid var(--rule); background: var(--card-2); color: var(--ink-2); cursor: pointer; text-align: left; }
+.presets button:hover, .btn:hover { color: var(--ink); border-color: #3e3e48; }
+.btn.primary { background: var(--water-dim); border-color: var(--water-dim); color: var(--ink); font-weight: 600; padding: 8px 14px; border-radius: 8px; }
+.btn.primary:hover { border-color: var(--water); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+select { font: 400 12px var(--f-body); padding: 4px 6px; border-radius: 6px; border: 1px solid var(--rule); background: var(--card-2); color: var(--ink); max-width: 230px; }
+.main { display: grid; gap: 14px; min-width: 0; }
+/* the 3D stage */
+.stage { position: relative; height: min(78vh, 820px); min-height: 460px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--rule);
+  background: radial-gradient(120% 90% at 50% 40%, #15161b 0%, #0a0a0c 70%); }
+.stage canvas { display: block; }
+.v3-top { position: absolute; left: 12px; right: 12px; top: 12px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; pointer-events: none; }
+.v3-top > * { pointer-events: auto; }
+.v3-views { display: inline-flex; gap: 4px; }
+.v3-views button { font: 500 11px/1 var(--f-body); padding: 6px 10px; border-radius: 14px; border: 1px solid var(--rule); background: rgba(22,22,26,0.8); color: var(--ink-2); cursor: pointer; backdrop-filter: blur(6px); }
+.v3-views button[aria-pressed="true"] { color: var(--ink); border-color: var(--water-dim); background: rgba(42,74,117,0.85); }
+.v3-fieldbox { display: inline-flex; gap: 6px; align-items: center; font-size: 11px; color: var(--ink-2); background: rgba(22,22,26,0.8); border: 1px solid var(--rule); border-radius: 14px; padding: 3px 4px 3px 10px; backdrop-filter: blur(6px); }
+.v3-fieldbox select { border-radius: 10px; }
+.v3-badge { font: 500 10.5px/1 var(--f-body); color: var(--spray); border: 1px solid #2c6b60; border-radius: 10px; padding: 4px 8px; background: rgba(12,40,36,0.7); }
+.v3-legend { position: absolute; left: 12px; bottom: 12px; display: grid; gap: 4px; font: 400 11px/1.2 var(--f-body); color: var(--ink-2); background: rgba(22,22,26,0.75); border: 1px solid var(--rule); border-radius: 8px; padding: 7px 9px; backdrop-filter: blur(6px); pointer-events: none; }
+.v3-legend .lr { display: flex; gap: 6px; align-items: center; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.v3-legend i { width: 120px; height: 7px; border-radius: 4px; display: inline-block; }
+.v3-key { position: absolute; right: 12px; bottom: 12px; display: flex; gap: 12px; font-size: 11px; color: var(--ink-2); pointer-events: none; }
+.v3-key span { display: inline-flex; align-items: center; gap: 5px; }
+.v3-key i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.v3-labels span { position: absolute; left: 0; top: 0; font-size: 11px; color: var(--ink-2); white-space: nowrap; pointer-events: none; padding-left: 6px; margin-top: -8px; border-left: 1px solid var(--ink-3); }
+/* outcome */
+.side { display: grid; gap: 10px; }
+.kpis { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.kpis.more { grid-template-columns: 1fr 1fr; }
+.kpi { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 11px; display: grid; gap: 1px; }
+.kpi .k { font: 600 10px/1.25 var(--f-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-3); }
+.kpi .v { font: 600 22px/1.15 var(--f-body); font-variant-numeric: tabular-nums; }
+.kpis.more .kpi .v { font-size: 15px; }
+.kpi .s { font-size: 11px; color: var(--ink-3); line-height: 1.35; }
+.kpis.more .kpi .s { display: none; }
+.kpi .v.bad { color: var(--bad); } .kpi .v.warn { color: var(--volt); }
+.rowhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 16px; }
+.eyebrow { font: 400 11px/1.3 var(--f-body); color: var(--ink-3); }
+.budget { display: grid; gap: 6px; }
+.bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: var(--card-2); }
+.bar span { display: block; height: 100%; }
+.bl { display: flex; flex-wrap: wrap; gap: 3px 12px; font: 400 11px/1.3 var(--f-body); color: var(--ink-2); }
+.sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+.note { font-size: 12px; color: var(--ink-2); margin: 0; max-width: 92ch; line-height: 1.5; }
+.banner { border: 1px solid var(--water-dim); border-radius: 8px; padding: 9px 11px; display: grid; gap: 4px; background: var(--card); font-size: 12px; }
+.banner .note { font-size: 11.5px; }
+details > summary { cursor: pointer; list-style: none; font: 600 11px/1.2 var(--f-body); text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); }
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: "›"; display: inline-block; margin-right: 6px; transition: transform .15s; }
+details[open] > summary::before { transform: rotate(90deg); }
+/* lower row */
+.lower { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 1100px) { .lower { grid-template-columns: 1fr; } }
+.mapbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; margin: 10px 0; }
+.mapbar label { font: 400 11.5px/1 var(--f-body); color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
 .mapbox { position: relative; }
 canvas { display: block; width: 100%; }
-.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 8px; font: 400 11.5px/1.45 var(--f-mono); color: var(--ink); box-shadow: 0 4px 14px rgba(0,0,0,.12); white-space: nowrap; z-index: 2; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); margin-top: 8px; }
-.cbar { width: 180px; height: 10px; border-radius: 2px; display: inline-block; vertical-align: -1px; }
-.slices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr)); gap: 18px; }
+.tip { position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; font: 400 11px/1.45 var(--f-mono); color: var(--ink); box-shadow: 0 6px 18px rgba(0,0,0,.45); white-space: nowrap; z-index: 2; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font: 400 11px/1.3 var(--f-body); color: var(--ink-2); margin-top: 8px; }
+.cbar { width: 160px; height: 8px; border-radius: 4px; display: inline-block; vertical-align: -1px; }
+.slices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; margin-top: 12px; }
 svg { display: block; width: 100%; height: auto; overflow: visible; }
-svg text { fill: var(--ink-2); font: 400 10.5px var(--f-mono); }
-svg .ttl { fill: var(--ink); font: 600 12.5px var(--f-body); }
-.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
-.kpi { border-top: 2px solid var(--rule); padding-top: 6px; display: grid; gap: 1px; align-content: start; }
-.kpi.target { border-top-color: var(--water); }
-.kpi .k { font: 500 10.5px/1.25 var(--f-mono); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-2); }
-.kpi .v { font: 600 24px/1.1 var(--f-display); font-variant-numeric: tabular-nums; }
-.kpi .v.bad { color: var(--bad); } .kpi .v.warn { color: var(--volt); }
-.kpi .s { font-size: 12px; color: var(--ink-2); }
-.rowhead { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; }
-.eyebrow { font: 500 11px/1 var(--f-mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
-.budget { display: grid; gap: 6px; }
-.bar { display: flex; height: 16px; border-radius: 3px; overflow: hidden; background: var(--chip); }
-.bar span { display: block; height: 100%; }
-.bl { display: flex; flex-wrap: wrap; gap: 4px 14px; font: 400 12px/1.3 var(--f-mono); color: var(--ink-2); }
-.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-.note { font-size: 12.5px; color: var(--ink-2); margin: 0; max-width: 92ch; }
-.banner[hidden] { display: none; }
-.banner { border: 1px solid var(--water); border-radius: 6px; padding: 10px 12px; display: grid; gap: 6px; background: var(--panel); }
-.banner .rowhead b { font-family: var(--f-mono); font-weight: 500; }
-details summary { cursor: pointer; font: 600 15px var(--f-body); }
-.val { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 12px 24px; margin-top: 10px; }
-.val div { font-size: 13px; }
-.val b { font-family: var(--f-mono); font-weight: 500; }
+svg text { fill: var(--ink-2); font: 400 10.5px var(--f-body); }
+svg .ttl { fill: var(--ink); font: 600 12px var(--f-body); }
+.slices svg text { font-size: 8.5px; } .slices svg .ttl { font-size: 9.5px; fill: var(--ink-2); }
+.val { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 10px 24px; margin-top: 10px; }
+.val div { font-size: 12px; color: var(--ink-2); }
+.val b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); }
 .mono { font-family: var(--f-mono); font-size: 0.92em; }
-.tube-wrap { display: grid; gap: 4px; }
-/* designs bench */
-.fl { display: grid; gap: 6px; }
-.check { display: flex; gap: 8px; align-items: baseline; font-size: 13px; cursor: pointer; }
-.check input { accent-color: var(--water); }
-.check .n { margin-left: auto; font: 400 11.5px var(--f-mono); color: var(--ink-2); }
-.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; flex: 0 0 auto; transform: translateY(1px); }
-.famchips { display: flex; flex-wrap: wrap; gap: 5px; }
-.famchips button { font: 500 11.5px/1 var(--f-mono); padding: 5px 7px; border-radius: 4px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); cursor: pointer; }
-.famchips button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink-2); background: var(--chip); }
-.scroll { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: 13px; }
-th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; white-space: nowrap; }
-th { font: 500 10.5px/1.2 var(--f-mono); text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-2); cursor: pointer; user-select: none; }
-th[aria-sort] { color: var(--ink); }
-td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; }
-th.n { text-align: right; }
-tbody tr { cursor: pointer; }
-tbody tr:hover td { background: var(--chip); }
-tbody tr[aria-selected="true"] td { background: var(--chip); font-weight: 600; }
-.detail { display: grid; gap: 14px; }
+.tube-wrap { display: grid; gap: 6px; }
+/* full simulation */
 .res { display: grid; gap: 12px; }
 .resbar { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
 .progress { display: grid; gap: 6px; }
-.pbar { height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
-.pbar span { display: block; height: 100%; width: 0; background: var(--water); transition: width .3s; }
-.reslog { font-size: 11.5px; color: var(--ink-2); max-height: 7.5em; overflow-y: auto; white-space: pre-wrap; }
+.pbar { height: 4px; border-radius: 2px; background: var(--card-2); overflow: hidden; }
+.pbar span { display: block; height: 100%; width: 0; background: var(--spray); transition: width .3s; }
+.reslog { font-size: 11px; color: var(--ink-3); max-height: 5.5em; overflow-y: auto; white-space: pre-wrap; }
+/* library */
+.library { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 860px) { .library { grid-template-columns: 1fr; } }
+.fl { display: grid; gap: 6px; }
+.check { display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; cursor: pointer; color: var(--ink-2); }
+.check input { accent-color: var(--water); }
+.check .n { margin-left: auto; font: 400 11px var(--f-mono); color: var(--ink-3); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; transform: translateY(1px); }
+.famchips { display: flex; flex-wrap: wrap; gap: 5px; }
+.famchips button { font: 500 11px/1 var(--f-body); padding: 5px 9px; border-radius: 14px; border: 1px solid var(--rule); background: var(--card-2); color: var(--ink-3); cursor: pointer; }
+.famchips button[aria-pressed="true"] { color: var(--ink); border-color: #3e3e48; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12px; }
+th, td { text-align: left; padding: 6px 10px 6px 0; border-bottom: 1px solid var(--rule); vertical-align: top; white-space: nowrap; }
+th { font: 600 10px/1.2 var(--f-body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); cursor: pointer; user-select: none; }
+th[aria-sort] { color: var(--ink); }
+td { color: var(--ink-2); }
+td.n { font-family: var(--f-mono); font-variant-numeric: tabular-nums; text-align: right; color: var(--ink); }
+th.n { text-align: right; }
+tbody tr { cursor: pointer; }
+tbody tr:hover td { background: var(--card-2); }
+tbody tr[aria-selected="true"] td { background: var(--water-dim); color: var(--ink); }
+.detail { display: grid; gap: 12px; }
+.detail .kpis { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 table.cmp td, table.cmp th { white-space: nowrap; }
 table.cmp th { cursor: default; }
-table.cmp td.d { color: var(--ink-2); }
+table.cmp td.d { color: var(--ink-3); }
 .ptable td:first-child { color: var(--ink-2); }
 .ptable td { white-space: normal; }
 .flag { color: var(--volt); font: 500 11px var(--f-mono); }
-.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 
-<div class="wrap">
-  <header>
-    <div>
-      <h1>Watercap Workbench</h1>
-      <p class="sub">Set the tube's operating and design parameters and two physics models run in your browser. The fast model answers in 20 ms, and every pixel of the sweep map is a full run of it on your GPU. The resolved model, the same spray CFD and 2D corona solver that produced the campaign, runs in about a minute in a background worker. The second tab browses the 2,074 campaign runs computed offline, and any of them can be re-run here.</p>
-    </div>
-    <div style="display:grid;gap:10px;justify-items:end">
-      <div class="tabs" role="tablist" aria-label="Bench">
-        <button type="button" role="tab" id="tab-simulate" aria-controls="simulate" aria-selected="true">Simulate</button><button type="button" role="tab" id="tab-designs" aria-controls="designs" aria-selected="false">Precomputed designs<span id="tabcount"></span></button>
-      </div>
-      <div class="chips" id="chips"><span class="chip">starting…</span></div>
+<div class="app">
+  <header class="top">
+    <div class="brand"><h1>Water capture tube</h1><span>design explorer</span></div>
+    <div class="chips" id="chips"></div>
+    <div class="tabs" role="tablist" aria-label="View">
+      <button type="button" role="tab" id="tab-simulate" aria-controls="simulate" aria-selected="true">Explore</button><button type="button" role="tab" id="tab-designs" aria-controls="designs" aria-selected="false">Design library<span id="tabcount"></span></button>
     </div>
   </header>
 
-  <!-- ================= SIMULATE ================= -->
-  <section id="simulate" role="tabpanel" aria-labelledby="tab-simulate">
-    <div class="bench">
-      <aside class="panel rail" id="rail" aria-label="Design and control parameters">
-        <div class="group"><div class="ghead"><h2>Start from</h2></div><div class="presets" id="presets"></div></div>
+  <!-- ================= EXPLORE ================= -->
+  <section id="simulate" role="tabpanel" aria-labelledby="tab-simulate" style="display:grid;gap:14px">
+    <div class="explore">
+      <aside class="panel rail" id="rail" aria-label="Design and operating inputs">
+        <div class="group"><div class="ghead"><h2>Starting points</h2></div><div class="presets" id="presets"></div></div>
       </aside>
 
       <div class="main">
-        <div class="banner" id="loaded" hidden></div>
-
-        <section class="panel" style="display:grid;gap:14px" aria-live="polite">
-          <div class="rowhead"><h2>Targets</h2><span class="eyebrow" id="runinfo"></span></div>
-          <div class="kpis" id="targets"></div>
-          <div class="kpis" id="kpis"></div>
-          <div class="budget"><div class="bl"><b style="color:var(--ink)">Water budget</b> <span id="budtxt"></span></div><div class="bar" id="bud"></div><div class="bl" id="budleg"></div></div>
-        </section>
-
-        <section class="panel tube-wrap">
-          <div class="rowhead"><h2>Along the tube</h2><span class="eyebrow">bottom (inlet) → top (outlet), to scale</span></div>
-          <svg id="tube" viewBox="0 0 1000 380" role="img" aria-label="Tube schematic with axial profiles"></svg>
-          <p class="note" id="tubenote"></p>
-        </section>
-
-        <section class="panel res" id="respanel">
-          <div class="rowhead"><h2>Resolved model</h2><span class="eyebrow">the campaign's high-fidelity tier, run in your browser</span></div>
-          <p class="note">The fully resolved tier behind the precomputed runs: axisymmetric RANS with the Lagrangian spray, mist bins, fog and wall film (stonelab.spray_cfd), then every disc period of the corona section solved in 2D, Poisson + ion drift-diffusion + Kaptsov corona, Newton with an exact Jacobian, with charged droplets tracked through it, two-way coupled (stonelab.ehd). It is a TypeScript port of the Python and matches it field by field. It runs on this rail's design, with the large sparse factorizations spread over your spare cores, and takes 30 s to a minute and a half (most for spray-laden coronas); the fast model above takes 20 ms.</p>
-          <div class="resbar">
-            <button type="button" class="btn primary" id="resrun">Run the resolved model</button>
-            <button type="button" class="btn" id="rescancel" hidden>Cancel</button>
-            <label for="respreset" class="eyebrow">Resolution <select id="respreset"><option value="resolved_coarse">coarse (campaign tier)</option><option value="resolved">full (about 5x longer)</option></select></label>
-            <span class="eyebrow" id="resstatus">not run yet</span>
+        <div class="stage" id="view3d" aria-label="3D view of the design">
+          <div class="v3-top">
+            <div class="v3-views"><button type="button" data-view="whole" aria-pressed="true">Whole tube</button><button type="button" data-view="spray">Spray section</button><button type="button" data-view="discs">Disc stack</button></div>
+            <div style="display:flex;gap:6px;align-items:center"><span class="v3-badge" hidden>full simulation</span><label class="v3-fieldbox">Cut plane <select class="v3-field" aria-label="Field on the cut plane"></select></label></div>
           </div>
-          <div class="progress" id="resprog" hidden><div class="pbar"><span id="respbar"></span></div><div class="reslog mono" id="reslog"></div></div>
-          <div id="resout" hidden>
-            <div class="scroll"><table class="cmp" id="rescmp"></table></div>
-            <div class="two">
-              <div><div class="mapbar"><label for="resfield">Spray stage <select id="resfield"></select></label></div><canvas id="resmap" aria-label="Spray stage field, r-z"></canvas><div class="legend" id="resmapleg"></div></div>
-              <div><div class="mapbar"><span class="eyebrow">Corona: one disc period, no mist</span><label for="corfield"><select id="corfield"><option value="E">Field |E|</option><option value="rho">Ion density</option></select></label></div><canvas id="cormap" aria-label="Corona unit cell"></canvas><div class="legend" id="cormapleg"></div></div>
-            </div>
-            <svg id="resper" viewBox="0 0 760 220" role="img" aria-label="Corona current and collection by period"></svg>
-            <p class="note" id="resnote"></p>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="rowhead" style="margin-bottom:8px"><h2>Sweep two parameters</h2><span class="eyebrow">every other input held at the rail's values</span></div>
-          <div class="mapbar">
-            <label for="xsel">X axis <select id="xsel"></select></label>
-            <label for="ysel">Y axis <select id="ysel"></select></label>
-            <label for="msel">Color <select id="msel"></select></label>
-            <label for="arc"><input type="checkbox" id="arc" checked> hatch arcing</label>
-          </div>
-          <div class="mapbox"><canvas id="map" aria-label="Sweep map"></canvas><div class="tip" id="tip" hidden></div></div>
-          <div class="legend" id="legend"></div>
-        </section>
-
-        <div class="slices">
-          <section class="panel"><svg id="sx" viewBox="0 0 480 230" role="img" aria-label="Slice along X"></svg></section>
-          <section class="panel"><svg id="sy" viewBox="0 0 480 230" role="img" aria-label="Slice along Y"></svg></section>
+          <div class="v3-labels"><span></span><span></span><span></span><span></span></div>
+          <div class="v3-legend" hidden></div>
+          <div class="v3-key"><span style="color:var(--ink-3)">drag to orbit · ⌃/⌘ + scroll to zoom</span><span><i style="background:var(--water)"></i>mist</span><span><i style="background:var(--spray)"></i>spray</span><span><i style="background:var(--esc)"></i>escaping</span><span><i style="background:var(--volt)"></i>corona</span></div>
         </div>
-
-        <section class="panel">
-          <details id="valdet">
-            <summary>What the browser model is, and how far to trust it</summary>
-            <div class="val" id="val"></div>
-            <p class="note" style="margin-top:12px">The browser model is Vega's fast model ported to a fixed-step march (a 1D, well-mixed cross-section with heat and mass transfer, Kelvin–Thomson surface vapor pressure, Coulomb dispersion of the spray cloud and mist scavenging). Its corona stage uses onset, current and field tables fitted to 264 resolved field and corona solves. Spray is given either as an atomizer (a lognormal drop size distribution, launch speed, and charge as a fraction of the Rayleigh limit, exactly as the campaign's atomizer runs) or as electrospray, where cone-jet scaling (Fernández de la Mora &amp; Loscertales) turns flow, conductivity and voltage into drop size, charge and current. It does not model ionic wind, flow separation behind the discs, wall films, spray momentum, or disc edges other than a smooth 0.3 mm disc. The sparkover formula is uncalibrated. The precomputed tab holds the runs that do model the spray flow, the film, and the 2D field.</p>
-          </details>
-        </section>
       </div>
+
+      <aside class="side" aria-live="polite">
+        <div class="banner" id="loaded" hidden></div>
+        <div class="kpis" id="targets"></div>
+        <div class="panel budget" style="padding:10px 12px"><div class="rowhead"><h2>Water budget</h2></div><div class="bar" id="bud"></div><div class="bl" id="budleg"></div><div class="bl" id="budtxt" style="color:var(--ink-3)"></div></div>
+        <details class="panel" style="padding:10px 12px"><summary>More outcomes</summary><div class="kpis more" id="kpis" style="margin-top:10px"></div><div class="eyebrow" id="runinfo" style="margin-top:8px"></div></details>
+      </aside>
     </div>
+
+    <div class="lower">
+      <section class="panel res" id="respanel">
+        <div class="rowhead"><h2>Full simulation</h2><span class="eyebrow" id="resstatus">not run yet</span></div>
+        <p class="note">The live view uses a fast model. The full simulation resolves the spray flow and the electric field around every disc, and the 3D view then shows its fields.</p>
+        <div class="resbar">
+          <button type="button" class="btn primary" id="resrun">Run full simulation</button>
+          <button type="button" class="btn" id="rescancel" hidden>Cancel</button>
+          <label for="respreset" class="eyebrow">Resolution <select id="respreset"><option value="resolved_coarse">standard</option><option value="resolved">fine (about 5× longer)</option></select></label>
+        </div>
+        <div class="progress" id="resprog" hidden><div class="pbar"><span id="respbar"></span></div><div class="reslog mono" id="reslog"></div></div>
+        <div id="resout" hidden>
+          <div class="scroll"><table class="cmp" id="rescmp"></table></div>
+          <details style="margin-top:12px"><summary>Fields and periods</summary>
+            <div class="two" style="margin-top:10px">
+              <div><div class="mapbar"><label for="resfield">Spray section <select id="resfield"></select></label></div><canvas id="resmap" aria-label="Spray section field, r-z"></canvas><div class="legend" id="resmapleg"></div></div>
+              <div><div class="mapbar"><span class="eyebrow">One disc period, no mist</span><label for="corfield"><select id="corfield"><option value="E">Field |E|</option><option value="rho">Ion density</option></select></label></div><canvas id="cormap" aria-label="One disc period"></canvas><div class="legend" id="cormapleg"></div></div>
+            </div>
+            <svg id="resper" viewBox="0 0 760 220" role="img" aria-label="Corona current and collection by period" style="margin-top:10px"></svg>
+          </details>
+          <p class="note" id="resnote" style="margin-top:8px;color:var(--ink-3)"></p>
+        </div>
+      </section>
+
+      <section class="panel tube-wrap">
+        <div class="rowhead"><h2>Along the tube</h2><span class="eyebrow">inlet → outlet</span></div>
+        <svg id="tube" viewBox="0 0 1000 308" role="img" aria-label="Profiles along the tube"></svg>
+        <p class="note" id="tubenote" hidden></p>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="rowhead"><h2>Explore two inputs</h2><span class="eyebrow">every pixel is a design · click to jump there</span></div>
+      <div class="mapbar">
+        <label for="xsel">Across <select id="xsel"></select></label>
+        <label for="ysel">Up <select id="ysel"></select></label>
+        <label for="msel">Color <select id="msel"></select></label>
+        <label for="arc"><input type="checkbox" id="arc" checked> hatch where it arcs</label>
+      </div>
+      <div class="mapbox"><canvas id="map" aria-label="Two-input sweep"></canvas><div class="tip" id="tip" hidden></div></div>
+      <div class="legend" id="legend"></div>
+      <div class="slices">
+        <div><svg id="sx" viewBox="0 0 480 230" role="img" aria-label="Slice along the first input"></svg></div>
+        <div><svg id="sy" viewBox="0 0 480 230" role="img" aria-label="Slice along the second input"></svg></div>
+      </div>
+    </section>
   </section>
 
-  <!-- ================= DESIGNS ================= -->
+  <!-- ================= LIBRARY ================= -->
   <section id="designs" role="tabpanel" aria-labelledby="tab-designs" hidden>
-    <div class="bench">
+    <div class="library">
       <aside class="panel rail" aria-label="Filters">
         <div class="group">
-          <div class="ghead"><h2>Which runs</h2></div>
+          <div class="ghead"><h2>Runs</h2></div>
           <div class="fl" id="setfl"></div>
-          <p class="note" id="snapnote"></p>
         </div>
         <div class="group">
-          <div class="ghead"><h2>Concept family</h2><button type="button" class="btn" id="famall">all</button></div>
+          <div class="ghead"><h2>Concept</h2><button type="button" class="btn" id="famall">all</button></div>
           <div class="famchips" id="famfl"></div>
         </div>
         <div class="group">
           <div class="ghead"><h2>Filters</h2></div>
           <label class="check"><input type="checkbox" id="f-arc" checked> Hide designs that arc</label>
-          <label class="check"><input type="checkbox" id="f-lg"> Hide spray water &gt; air by mass</label>
-          <label class="check"><input type="checkbox" id="f-recool"> Count spray recooling in energy</label>
-          <p class="note">All campaign runs share one inlet: saturated air at 35 °C carrying 2 g/m³ of 15 µm mist. Recooling the spray water below ambient needs a chiller, which dominates energy per liter when counted.</p>
+          <label class="check"><input type="checkbox" id="f-lg"> Hide spray heavier than the air</label>
+          <label class="check"><input type="checkbox" id="f-recool"> Count spray chilling in energy</label>
         </div>
-        <div class="group">
-          <div class="ghead"><h2>Browser model check</h2></div>
-          <p class="note" id="bmstat">Runs every stored design through the browser model once the engine is up.</p>
-        </div>
+        <details class="group"><summary>About these runs</summary>
+          <p class="note" id="snapnote" style="margin-top:8px"></p>
+          <p class="note" style="margin-top:6px">All runs share one inlet: saturated air at 35 °C carrying 2 g/m³ of 15 µm mist.</p>
+          <p class="note" id="bmstat" style="margin-top:6px"></p>
+        </details>
       </aside>
 
       <div class="main">
         <section class="panel">
-          <div class="mapbar">
-            <label for="dx">X axis <select id="dx"></select></label>
-            <label for="dy">Y axis <select id="dy"></select></label>
+          <div class="mapbar" style="margin-top:0">
+            <label for="dx">Across <select id="dx"></select></label>
+            <label for="dy">Up <select id="dy"></select></label>
             <label for="dc">Color <select id="dc"></select></label>
-            <label for="dpar"><input type="checkbox" id="dpar" checked> Pareto front</label>
+            <label for="dpar"><input type="checkbox" id="dpar" checked> Best trade-offs</label>
           </div>
-          <div class="mapbox"><canvas id="scat" aria-label="Stored designs scatter"></canvas><div class="tip" id="stip" hidden></div></div>
+          <div class="mapbox"><canvas id="scat" aria-label="Stored designs"></canvas><div class="tip" id="stip" hidden></div></div>
           <div class="legend" id="slegend"></div>
         </section>
 
         <section class="panel detail" id="detail" aria-live="polite"></section>
 
         <section class="panel">
-          <div class="rowhead" style="margin-bottom:8px"><h2 id="tabletitle">Best designs</h2><span class="eyebrow">click a column to sort · click a row to inspect</span></div>
+          <div class="rowhead" style="margin-bottom:8px"><h2 id="tabletitle">Best designs</h2><span class="eyebrow">click a column to sort · a row to inspect</span></div>
           <div class="scroll"><table id="dtable"></table></div>
         </section>
+
+        <details class="panel" id="valdet"><summary>How the models were checked</summary><div class="val" id="val"></div></details>
       </div>
     </div>
   </section>
@@ -278,6 +307,7 @@ table.cmp td.d { color: var(--ink-2); }
 <script id="wcm-src">/*__WCMODEL__*/</script>
 <script id="wcg-src">/*__WCGPU__*/</script>
 <script id="res-src" type="text/plain">/*__RESWORKER__*/</script>
+<script id="pybundle" type="application/json">/*__PYBUNDLE__*/null</script>
 <script>
 const FIT = /*__FIT__*/null;
 const DATA = /*__DESIGNS__*/null;
@@ -321,7 +351,7 @@ function coronaVforI(x, I_mA) {
   return b.V_on0 * (1 + Math.sqrt(1 + 4 * Ipm * b.s / b.J)) / 2;
 }
 
-/* ======================= inputs (grouped as in the partner's list) ======================= */
+/* ======================= inputs ======================= */
 const PARAMS = [
   { g: "Air & inlet", k: "air_flow_m3_s", n: "Air flow rate", u: "m³/s", lo: 0.03, hi: 0.6, v: 0.15, log: 1, d: 3 },
   { g: "Air & inlet", k: "inlet_T_C", n: "Inlet air temperature", u: "°C", lo: 20, hi: 45, v: 35, d: 1 },
@@ -371,11 +401,11 @@ const METRICS = [
 const MK = Object.fromEntries(METRICS.map(m => [m.k, m]));
 
 const PRESETS = [
-  { n: "Brad's prototype, 40 kV", x: { spray_flow_L_min: 0, corona_voltage_kV: 40 }, ax: ["corona_voltage_kV", "mist_mmd_um"], m: "esc" },
-  { n: "Prototype at 30 kV (below onset)", x: { spray_flow_L_min: 0, corona_voltage_kV: 30 }, ax: ["corona_voltage_kV", "disc_diameter_frac"], m: "esc" },
-  { n: "Prototype, current-controlled 1 mA", x: { spray_flow_L_min: 0, corona_current_mA: 1 }, supply: "I", ax: ["corona_current_mA", "air_flow_m3_s"], m: "spec" },
+  { n: "Disc corona, 40 kV", x: { spray_flow_L_min: 0, corona_voltage_kV: 40 }, ax: ["corona_voltage_kV", "mist_mmd_um"], m: "esc" },
+  { n: "Disc corona, 30 kV", x: { spray_flow_L_min: 0, corona_voltage_kV: 30 }, ax: ["corona_voltage_kV", "disc_diameter_frac"], m: "esc" },
+  { n: "Disc corona, 1 mA supply", x: { spray_flow_L_min: 0, corona_current_mA: 1 }, supply: "I", ax: ["corona_current_mA", "air_flow_m3_s"], m: "spec" },
   { n: "Cold coarse spray + corona", x: { spray_flow_L_min: 8, spray_T_C: 12, spray_d_um: 60, spray_q_frac: 1e-5, corona_voltage_kV: 40 }, ax: ["spray_T_C", "spray_flow_L_min"], m: "out" },
-  { n: "Electrospray at 2 L/min (where does it stop arcing?)", x: { spray_flow_L_min: 2, spray_T_C: 15, es_voltage_kV: 12, corona_voltage_kV: 40 }, mode: "electrospray", ax: ["es_conductivity_mS_m", "es_nozzles"], m: "arc" },
+  { n: "Electrospray, 2 L/min", x: { spray_flow_L_min: 2, spray_T_C: 15, es_voltage_kV: 12, corona_voltage_kV: 40 }, mode: "electrospray", ax: ["es_conductivity_mS_m", "es_nozzles"], m: "arc" },
   { n: "Spray drop size × charge", x: { spray_flow_L_min: 4, spray_T_C: 15, corona_voltage_kV: 40 }, ax: ["spray_d_um", "spray_q_frac"], m: "vap" },
 ];
 
@@ -537,7 +567,7 @@ for(let k=0;k<${S_OUT};k++)out[i*${S_OUT}+k]=r[OUTK[k]];}postMessage({out,id},[o
 // the map and the stored-design batch share one engine; runs are serialized
 let queue = Promise.resolve();
 const runEngine = (arr, n) => (queue = queue.then(() => engine.run(arr, n)));
-function schedule() { dirty = true; if (!busy) compute(); updateReadout(); }
+function schedule() { dirty = true; if (!busy) compute(); window.View3D?.setResolved(null); updateReadout(); }
 async function compute() {
   if (!engine) return;
   busy = true; dirty = false;
@@ -569,7 +599,7 @@ function metricGrid() {
 const arcAt = i => Math.min(grid.out[i * S_OUT + O.arc_margin], grid.arcS[i]);
 function render() {
   if (!grid) return;
-  const w = cv.parentElement.clientWidth, h = Math.round(Math.min(Math.max(w * 0.58, 300), 600)), dpr = window.devicePixelRatio || 1;
+  const w = cv.parentElement.clientWidth, h = Math.round(Math.min(Math.max(w * 0.4, 280), 460)), dpr = window.devicePixelRatio || 1;
   cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); cv.style.height = h + "px";
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const pw = w - M.l - M.r, ph = h - M.t - M.b, { nx, ny } = grid, m = MK[state.metric];
@@ -720,9 +750,9 @@ function updateReadout() {
   $("#targets").innerHTML =
     kpi("Total water out", (100 * r.outlet_total_water_frac).toFixed(1) + "%", `liquid + vapor leaving the top, of ${(vin + min_).toFixed(1)} L/h in`, r.outlet_total_water_frac > 1 ? "bad" : "", true) +
     kpi("Energy per liter", isFinite(spec) ? spec.toPrecision(3) + " Wh/L" : "–", isFinite(spec) ? `electric ${elecW.toFixed(1)} W + fan ${r.fan_power_W.toFixed(1)} W over ${rec.toFixed(2)} L/h` : "nothing recovered", "", true) +
-    kpi("Pressure drop", r.pressure_drop_Pa.toFixed(1) + " Pa", "tube friction + discs + spray drag", "", true) +
+    kpi("Pressure drop", r.pressure_drop_Pa.toFixed(1) + " Pa", "tube, discs and spray", "", true) +
     kpi("Arc margin", arc.toFixed(2), arcWhy, arc < 0 ? "bad" : arc < 0.15 ? "warn" : "", true) +
-    kpi("Field at the wall", r.wall_field_kV_cm.toFixed(2) + " kV/cm", "corona stage, vs ~24 kV/cm breakdown in humid air", "", true);
+    kpi("Field at the wall", r.wall_field_kV_cm.toFixed(2) + " kV/cm", "breakdown ≈ 24 kV/cm", "", true);
   $("#kpis").innerHTML =
     kpi("Recovered", rec.toFixed(2) + " L/h", "inlet water minus outlet water") +
     kpi("Vapor removed", (100 * r.vapor_removed_frac).toFixed(1) + "%", r.vapor_ceiling_frac > 0 ? `ceiling from spray subcooling ${(100 * r.vapor_ceiling_frac).toFixed(1)}%` : "spray not colder than the air: ceiling 0") +
@@ -738,41 +768,21 @@ function updateReadout() {
   $("#budleg").innerHTML = `<span><span class="sw" style="background:var(--water)"></span>vapor out ${vout.toFixed(2)}</span><span><span class="sw" style="background:var(--volt)"></span>liquid out ${liqOut.toFixed(2)}</span><span><span class="sw" style="background:var(--good)"></span>recovered ${Math.max(totIn - totOut, 0).toFixed(2)} L/h</span>` + (totOut > totIn ? `<span style="color:var(--bad)">more water leaves than came in: spray is escaping</span>` : "");
   drawTube(x, r);
   renderLoaded(r, ex);
+  window.__wbLast = { x, r };
+  window.View3D?.update(x, r);
 }
 
 function drawTube(x, r) {
   const svg = $("#tube"); svg.innerHTML = "";
   const P = r.profile, W = 1000, l = 70, rr = 16, pw = W - l - rr, L = P.L, Ls = P.Ls, nz = P.T.length;
   const Z = z => l + z / L * pw;
-  const D = x.tube_diameter_m, th = Math.max(26, Math.min(90, D / L * pw)), ty = 18, mid = ty + th / 2;
-  const ink2 = css("--ink-2"), water = css("--water"), volt = css("--volt"), rule = css("--rule");
-  // sections
-  el("rect", { x: Z(0), y: ty, width: Z(Ls) - Z(0), height: th, fill: water, opacity: 0.07 }, svg);
-  el("rect", { x: Z(Ls), y: ty, width: Z(L) - Z(Ls), height: th, fill: volt, opacity: 0.07 }, svg);
-  el("line", { x1: Z(0), x2: Z(L), y1: ty, y2: ty, stroke: css("--ink"), "stroke-width": 1.5 }, svg);
-  el("line", { x1: Z(0), x2: Z(L), y1: ty + th, y2: ty + th, stroke: css("--ink"), "stroke-width": 1.5 }, svg);
-  el("text", { x: (Z(0) + Z(Ls)) / 2, y: 12, "text-anchor": "middle" }, svg).textContent = `spray section ${Ls.toFixed(2)} m`;
-  el("text", { x: (Z(Ls) + Z(L)) / 2, y: 12, "text-anchor": "middle" }, svg).textContent = `corona section ${(L - Ls).toFixed(2)} m`;
-  // discs
-  const nd = Math.max(1, Math.floor((L - Ls) / x.disc_spacing_m)), hd = th * x.disc_diameter_frac / 2;
-  for (let i = 0; i < nd; i++) { const zx = Z(Ls + (i + 0.5) * x.disc_spacing_m); el("line", { x1: zx, x2: zx, y1: mid - hd, y2: mid + hd, stroke: volt, "stroke-width": nd > 80 ? 1 : 2 }, svg); }
-  el("line", { x1: Z(Ls), x2: Z(L), y1: mid, y2: mid, stroke: volt, "stroke-width": 1, opacity: 0.7 }, svg);
-  // nozzle + spray cone pointing down (left), against the air
-  if (x.spray_flow_L_min > 0) {
-    const zn = Z(x.nozzle_height_frac * Ls), len = Math.min(60, zn - Z(0));
-    el("path", { d: `M${zn},${mid} L${zn - len},${mid - th * 0.42} L${zn - len},${mid + th * 0.42} Z`, fill: water, opacity: 0.25 }, svg);
-    el("circle", { cx: zn, cy: mid, r: 4, fill: water }, svg);
-    el("text", { x: zn, y: ty + th + 13, "text-anchor": "middle" }, svg).textContent = `nozzle ${(x.nozzle_height_frac * Ls).toFixed(2)} m`;
-  }
-  // flow arrows
-  el("path", { d: `M${l - 60},${mid} L${l - 10},${mid} M${l - 18},${mid - 6} L${l - 10},${mid} L${l - 18},${mid + 6}`, stroke: ink2, fill: "none", "stroke-width": 1.5 }, svg);
-  el("text", { x: l - 62, y: mid - 9 }, svg).textContent = "air in";
+  const water = css("--water"), volt = css("--volt"), rule = css("--rule");
   // profiles: three rows sharing z
   const sprayKg = x.spray_flow_L_min / 60000 * 998;
   const rows = [
-    { t: "Vapor in the air, % of inlet vapor", y0: 140, h: 62, ser: [{ v: P.w.map(w => 100 * w / P.w_in), c: water }] },
-    { t: "Liquid carried up, % of its inflow", y0: 228, h: 62, ser: [{ v: P.mist.map(m => 100 * m / Math.max(P.mist_in, 1e-12)), c: volt, n: "mist" }].concat(sprayKg > 0 ? [{ v: P.spray.map(m => 100 * m / sprayKg), c: css("--liquid"), n: "spray carried up", dash: "4 3" }] : []) },
-    { t: "Air temperature, °C", y0: 316, h: 50, ser: [{ v: P.T, c: css("--bad") }] },
+    { t: "Vapor in the air, % of inlet vapor", y0: 24, h: 70, ser: [{ v: P.w.map(w => 100 * w / P.w_in), c: water }] },
+    { t: "Liquid carried up, % of its inflow", y0: 124, h: 70, ser: [{ v: P.mist.map(m => 100 * m / Math.max(P.mist_in, 1e-12)), c: water, n: "mist" }].concat(sprayKg > 0 ? [{ v: P.spray.map(m => 100 * m / sprayKg), c: css("--spray"), n: "spray carried up", dash: "4 3" }] : []) },
+    { t: "Air temperature, °C", y0: 224, h: 60, ser: [{ v: P.T, c: css("--esc") }] },
   ];
   const zc = k => (k + 0.5) * P.dz;
   for (const row of rows) {
@@ -792,21 +802,23 @@ function drawTube(x, r) {
     }
     if (row.ser.length > 1) { let lx = l + pw - 250; for (const s of row.ser) { el("line", { x1: lx, x2: lx + 18, y1: row.y0 - 11, y2: row.y0 - 11, stroke: s.c, "stroke-width": 2, "stroke-dasharray": s.dash || "none" }, svg); el("text", { x: lx + 22, y: row.y0 - 7 }, svg).textContent = s.n; lx += 115; } }
   }
-  for (const v of niceTicks(0, L, 8)) el("text", { x: Z(v), y: 378, "text-anchor": "middle" }, svg).textContent = v + (v === 0 ? " m" : "");
+  for (const v of niceTicks(0, L, 8)) el("text", { x: Z(v), y: 302, "text-anchor": "middle" }, svg).textContent = v + (v === 0 ? " m" : "");
+  el("text", { x: Z(Ls) + 4, y: 14 }, svg).textContent = "discs start";
   $("#tubenote").textContent = (P.falling ? "Some spray drops are too heavy for the upflow and fall to the sump; their exchange shows up as the step in vapor and temperature at the nozzle. " : "") +
-    "Values are cross-section averages from the browser model's 40-cell march. The dashed line marks the start of the corona section.";
+    "Values are cross-section averages from the fast model's 40-cell march. The dashed line marks the start of the corona section.";
 }
 
 /* ======================= precomputed designs ======================= */
 const ROWS = DATA ? DATA.rows : [];
+for (const r of ROWS) { r.id = r.id.replace(/^brad_variants/, "disc_variants"); if (r.fam === "brad_variants") r.fam = "disc_variants"; }
 const SETS = [
-  { k: "v1", n: "Fast spray + resolved corona", c: "--set-v1", d: "campaign v1: fast model for the spray, resolved electric field for the corona" },
+  { k: "v1", n: "Fast spray + resolved corona", c: "--set-v1", d: "first sweep: fast model for the spray, full electric field for the corona" },
   { k: "rerun", n: "Fully resolved, v1 spray designs", c: "--set-rerun", d: "v1's spray designs rerun with spray CFD + resolved corona" },
   { k: "new", n: "Fully resolved, new concepts", c: "--set-new", d: "ring, coflow, multi-tier and charged-film sprays, cooled walls" },
 ];
 const SETK = Object.fromEntries(SETS.map(s => [s.k, s]));
 const FAMS = [...new Set(ROWS.map(r => r.fam))];
-const FAMNAME = { corona_only: "corona only", cold_spray: "cold spray", charged_spray: "charged spray", rain_curtain: "rain curtain", brad_variants: "Brad's variants", multi_tier: "multi-tier", ring_spray: "ring spray", coflow_spray: "coflow spray", charged_film: "charged film", cooled_wall: "cooled wall" };
+const FAMNAME = { corona_only: "corona only", cold_spray: "cold spray", charged_spray: "charged spray", rain_curtain: "rain curtain", disc_variants: "disc variants", multi_tier: "multi-tier", ring_spray: "ring spray", coflow_spray: "coflow spray", charged_film: "charged film", cooled_wall: "cooled wall" };
 const BY_ID_V1 = {}; for (const r of ROWS) if (r.set === "v1") BY_ID_V1[r.id] = r;
 const RERUN_IDS = new Set(ROWS.filter(r => r.set === "rerun").map(r => r.id));
 for (const r of ROWS) {
@@ -828,8 +840,8 @@ const RA = [
   { k: "Ima", n: "Corona current", u: "mA", f: r => r.r.Ima, log: 1, g: "Results" },
   { k: "elecW", n: "Electrical power", u: "W", f: r => r.r.elecW, log: 1, g: "Results" },
   { k: "recoolW", n: "Spray recooling power", u: "W", f: r => r.r.recoolW ?? NaN, log: 1, g: "Results" },
-  { k: "bm_out", n: "Browser model: total water out", u: "%", f: r => r.bm ? 100 * r.bm.out : NaN, g: "Model comparison" },
-  { k: "bm_err", n: "Browser − stored: total water out", u: "pts", f: r => r.bm ? 100 * (r.bm.out - r.r.out) : NaN, g: "Model comparison" },
+  { k: "bm_out", n: "Fast model: total water out", u: "%", f: r => r.bm ? 100 * r.bm.out : NaN, g: "Model comparison" },
+  { k: "bm_err", n: "Fast model − library: total water out", u: "pts", f: r => r.bm ? 100 * (r.bm.out - r.r.out) : NaN, g: "Model comparison" },
   { k: "rom_out", n: "Old fast model: total water out (v1)", u: "%", f: r => r.rom ? 100 * r.rom.out : NaN, g: "Model comparison" },
   { k: "lg", n: "Spray water / air", u: "kg/kg", f: r => r.lg, g: "Design" },
   ...["air_flow_m3_s", "tube_diameter_m", "spray_section_length_m", "corona_section_length_m", "nozzle_height_frac", "disc_diameter_frac", "disc_spacing_m", "spray_flow_L_min", "spray_T_C", "spray_d_um", "spray_q_frac", "corona_voltage_kV"].map(k => {
@@ -846,7 +858,7 @@ function dsFiltered() {
 function buildDesigns() {
   if (!ROWS.length) { $("#designs").innerHTML = `<p class="note">No stored designs were bundled with this page.</p>`; return; }
   $("#tabcount").textContent = ROWS.length.toLocaleString();
-  $("#snapnote").textContent = `Snapshot of the campaign taken ${DATA.meta.exported}. The fully resolved runs were still in progress, so more will appear in a later snapshot.`;
+  $("#snapnote").textContent = `Library snapshot from ${DATA.meta.exported}; more fully resolved runs will appear in later snapshots.`;
   $("#setfl").innerHTML = SETS.map(s => `<label class="check" title="${s.d}"><input type="checkbox" data-set="${s.k}" checked><span class="dot" style="background:var(${s.c})"></span>${s.n}<span class="n">${ROWS.filter(r => r.set === s.k).length}</span></label>`).join("");
   $("#setfl").querySelectorAll("input").forEach(i => i.onchange = () => { i.checked ? ds.sets.add(i.dataset.set) : ds.sets.delete(i.dataset.set); dsRender(); });
   $("#famfl").innerHTML = FAMS.map(f => `<button type="button" data-f="${f}" aria-pressed="true">${FAMNAME[f] || f} <span style="opacity:.7">${ROWS.filter(r => r.fam === f).length}</span></button>`).join("");
@@ -946,7 +958,7 @@ function dsTable(rows) {
     { k: "arc", n: "Arc margin", f: r => r.r.arc.toFixed(2), s: r => r.r.arc, num: 1 },
     { k: "Ima", n: "Corona mA", f: r => fmtN(r.r.Ima), s: r => r.r.Ima, num: 1 },
     { k: "rec", n: "L/h", f: r => fmtN(r.r.rec), s: r => r.r.rec, num: 1 },
-    { k: "bm", n: "Browser", f: r => r.bm ? (100 * r.bm.out).toFixed(1) + "%" : "…", s: r => r.bm ? r.bm.out : NaN, num: 1 },
+    { k: "bm", n: "Fast model", f: r => r.bm ? (100 * r.bm.out).toFixed(1) + "%" : "…", s: r => r.bm ? r.bm.out : NaN, num: 1 },
   ];
   const col = cols.find(c => c.k === ds.sort) || cols[2];
   const v = r => { const s = col.s(r); return typeof s === "number" && !isFinite(s) ? Infinity : s; };
@@ -959,7 +971,7 @@ function dsTable(rows) {
   t.querySelectorAll("tbody tr").forEach(tr => tr.onclick = () => { ds.sel = ROWS[+tr.dataset.i]; dsRender(); });
 }
 const UNREP = [
-  ["disc_thickness_mm", v => Math.abs(v - 0.3) > 0.05, v => `disc thickness ${v.toFixed(2)} mm (browser model: 0.3 mm)`],
+  ["disc_thickness_mm", v => Math.abs(v - 0.3) > 0.05, v => `disc thickness ${v.toFixed(2)} mm (fast model: 0.3 mm)`],
   ["spray_cone_half_angle_deg", () => true, v => `cone half-angle ${v.toFixed(0)}°`],
   ["spray_axis_angle_deg", () => true, v => `spray axis ${v.toFixed(0)}°`],
   ["spray_n_tiers", () => true, v => `${Math.round(v)} spray tiers`],
@@ -979,7 +991,7 @@ function dsDetail() {
     kpi("Field at the wall", R.Ewall !== undefined ? R.Ewall.toFixed(2) + " kV/cm" : "–", "corona stage", "", true) +
     kpi("Recovered", R.rec.toFixed(2) + " L/h", `vapor removed ${(100 * R.vap).toFixed(1)}% · liquid escaping ${(100 * R.esc).toFixed(2)}%`) +
     kpi("Corona", R.Ima.toFixed(3) + " mA", R.Ima0 ? `${R.Ima0.toFixed(2)} mA without mist` : "") +
-    kpi("Browser model", r.bm ? (100 * r.bm.out).toFixed(1) + "%" : "…", r.bm ? `total water out · Δ ${(100 * (r.bm.out - R.out)).toFixed(1)} pts vs stored` : "running");
+    kpi("Fast model", r.bm ? (100 * r.bm.out).toFixed(1) + "%" : "…", r.bm ? `total water out · Δ ${(100 * (r.bm.out - R.out)).toFixed(1)} pts vs stored` : "running");
   const p = r.d, flags = unrepresented(r);
   const prow = (n, v) => `<tr><td>${n}</td><td class="n">${v}</td></tr>`;
   const params = [
@@ -996,10 +1008,10 @@ function dsDetail() {
   if (pair) cmp += `<div>${pair.set === "rerun" ? "Same design, fully resolved" : "Same design, fast spray + resolved corona"}: total water out <b>${(100 * pair.r.out).toFixed(1)}%</b>, vapor removed ${(100 * pair.r.vap).toFixed(1)}%, liquid escaping ${(100 * pair.r.esc).toFixed(2)}%. <button type="button" class="btn" id="gopair">Inspect it</button></div>`;
   if (r.ss) cmp += `<div>Spray stage (CFD): air leaves it at <b>${r.ss.Tout?.toFixed(1)} °C</b>, wall film drains ${(100 * (r.ss.film || 0)).toFixed(1)}% of the inlet water${r.ss.recirc ? ", with reverse flow below the nozzle" : ""}.</div>`;
   box.innerHTML = `<div class="rowhead"><div><span class="eyebrow">${FAMNAME[r.fam] || r.fam} · <span class="dot" style="background:var(${s.c})"></span> ${s.n}</span><h2 style="margin-top:4px">${r.id}</h2></div>
-    <span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="openSim">Open in simulator</button><button type="button" class="btn" id="rerunRes" ${r.set === "v1" ? "title=\"v1 used the fast spray model; the resolved model will differ in the spray stage\"" : ""}>Re-run at full fidelity here</button></span></div>
+    <span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="openSim">Open in simulator</button><button type="button" class="btn" id="rerunRes" ${r.set === "v1" ? "title=\"v1 used the fast spray model; the resolved model will differ in the spray stage\"" : ""}>Full simulation</button></span></div>
     <div class="kpis">${kp}</div>
     <div class="two"><div class="scroll"><table class="ptable"><tbody>${params.map(q => prow(...q)).join("")}</tbody></table></div>
-    <div class="val" style="margin:0;grid-template-columns:1fr">${cmp}${flags.length ? `<div><span class="flag">Not in the browser model:</span> ${flags.join("; ")}.</div>` : ""}</div></div>`;
+    <div class="val" style="margin:0;grid-template-columns:1fr">${cmp}${flags.length ? `<div><span class="flag">Not in the fast model:</span> ${flags.join("; ")}.</div>` : ""}</div></div>`;
   $("#openSim").onclick = () => openInSim(r);
   $("#rerunRes").onclick = () => { openInSim(r); runResolved(); setTimeout(() => $("#respanel").scrollIntoView({ behavior: "smooth" }), 50); };
   if (pair) $("#gopair").onclick = () => { ds.sel = pair; if (!ds.sets.has(pair.set)) { ds.sets.add(pair.set); $(`#setfl input[data-set="${pair.set}"]`).checked = true; } dsRender(); };
@@ -1024,9 +1036,10 @@ function renderLoaded(res, ex) {
   if (!r) { b.hidden = true; return; }
   const flags = unrepresented(r), clip = PARAMS.filter(p => { const v = rowToU(r)[p.k]; return v < p.lo - 1e-9 || v > p.hi + 1e-9; });
   b.hidden = false;
-  b.innerHTML = `<div class="rowhead"><span><span class="eyebrow">Loaded from the precomputed runs</span> <b>${r.id}</b></span><button type="button" class="btn" id="unload">Dismiss</button></div>
-    <div class="note">Stored run (${SETK[r.set].n.toLowerCase()}): total water out <b>${(100 * r.r.out).toFixed(1)}%</b>, ${r.r.Ima.toFixed(3)} mA, Δp ${r.r.dp.toFixed(1)} Pa. The browser model gives <b>${(100 * res.outlet_total_water_frac).toFixed(1)}%</b>, ${res.corona_current_mA.toFixed(3)} mA, Δp ${res.pressure_drop_Pa.toFixed(1)} Pa.
-    ${flags.length ? ` Not in the browser model: ${flags.join("; ")}.` : ""}${r.lg > LG_MAX ? " Spray water exceeds the air by mass, outside the browser model's validated range." : ""}${clip.length ? ` Outside the sliders' range: ${clip.map(p => p.n.toLowerCase()).join(", ")}.` : ""}</div>`;
+  const why = [...flags, ...(r.lg > LG_MAX ? ["spray heavier than the air"] : []), ...(clip.length ? ["some inputs outside the sliders' range"] : [])];
+  b.innerHTML = `<div class="rowhead"><span><span class="eyebrow">From the library</span> <b>${r.id}</b></span><button type="button" class="btn" id="unload">Dismiss</button></div>
+    <div class="note">Water out: library <b>${(100 * r.r.out).toFixed(1)}%</b> · fast model <b>${(100 * res.outlet_total_water_frac).toFixed(1)}%</b>. Run the full simulation to compare like with like.</div>` +
+    (why.length ? `<div class="note" style="color:var(--ink-3)" title="${why.join("; ")}">The fast model approximates this design (${why.length} detail${why.length > 1 ? "s" : ""} it leaves out).</div>` : "");
   $("#unload").onclick = () => { state.loaded = null; b.hidden = true; };
 }
 async function runStored() {
@@ -1045,16 +1058,16 @@ async function runStored() {
   };
   const a = stat(["v1"]), b = stat(["rerun", "new"]);
   const line = (t, s) => s ? `<br>${t} (${s.n}): within 2 pts on <b>${(100 * s.w2).toFixed(0)}%</b>, median <b>${(100 * s.med).toFixed(1)}</b> pts. Both say spray blows out the top on ${s.both}; they disagree on whether it does on ${s.flip}.` : "";
-  $("#bmstat").innerHTML = `All ${n.toLocaleString()} stored designs through the browser model in ${(performance.now() - t0).toFixed(0)} ms (${engine.name}). Total water out, designs with water/air ≤ 1:` +
+  $("#bmstat").innerHTML = `All ${n.toLocaleString()} stored designs through the fast model in ${(performance.now() - t0).toFixed(0)} ms (${engine.name}). Total water out, designs with water/air ≤ 1:` +
     line("vs fast spray + resolved corona", a) + line("vs fully resolved", b) +
-    `<br>The browser model has no wall film, no wall cooling and no spray-driven recirculation, so it under-predicts vapor capture for rain curtains, charged films, charged sprays and cooled walls. Set an axis to “Browser − stored” to see where they part.`;
+    `<br>The fast model has no wall film, no wall cooling and no spray-driven recirculation, so it under-predicts vapor capture for rain curtains, charged films, charged sprays and cooled walls. Set an axis to “Browser − stored” to see where they part.`;
   dsRender();
   return { a, b };
 }
 
 
 /* ======================= resolved model (Web Worker) ======================= */
-let resWorker = null, resJob = 0, resT0 = 0, resLast = null;
+let resWorker = null, resJob = 0, resT0 = 0, resLast = null, resBooted = false;
 function resolvedInputs() {
   // a design loaded from the precomputed runs is passed verbatim (an exact re-run); otherwise the rail
   if (state.loaded) return { design: { ...state.loaded.d }, aux: { ...state.loaded.a, ambient_T_C: state.u.ambient_T_C }, from: state.loaded.id };
@@ -1070,23 +1083,24 @@ function resolvedInputs() {
 }
 function resLog(t) { const el = $("#reslog"); el.textContent += t + "\n"; el.scrollTop = el.scrollHeight; }
 function runResolved() {
-  // one worker for the page's lifetime (dropped only on cancel or error): it keeps its
-  // factorization pool and whatever that pool has learned about this machine
-  if (!resWorker) resWorker = new Worker(URL.createObjectURL(new Blob([document.getElementById("res-src").textContent], { type: "text/javascript" })));
+  // one worker for the page's lifetime (dropped only on cancel or error): it keeps Python loaded
+  if (!resWorker) { resWorker = new Worker(URL.createObjectURL(new Blob([document.getElementById("res-src").textContent], { type: "text/javascript" }))); resBooted = false; }
   const job = ++resJob, inp = resolvedInputs(), preset = $("#respreset").value;
   const fastRun = lastRun ? { r: lastRun.r, ex: lastRun.ex } : null;
   resT0 = performance.now();
   $("#resprog").hidden = false; $("#reslog").textContent = ""; $("#respbar").style.width = "0%";
   $("#resrun").disabled = true; $("#rescancel").hidden = false;
   $("#resstatus").textContent = "running: spray stage";
-  resLog(inp.from ? `re-running ${inp.from} exactly as the campaign stored it` : "running the rail's design");
+  resLog(inp.from ? `running ${inp.from} from the library` : "running this design");
   const nPer = Math.max(1, Math.round(inp.design.corona_section_length_m / inp.design.disc_spacing_m));
   const maxOuter = preset === "resolved" ? 80 : 40;
   resWorker.onmessage = e => {
     const m = e.data; if (m.id !== job) return;
     const el = ((performance.now() - resT0) / 1e3).toFixed(0) + " s";
     if (m.type === "progress") {
-      if (m.stage === "spray") {
+      if (m.stage === "load") {
+        $("#resstatus").textContent = `starting: ${m.line} · ${el}`; resLog(m.line);
+      } else if (m.stage === "spray") {
         const sp = m.spray, f = sp.spray;
         $("#respbar").style.width = (25 * Math.min(1, (sp.outer + 1) / Math.min(maxOuter, 16))).toFixed(1) + "%";
         $("#resstatus").textContent = `running: spray stage, outer iteration ${sp.outer + 1} · ${el}`;
@@ -1100,13 +1114,17 @@ function runResolved() {
       $("#respbar").style.width = "100%";
       $("#resstatus").textContent = `done in ${el}`;
       resLog(`done in ${el}`);
-      resLast = { ...m.result, inp, fastRun, preset, threads: m.pool ? m.pool.workersUsed || 1 : m.threads || 1, pool: m.pool || null, seconds: (performance.now() - resT0) / 1e3 };
+      resBooted = true;
+      resLast = { ...m.result, inp, fastRun, preset, seconds: (performance.now() - resT0) / 1e3 };
       finishResolved();
     } else if (m.type === "error") {
       $("#resstatus").textContent = `failed: ${m.message}`; resLog("error: " + m.message); finishResolved(true);
     }
   };
-  resWorker.postMessage({ type: "run", id: job, design: inp.design, aux: inp.aux, preset, seed: 0 });
+  // the worker runs from a blob: URL, so it gets the page's directory to find pyodide/ (and the Python once)
+  const base = new URL(".", location.href).href;
+  resWorker.postMessage({ type: "run", id: job, design: inp.design, aux: inp.aux, preset, seed: 0, base,
+    bundle: resBooted ? null : JSON.parse(document.getElementById("pybundle").textContent) });
 }
 function finishResolved(failed) {
   $("#resrun").disabled = false; $("#rescancel").hidden = true;
@@ -1116,12 +1134,12 @@ function finishResolved(failed) {
 $("#resrun").onclick = runResolved;
 $("#rescancel").onclick = () => { resJob++; $("#resstatus").textContent = "cancelled"; finishResolved(true); };
 
-// workersUsed is the most the pool ever ran, its trial included
-function factoredNote(R) {
-  const p = R.pool;
-  if (p && p.verdict === "in place") return R.threads > 1 ? `factored in one thread: a ${R.threads}-worker pool measured ${p.measuredSpeedup.toFixed(1)}×, not worth it here` : "factored in one thread";
-  if (p && p.verdict === "pending" && R.threads > 1) return `factored on up to ${R.threads} workers, still measuring whether they pay`;
-  return R.threads > 1 ? `factored on ${R.threads} workers${p && p.measuredSpeedup ? `, ${p.measuredSpeedup.toFixed(1)}× over one thread` : ""}` : "factored in one thread";
+// which kernels did the grid solves (wck: wasm-compute-kit; scipy: its fallback) and how often
+function solverNote(R) {
+  const v = R.solver; if (!v) return "";
+  const k = v.kernels === "wasm" ? "wasm-compute-kit's solver in WebAssembly" : v.kernels === "native" ? "wasm-compute-kit's solver" : "scipy's SuperLU";
+  return `${v.factorizations} sparse factorizations on ${k}, ${v.analyses} symbolic analyses` + (v.fallbacks ? `, ${v.fallbacks} pivoting fallbacks to SuperLU` : "") +
+    `; droplet parcels on ${v.threads > 1 ? v.threads + " threads" : "one thread"}`;
 }
 function renderResolved() {
   const R = resLast, m = R.metrics;
@@ -1146,14 +1164,13 @@ function renderResolved() {
     ["Water balance closure", m.water_balance_residual, null, null, v => v.toExponential(1)],
   ];
   const cell = (v, f) => v == null || !isFinite(v) ? "<td class=\"n d\">–</td>" : `<td class="n">${f(v)}</td>`;
-  $("#rescmp").innerHTML = `<thead><tr><th></th><th class="n">Resolved, here</th><th class="n">Fast model</th>${stored ? `<th class="n">Stored run (${SETK[stored.set].n.toLowerCase()})</th>` : ""}</tr></thead><tbody>` +
+  $("#rescmp").innerHTML = `<thead><tr><th></th><th class="n">Full simulation</th><th class="n">Fast model</th>${stored ? `<th class="n">Library</th>` : ""}</tr></thead><tbody>` +
     rows.map(([n, a, b, c, f]) => `<tr><td>${n}</td>${cell(a, f)}${cell(b, f)}${stored ? cell(c, f) : ""}</tr>`).join("") + "</tbody>";
-  const lin = R.corona ? R.corona.linear : null;
-  $("#resnote").textContent = `Spray stage ${m.cfd_s.toFixed(1)} s (${R.sprayDiag.nOuter} outer iterations, water closure ${R.sprayDiag.waterResidual.toExponential(1)}, ` +
-    `${R.sprayDiag.recirculating ? "with reverse flow" : "no reverse flow"}); corona ${m.ehd_s.toFixed(1)} s over ${R.corona ? R.corona.currents.length : 0} periods` +
-    (lin ? ` (${lin.newton ? lin.newton.factorizations : 0} Newton factorizations, ${factoredNote(R)})` : "") + `. ` +
-    (R.inp.from ? "The stored run used the same code in Python with its own random numbers, so spray-trace and droplet totals differ by Monte Carlo noise." : "Not every rail input exists in the campaign data; this is a new design.");
+  $("#resnote").textContent = `${R.seconds.toFixed(0)} s in your browser` + (R.solver && R.solver.threads > 1 ? ` on ${R.solver.threads} threads` : "") +
+    (R.sprayDiag.recirculating ? " · the spray drives reverse flow in the tube" : "") +
+    (R.inp.from ? " · library values are from an earlier run: droplet sampling differs, and its corona power predates a correction" : "");
   fillResField(); drawResMap(); drawCorMap(); drawPeriods();
+  window.View3D?.setResolved(R);
 }
 const RES_FIELDS = [
   { k: "T", n: "Air temperature, °C", f: F => F.T },
@@ -1292,8 +1309,8 @@ function fillValidation(chk) {
   <div><b>${engine.name === "GPU" ? "GPU (float32) vs CPU (float64)" : "CPU engine"}</b>, checked just now on 64 random designs: total water out differs by a median of <b>${chk.med.toExponential(1)}</b>, p90 <b>${chk.p90.toExponential(1)}</b>, max <b>${chk.max.toExponential(1)}</b>.</div>
   <div><b>This port vs. the Python fast model</b> on the 1,050 campaign v1 designs (lognormal atomizer spray, fast-model corona, water/air ≤ 1): total water out median error <b>5.5e-5</b>, p90 <b>1.6e-3</b>.</div>
   <div><b>Refit corona vs. the resolved electric model</b> on 55 pilot designs: corona on or off matches <b>55/55</b>. Total water out median error <b>8e-4</b>, p90 <b>2.6e-3</b>. Current median ratio <b>1.18</b>. Fine-mist designs are under-quenched, with current up to about 5× too high.</div>
-  <div><b>Brad's geometry</b> (30 cm tube, 9 cm discs, 2 g/m³ of 15 µm mist): onset <b>32.8 kV</b> (resolved 33.0–33.5). Current at 35 / 40 / 46 kV is <b>0.135 / 0.649 / 1.43 mA</b> (resolved 0.134 / 0.669 / 1.46).</div>
-  <div><b>Against the fully resolved runs</b> (spray CFD + wall film + resolved corona), see the precomputed tab: the browser model has no wall film, so it misses the extra condensation of sprays that land on the wall, and it treats strongly counterflowing sprays as well mixed.</div>`;
+  <div><b>Baseline geometry</b> (30 cm tube, 9 cm discs, 2 g/m³ of 15 µm mist): onset <b>32.8 kV</b> (resolved 33.0–33.5). Current at 35 / 40 / 46 kV is <b>0.135 / 0.649 / 1.43 mA</b> (resolved 0.134 / 0.669 / 1.46).</div>
+  <div><b>Against the fully resolved runs</b> (spray CFD + wall film + resolved corona), see the design library: the fast model has no wall film, so it misses the extra condensation of sprays that land on the wall, and it treats strongly counterflowing sprays as well mixed.</div>`;
 }
 
 /* ======================= boot ======================= */
@@ -1301,12 +1318,11 @@ buildRail(); buildSelects(); syncRail(); updateReadout(); buildDesigns();
 if (location.hash === "#designs") showTab("designs");
 (async () => {
   const chips = $("#chips");
-  try { engine = await gpuEngine(); } catch (e) { engine = cpuEngine(); chips.innerHTML = `<span class="chip warn">WebGPU unavailable (${e.message}): sweeps run on CPU at ${engine.res}×${engine.res}</span>`; }
+  try { engine = await gpuEngine(); } catch (e) { engine = cpuEngine(); chips.innerHTML = `<span class="chip warn" title="${e.message}">no WebGPU: sweeps at ${engine.res}×${engine.res} on CPU</span>`; }
   await compute();
   const chk = await selfCheck(); fillValidation(chk);
   const ok = chk.p90 < 1e-2;
-  chips.innerHTML = (engine.name === "GPU" ? `<span class="chip ok">WebGPU · ${engine.res}² sweep</span>` : chips.innerHTML) +
-    `<span class="chip ${ok ? "ok" : "warn"}">${engine.name} vs float64: p90 Δ ${chk.p90.toExponential(1)}</span><span class="chip">corona fitted to 264 resolved solves</span>`;
+  if (!ok) chips.innerHTML += `<span class="chip warn">sweep engine check: p90 Δ ${chk.p90.toExponential(1)}</span>`;
   await runStored();
 })();
 addEventListener("resize", () => { render(); dsRender(); if (resLast) { drawResMap(); drawCorMap(); } });
@@ -1319,10 +1335,12 @@ scv.addEventListener("mousemove", ev => {
   let best = null, bd = 64; for (const p of scatPts) { const d = (p.px - x) ** 2 + (p.py - y) ** 2; if (d < bd) { bd = d; best = p; } }
   if (!best) { tip.hidden = true; scv.style.cursor = ""; return; }
   const r = best.r; scv.style.cursor = "pointer";
-  tip.innerHTML = `<b>${r.id}</b> · ${SETK[r.set].n}<br>total water out ${(100 * r.r.out).toFixed(1)}%<br>${isFinite(RK.Wh.f(r)) ? RK.Wh.f(r).toPrecision(3) + " Wh/L" : "no recovery"} · Δp ${r.r.dp.toFixed(1)} Pa<br>arc margin ${r.r.arc.toFixed(2)} · ${r.r.Ima.toFixed(2)} mA` + (r.bm ? `<br>browser model ${(100 * r.bm.out).toFixed(1)}%` : "");
+  tip.innerHTML = `<b>${r.id}</b> · ${SETK[r.set].n}<br>total water out ${(100 * r.r.out).toFixed(1)}%<br>${isFinite(RK.Wh.f(r)) ? RK.Wh.f(r).toPrecision(3) + " Wh/L" : "no recovery"} · Δp ${r.r.dp.toFixed(1)} Pa<br>arc margin ${r.r.arc.toFixed(2)} · ${r.r.Ima.toFixed(2)} mA` + (r.bm ? `<br>fast model ${(100 * r.bm.out).toFixed(1)}%` : "");
   tip.hidden = false; const tw = tip.offsetWidth; tip.style.left = Math.min(x + 14, rc.width - tw - 4) + "px"; tip.style.top = (y + 14) + "px";
   scv._hover = r;
 });
 scv.addEventListener("mouseleave", () => { $("#stip").hidden = true; scv._hover = null; });
 scv.addEventListener("click", () => { if (scv._hover) { ds.sel = scv._hover; dsRender(); } });
 </script>
+
+<script type="module">/*__VIEW3D__*/</script>
