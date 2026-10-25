@@ -467,4 +467,11 @@ def simulate(c, aux, preset_name="resolved_coarse", seed=0, verbose=False, keep=
                 for k in ("outlet_total_water_frac", "vapor_out", "vapor_removed_frac", "dp_Pa", "spray_top")},
             **{k: d["transient"][k] for k in ("dp_std_rel", "w_out_std_rel", "dp_period_s", "t_avg", "wall_s")}),
     })
+    # can real nozzles deliver this spray (flow, drop size, launch speed)? A flag next to the scores, not in them.
+    try:
+        import watercap_nozzles
+        nz = watercap_nozzles.nozzle_feasibility(c, aux)
+        pay.update(nozzle=nz, feasible=nz["feasible"], feasible_relaxed=nz["feasible_relaxed"], feasible_reason=nz["reason"])
+    except ImportError:          # browser bundles built before the module existed
+        pay.update(nozzle=None, feasible=None, feasible_relaxed=None, feasible_reason="watercap_nozzles unavailable")
     return True, pay
