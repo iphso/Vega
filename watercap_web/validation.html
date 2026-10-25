@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulation Validation</title>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/"}}</script>
+<style>
+:root {
+  --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
+  --ink: #e8e8ec; --ink-2: #8a8a94; --ink-3: #55555e; --rule: #2a2a30;
+  --water: #5b9dff; --water-dim: #2a4a75; --spray: #3ccfb4; --volt: #ffb547;
+  --s-pass: #7ee0a8; --s-part: #ffb547; --s-fail: #ff8a7a; --s-none: #55555e; --s-run: #5b9dff;
+  --f-body: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 400 13.5px/1.5 var(--f-body); }
+a { color: var(--water); text-decoration: none; } a:hover { text-decoration: underline; }
+.app { max-width: 1240px; margin: 0 auto; padding: 14px 16px 56px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+header.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; }
+.brand h1 { font: 600 15px/1.2 var(--f-body); margin: 0; }
+.brand span { font-size: 12px; color: var(--ink-2); }
+h2 { font: 600 11px/1.2 var(--f-body); text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-3); margin: 0 0 10px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 16px; min-width: 0; }
+.lead { font-size: 17px; line-height: 1.45; max-width: 820px; margin: 0; }
+.lead b { font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--ink-2); }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.hero { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; align-items: start; }
+.tube svg { width: 100%; height: auto; display: block; }
+.tube .hot { cursor: pointer; }
+.tube .hot:hover rect.tag, .tube .hot.sel rect.tag { stroke: var(--ink); stroke-width: 1.4; }
+.detail { display: grid; gap: 12px; }
+.dcard { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 14px; }
+.dcard h3 { font: 600 15px/1.2 var(--f-body); margin: 0 0 4px; }
+.dcard .st { font: 500 11px/1 var(--f-mono); padding: 4px 8px; border-radius: 10px; display: inline-block; margin-bottom: 8px; }
+.dcard p { margin: 6px 0; color: var(--ink-2); }
+.dcard p b { color: var(--ink); font-weight: 500; }
+.cover { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.stage h4 { font: 600 12px/1.2 var(--f-body); margin: 0 0 8px; color: var(--ink-2); }
+.cell { display: flex; gap: 8px; align-items: flex-start; padding: 7px 9px; border-radius: 6px; background: var(--card); margin-bottom: 6px; border-left: 3px solid var(--s-none); cursor: pointer; }
+.cell:hover { background: var(--card-2); }
+.cell span { font-size: 12.5px; line-height: 1.3; }
+.cases { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.case { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 14px; display: grid; gap: 8px; align-content: start; }
+.case .hd { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.case .hd b { font-size: 14px; font-weight: 600; }
+.case .src { font-size: 12px; color: var(--ink-2); }
+.case .what { font-size: 12.5px; color: var(--ink-2); }
+.case .verdict { font-size: 12.5px; }
+.case svg { width: 100%; height: auto; display: block; }
+.badge { font: 500 11px/1 var(--f-mono); padding: 4px 8px; border-radius: 10px; white-space: nowrap; }
+.mono { font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); }
+.next { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.next .n { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 12px; font-size: 12.5px; }
+.next .n b { display: block; font-size: 13px; margin-bottom: 4px; }
+.next .n .k { font: 500 10px/1 var(--f-mono); color: var(--ink-3); margin-bottom: 6px; display: block; }
+.film { padding: 14px; }
+.film .fhd { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; flex-wrap: wrap; }
+.film .fhd h2 { margin: 0; }
+.film .fhd span { font-size: 12px; color: var(--ink-3); }
+.film .nogl { aspect-ratio: 16/9; display: grid; place-items: center; text-align: center; color: var(--ink-2); background: #070708; border: 1px solid var(--rule); border-radius: 10px; padding: 20px; }
+@media (max-width: 520px) { .film { padding: 10px; } .film .fhd span { display: none; } }
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); } .tube { max-width: 380px; margin: 0 auto; width: 100%; }
+  .cover { grid-template-columns: repeat(2, minmax(0, 1fr)); } .cases { grid-template-columns: 1fr; }
+  .next { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 520px) { .cover, .next { grid-template-columns: 1fr; } .lead { font-size: 15px; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><h1>Water capture tube</h1><span>simulation validation</span></div>
+    <a href="./">← Design explorer</a>
+  </header>
+
+  <section class="panel film" aria-label="Animated explainer of the simulation">
+    <div class="fhd"><h2>The device, simulated</h2><span>Space plays and pauses · ← → seek · ↑ ↓ chapters</span></div>
+    <div id="cinema"></div>
+  </section>
+
+  <section class="panel">
+    <p class="lead">The simulator <b>ranks designs reliably</b>, but its absolute outlet-water numbers are <b>not yet validated</b> against experiment. The corona physics checks out against measurement. The spray stage, which sets outlet water, is still the open question.</p>
+    <div class="legend" style="margin-top:12px" id="legend"></div>
+  </section>
+
+  <section class="hero">
+    <div class="panel tube"><h2>What's modeled, where</h2><svg id="tube" viewBox="0 0 380 640" role="img" aria-label="Tube schematic with physics status"></svg></div>
+    <div class="detail">
+      <div class="dcard" id="dcard"></div>
+      <div class="panel">
+        <h2>Coverage by stage</h2>
+        <div class="cover" id="cover"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Experiments and cross-checks</h2>
+    <div class="cases" id="cases"></div>
+  </section>
+
+  <section class="panel">
+    <h2>Next</h2>
+    <div class="next" id="next"></div>
+  </section>
+  <div class="mono">Updated 2026-10-24 · case files in StoneLab/validation/</div>
+</div>
+
+<script type="module">
+import { ST, PHYS, CASES, NEXT } from "./validation_data.js";
+
+const $ = (s) => document.querySelector(s);
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text != null) e.textContent = text; return e; };
+
+$("#legend").innerHTML = Object.values(ST).map(s => `<span><i style="background:${s.c}"></i>${s.t}</span>`).join("");
+
+// ---- tube schematic
+function drawTube() {
+  const s = $("#tube");
+  const x0 = 40, x1 = 140, top = 30, bot = 610, H = bot - top;
+  const yOf = (f) => bot - f * H;
+  const split = yOf(0.70);
+  // stage bands
+  s.append(el("rect", { x: x0, y: top, width: x1 - x0, height: split - top, fill: "rgba(255,181,71,0.07)" }));
+  s.append(el("rect", { x: x0, y: split, width: x1 - x0, height: bot - split, fill: "rgba(60,207,180,0.07)" }));
+  s.append(el("text", { x: 10, y: (top + split) / 2, fill: "var(--volt)", "font-size": 10, transform: `rotate(-90 14 ${(top + split) / 2})`, "text-anchor": "middle" }, "CORONA"));
+  s.append(el("text", { x: 10, y: (split + bot) / 2, fill: "var(--spray)", "font-size": 10, transform: `rotate(-90 14 ${(split + bot) / 2})`, "text-anchor": "middle" }, "SPRAY"));
+  // walls
+  for (const x of [x0, x1]) s.append(el("line", { x1: x, y1: top, x2: x, y2: bot, stroke: "var(--ink-2)", "stroke-width": 2 }));
+  // rod + discs
+  const cx = (x0 + x1) / 2;
+  s.append(el("line", { x1: cx, y1: top + 6, x2: cx, y2: split - 8, stroke: "var(--volt)", "stroke-width": 2 }));
+  for (let y = top + 18; y < split - 10; y += 22) s.append(el("line", { x1: cx - 26, y1: y, x2: cx + 26, y2: y, stroke: "var(--volt)", "stroke-width": 2.2 }));
+  // nozzle + spray cone
+  const ny = yOf(0.62);
+  s.append(el("rect", { x: cx - 5, y: ny - 6, width: 10, height: 8, fill: "var(--spray)" }));
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 26; i++) {
+    const t = rnd(), a = (rnd() - 0.5) * 1.1, r = 6 + t * (yOf(0.15) - ny);
+    const dx = Math.sin(a) * r, dy = Math.cos(a) * r;
+    if (Math.abs(dx) < (x1 - x0) / 2 - 3) s.append(el("circle", { cx: cx + dx, cy: ny + dy, r: 1.6, fill: "var(--spray)", opacity: 0.7 }));
+  }
+  // wall film
+  s.append(el("line", { x1: x0 + 2, y1: split, x2: x0 + 2, y2: bot, stroke: "var(--water)", "stroke-width": 2, opacity: 0.6 }));
+  s.append(el("line", { x1: x1 - 2, y1: split, x2: x1 - 2, y2: bot, stroke: "var(--water)", "stroke-width": 2, opacity: 0.6 }));
+  // air arrows
+  for (const y of [bot + 4, top - 4]) {
+    s.append(el("path", { d: `M${cx - 18} ${y + 10} L${cx} ${y - 4} L${cx + 18} ${y + 10}`, fill: "none", stroke: "var(--ink-3)", "stroke-width": 1.5 }));
+  }
+  s.append(el("text", { x: cx, y: top - 14, fill: "var(--ink-3)", "font-size": 10, "text-anchor": "middle" }, "outlet"));
+  // tags
+  const tx = 168, tw = 200;
+  const sorted = [...PHYS].sort((a, b) => b.y - a.y);
+  const gap = (bot - top) / sorted.length;
+  sorted.forEach((p, i) => {
+    const ty = top + i * gap + 2, py = yOf(p.y), c = ST[p.st].c;
+    const g = el("g", { class: "hot", "data-id": p.id });
+    g.append(el("path", { d: `M${x1 + 2} ${py} C ${x1 + 14} ${py}, ${tx - 14} ${ty + 10}, ${tx} ${ty + 10}`, fill: "none", stroke: c, "stroke-width": 1, opacity: 0.55 }));
+    g.append(el("circle", { cx: x1 + 2, cy: py, r: 2.5, fill: c }));
+    g.append(el("rect", { class: "tag", x: tx, y: ty, width: tw, height: 21, rx: 5, fill: "var(--card)", stroke: "var(--rule)" }));
+    g.append(el("rect", { x: tx, y: ty, width: 4, height: 21, rx: 2, fill: c }));
+    g.append(el("text", { x: tx + 11, y: ty + 14.5, fill: "var(--ink)", "font-size": 11.5 }, p.name));
+    g.addEventListener("click", () => select(p.id));
+    s.append(g);
+  });
+}
+
+function select(id) {
+  const p = PHYS.find(q => q.id === id);
+  document.querySelectorAll(".tube .hot").forEach(g => g.classList.toggle("sel", g.dataset.id === id));
+  const s = ST[p.st];
+  $("#dcard").innerHTML = `<div class="mono">${p.stage}</div><h3>${p.name}</h3>
+    <span class="st" style="background:color-mix(in srgb, ${s.c} 18%, transparent);color:${s.c}">${s.t}</span>
+    <p><b>Model:</b> ${p.model}</p><p><b>Evidence:</b> ${p.ev}</p>`;
+}
+
+function drawCover() {
+  const stages = ["Spray", "Gas flow", "Mist", "Corona"];
+  $("#cover").innerHTML = stages.map(st => `<div class="stage"><h4>${st}</h4>${
+    PHYS.filter(p => p.stage === st || (st === "Gas flow" && p.stage === "Energy")).map(p =>
+      `<div class="cell" data-id="${p.id}" style="border-left-color:${ST[p.st].c}"><span>${p.name}</span></div>`).join("")}</div>`).join("");
+  document.querySelectorAll(".cell").forEach(c => c.addEventListener("click", () => select(c.dataset.id)));
+}
+
+// ---- case mini-charts
+function xyChart(ch) {
+  const W = 520, H = 190, L = 40, R = 12, T = 14, B = 30;
+  const s = el("svg", { viewBox: `0 0 ${W} ${H}` });
+  const xs = (v) => L + (v - 12) / (30 - 12) * (W - L - R);
+  const ymax = 42, ys = (v) => H - B - v / ymax * (H - T - B);
+  for (const v of [0, 10, 20, 30, 40]) {
+    s.append(el("line", { x1: L, x2: W - R, y1: ys(v), y2: ys(v), stroke: "var(--rule)" }));
+    s.append(el("text", { x: L - 6, y: ys(v) + 3.5, fill: "var(--ink-3)", "font-size": 10, "text-anchor": "end" }, v));
+  }
+  ch.x.forEach(v => s.append(el("text", { x: xs(v), y: H - B + 15, fill: "var(--ink-3)", "font-size": 10, "text-anchor": "middle" }, v)));
+  s.append(el("text", { x: W - R, y: H - 4, fill: "var(--ink-3)", "font-size": 10, "text-anchor": "end" }, ch.xl));
+  s.append(el("text", { x: L, y: T - 3, fill: "var(--ink-3)", "font-size": 10 }, ch.yl));
+  const line = (arr, color, dash) => s.append(el("polyline", { points: arr.map((v, i) => `${xs(ch.x[i])},${ys(v)}`).join(" "), fill: "none", stroke: color, "stroke-width": 1.8, "stroke-dasharray": dash || "" }));
+  line(ch.pred2, "var(--ink-3)", "4 3");
+  line(ch.pred, "var(--water)");
+  ch.meas.forEach((v, i) => s.append(el("circle", { cx: xs(ch.x[i]), cy: ys(v), r: 4, fill: "var(--s-pass)" })));
+  const lg = [["var(--s-pass)", ch.labels[0], "dot"], ["var(--water)", ch.labels[1]], ["var(--ink-3)", ch.labels[2], "dash"]];
+  lg.forEach(([c, t, k], i) => {
+    const x = W - R - 190, y = T + 46 + i * 15;
+    if (k === "dot") s.append(el("circle", { cx: x + 8, cy: y - 3, r: 3.5, fill: c }));
+    else s.append(el("line", { x1: x, x2: x + 16, y1: y - 3, y2: y - 3, stroke: c, "stroke-width": 1.8, "stroke-dasharray": k === "dash" ? "4 3" : "" }));
+    s.append(el("text", { x: x + 22, y: y + 0.5, fill: "var(--ink-2)", "font-size": 10.5 }, t));
+  });
+  return s;
+}
+function barChart(ch) {
+  const W = 520, rowH = 26, L = 70, R = 56, T = 16, H = T + ch.items.length * rowH + 22;
+  const s = el("svg", { viewBox: `0 0 ${W} ${H}` });
+  const xs = (v) => L + v / 100 * (W - L - R);
+  ch.items.forEach(([n, v], i) => {
+    const y = T + i * rowH;
+    s.append(el("text", { x: L - 8, y: y + 14, fill: "var(--ink-2)", "font-size": 11, "text-anchor": "end" }, n));
+    s.append(el("rect", { x: L, y: y + 3, width: xs(100) - L, height: 16, rx: 3, fill: "var(--card-2)" }));
+    s.append(el("rect", { x: L, y: y + 3, width: xs(v) - L, height: 16, rx: 3, fill: "var(--s-fail)" }));
+    s.append(el("text", { x: xs(v) + 6, y: y + 15, fill: "var(--ink)", "font-size": 11 }, v + "%"));
+  });
+  s.append(el("line", { x1: xs(100), x2: xs(100), y1: T - 4, y2: H - 18, stroke: "var(--s-pass)", "stroke-dasharray": "3 3" }));
+  s.append(el("text", { x: xs(100), y: H - 5, fill: "var(--s-pass)", "font-size": 10, "text-anchor": "end" }, "measured = 100%"));
+  s.append(el("text", { x: L, y: T - 5, fill: "var(--ink-3)", "font-size": 10 }, "share of measured air cooling reproduced"));
+  return s;
+}
+function drawCases() {
+  const box = $("#cases");
+  for (const c of CASES) {
+    const s = ST[c.st], d = document.createElement("div");
+    d.className = "case";
+    d.innerHTML = `<div class="hd"><b>${c.name}</b><span class="badge" style="background:color-mix(in srgb, ${s.c} 18%, transparent);color:${s.c}">${c.badge}</span></div>
+      <div class="src">${c.href ? `<a href="${c.href}" target="_blank" rel="noopener">${c.src}</a>` : c.src}</div>
+      <div class="what">${c.what}</div>`;
+    if (c.chart) d.append(c.chart.kind === "xy" ? xyChart(c.chart) : barChart(c.chart));
+    const v = document.createElement("div"); v.className = "verdict"; v.textContent = c.verdict; d.append(v);
+    box.append(d);
+  }
+}
+$("#next").innerHTML = NEXT.map(([k, b, t]) => `<div class="n"><span class="k" style="color:${k === "Running" ? "var(--s-run)" : "var(--ink-3)"}">${k.toUpperCase()}</span><b>${b}</b>${t}</div>`).join("");
+
+drawTube(); drawCover(); drawCases(); select("drops");
+
+// the film: same data, animated (cinema/). The static sections above stand on their own if WebGL is missing.
+(async () => {
+  const host = document.getElementById("cinema");
+  const gl = document.createElement("canvas").getContext("webgl2");
+  gl?.getExtension("WEBGL_lose_context")?.loseContext();   // release the probe so it doesn't hold a context slot
+  if (!gl) { host.innerHTML = `<div class="nogl">The animated explainer needs WebGL 2, which this browser doesn't provide. Everything below is the same content.</div>`; return; }
+  try {
+    const [{ createCinema }, { default: script }] = await Promise.all([import("./cinema/cinema.js"), import("./cinema/watercap_script.js")]);
+    window.cinema = await createCinema(host, script);
+  } catch (e) {
+    console.error(e);
+    host.innerHTML = `<div class="nogl">The animated explainer couldn't start a 3D (WebGL) context in this browser. Usually that means hardware acceleration is off, or the GPU process needs a restart (quit and reopen the browser). Everything below is the same content.</div>`;
+  }
+})();
+</script>
+</body>
+</html>

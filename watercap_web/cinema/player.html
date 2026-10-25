@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simulation Film</title>
+<script type="importmap">{"imports":{"three":"../vendor/three.module.js","three/addons/":"../vendor/"}}</script>
+<style>
+  html, body { margin: 0; background: #0c0c0e; color: #e8e8ec; font: 13px/1.4 -apple-system, "Segoe UI", system-ui, sans-serif; }
+  main { width: min(100vw - 32px, (100vh - 110px) * 16 / 9); margin: 16px auto; }
+  body.bare main { width: min(100vw, 100vh * 16 / 9); margin: 0 auto; }
+  body.bare .cin-bar, body.bare .cin-chaps { display: none; }
+  body.bare .cin-stage { border: 0; border-radius: 0; }
+</style>
+</head>
+<body>
+<!-- Generic player: ?script=watercap_script.js (default) · &t=12.5&paused=1 for one exact frame · &bare=1 for the stage alone -->
+<main><div id="film"></div></main>
+<script type="module">
+import { createCinema } from "./cinema.js";
+const q = new URLSearchParams(location.search);
+if (q.get("bare") === "1") document.body.classList.add("bare");
+const name = (q.get("script") || "watercap_script.js").replace(/[^\w.\-]/g, "");
+const { default: script } = await import("./" + name);
+document.title = script.title || document.title;
+window.cinema = await createCinema(document.getElementById("film"), script);
+</script>
+</body>
+</html>

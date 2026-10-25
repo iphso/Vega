@@ -81,7 +81,12 @@ PLUS_SST = dict(PLUS, resolved_flow="sst", resolved_dp=True, require_steady_spra
 # spray-driven tube flow, where the mixing length misplaces the spray wake -- realism roadmap, spray-stage SST).
 # Plus: Abramzon-Sirignano drops with finite liquid conductivity, and the corona coupled with common random
 # numbers and a start-up load ramp, charged on the emitted current (realism roadmap, corona-mist coupling).
-HIFI = dict(PLUS_SST, spray_turbulence="sst", drop_model="as_conduction", corona_crn="ramp", supply_current=True)
+HIFI = dict(PLUS_SST, spray_turbulence="sst", drop_model="as_conduction", corona_crn="ramp", supply_current=True,
+            # ion mobility from hydrate equilibrium + Blanc's law for the air/water-vapour mixture (StoneLab
+            # corona_air, valid to saturation at 20-80 C; the Nouri fit of the other tiers saturates above
+            # ~30 g/m^3). onset_humidity: StoneLab's FITTED empirical onset-vs-RH factor ("empirical_nouri",
+            # blind test on Fu 2022 over-predicts the fall ~2x), kept off here.
+            mobility_model="cluster_blanc", onset_humidity=None)
 for _k in list(RESOLVED_PRESETS):
     RESOLVED_PRESETS[_k + "_plus"] = dict(RESOLVED_PRESETS[_k], physics=PLUS)
     _cfd = dict(RESOLVED_PRESETS[_k]["cfd"], outer_iters=max(RESOLVED_PRESETS[_k]["cfd"]["outer_iters"],
@@ -90,7 +95,7 @@ for _k in list(RESOLVED_PRESETS):
     # SST spray stages near flooding converge slowly (cold_spray-0214: a monotone dp drift that a
     # 100-iteration cap reports as "oscillating"; settled by iteration 120-155, the same with 15 or
     # 40 SIMPLE sweeps per outer step), so the cap is 200 (converged designs stop early)
-    RESOLVED_PRESETS[_k + "_hifi"] = dict(RESOLVED_PRESETS[_k], cfd=dict(_cfd, outer_iters=max(_cfd["outer_iters"], 200)),
+    RESOLVED_PRESETS[_k + "_hifi"] = dict(RESOLVED_PRESETS[_k], cfd=dict(_cfd, outer_iters=max(_cfd["outer_iters"], 200), nozzle_cd=0.67),  # Tokgoz 2019 measured Cd
                                           physics=HIFI)
 
 
@@ -328,13 +333,33 @@ def simulate(c, aux, preset_name="resolved_coarse", seed=0, verbose=False, keep=
             hg = res.handoff["gas"]
             T_h, w_h = float(np.mean(hg["T"])), float(np.mean(hg["w"]))
             e = w_h * 101325.0 / (0.622 + w_h)
-            mobility = corona_air.ion_mobility(pol_c, T_h, ah=e * 0.018015 / (8.314 * (T_h + 273.15)) * 1e3)
+            mobility = corona_air.ion_mobility(pol_c, T_h, ah=e * 0.018015 / (8.314 * (T_h + 273.15)) * 1e3,
+                                               mobility_model=phys.get("mobility_model", "nouri_fit"))
         mobility *= phys.get("mobility_scale", 1.0)          # uncertainty studies
+        onset_scale = phys.get("onset_scale", 1.0)
+        if phys.get("onset_humidity") not in (None, "none"):
+            # StoneLab corona_onset.onset_humidity_factor: FITTED (Nouri 2011) onset-vs-RH factor, handed-over gas
+            from stonelab import corona_air, corona_onset
+            hg = res.handoff["gas"]
+            T_h, w_h = float(np.mean(hg["T"])), float(np.mean(hg["w"]))
+            e = w_h * 101325.0 / (0.622 + w_h)
+            onset_scale *= corona_onset.onset_humidity_factor(
+                min(100.0, 100.0 * e / corona_air.saturation_vapour_pressure(T_h)), phys["onset_humidity"])
+        onset_kw = {}
+        if phys.get("onset_model", "peek") != "peek":
+            # stonelab.corona_onset: ionization-integral onset on the disc edge's own field, in the
+            # handed-over moist gas (opt-in; the existing tiers keep Peek)
+            hg = res.handoff["gas"]
+            T_h, w_h = float(np.mean(hg["T"])), float(np.mean(hg["w"]))
+            e = w_h * 101325.0 / (0.622 + w_h)
+            onset_kw = dict(onset_model=phys["onset_model"],
+                            abs_humidity=e * 0.018015 / (8.314 * (T_h + 273.15)) * 1e3)
         sec = DiscStackSection(R=R, disc_radius=c["disc_diameter_frac"] * R, disc_thickness=c["disc_thickness_mm"] * 1e-3,
                                rel_air_density=293.15 / (aux["inlet_T_C"] + 273.15), spacing=c["disc_spacing_m"],
                                n_periods=n_periods, voltage=pol_c * c["corona_voltage_kV"] * 1e3,
                                mobility=mobility, edge_cells=ep["edge_cells"], h_coarse=ep["h_coarse"],
-                               growth=ep["growth"], onset_scale=phys.get("onset_scale", 1.0))
+                               growth=ep["growth"], onset_scale=onset_scale,
+                               **onset_kw)
         Q = U * np.pi * R ** 2
         try:
             sr = march_section(sec, pol_c, U, cp["radii"], cp["nflow"] / Q, n_per_class=pre["n_per_class"],
