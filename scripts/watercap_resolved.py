@@ -97,6 +97,14 @@ for _k in list(RESOLVED_PRESETS):
     # 40 SIMPLE sweeps per outer step), so the cap is 200 (converged designs stop early)
     RESOLVED_PRESETS[_k + "_hifi"] = dict(RESOLVED_PRESETS[_k], cfd=dict(_cfd, outer_iters=max(_cfd["outer_iters"], 200), nozzle_cd=0.67),  # Tokgoz 2019 measured Cd
                                           physics=HIFI)
+    # _hifi2: hifi plus local molecular properties, film resistance, mist phoresis, CCN (kappa-Koehler) fog,
+    # and the stopping fixes (neighbour-chained drop transfers, configurable averaged-gap floor, "settling"
+    # status) and the core-resolving radial grid -- StoneLab realism roadmap, Experiments 12-13 and "Loose ends"
+    # 2026-10-26. A separate tier so the stored _hifi library stays reproducible.
+    RESOLVED_PRESETS[_k + "_hifi2"] = dict(RESOLVED_PRESETS[_k + "_hifi"], cfd=dict(
+        RESOLVED_PRESETS[_k + "_hifi"]["cfd"], molecular_props="local", film_resistance=True, mist_phoresis=True,
+        fog_model="kohler", adjacent_transfers=True, avg_gap_tol=0.01, settle_band=0.03,
+        dr_core=0.012, n_per_bin=600))   # resolved radial core + parcel count: dp GCI <= 2.5% (Experiment 13)
 
 
 def recool_power_W(Q_heat, T_spray, T_amb):
