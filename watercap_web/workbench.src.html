@@ -169,15 +169,33 @@ table.cmp td.d { color: var(--ink-3); }
 .ptable td:first-child { color: var(--ink-2); }
 .ptable td { white-space: normal; }
 .flag { color: var(--volt); font: 500 11px var(--f-mono); }
-/* device3d tab */
-.d3grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-@media (max-width: 900px) { .d3grid { grid-template-columns: minmax(0, 1fr); } }
-.d3ctl { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 12.5px; color: var(--ink-2); margin: 8px 0; }
-.d3ctl input[type=text] { font: 400 12px var(--f-mono); width: 16ch; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--rule); background: var(--card-2); color: var(--ink); }
-.d3log { font: 400 11px/1.45 var(--f-mono); color: var(--ink-3); max-height: 7.5em; overflow: auto; white-space: pre-wrap; margin-top: 6px; }
-.d3maps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
-.d3maps canvas { width: 100%; aspect-ratio: 1; border-radius: 6px; background: var(--card-2); image-rendering: pixelated; }
-.d3bar { height: 10px; border-radius: 3px; background: var(--water); display: inline-block; vertical-align: middle; }
+.famstrip { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+.famcard { text-align: left; background: var(--panel); border: 1px solid var(--rule); border-left: 4px solid var(--c); border-radius: 8px; padding: 8px 10px; cursor: pointer; display: grid; gap: 2px; color: var(--ink-2); font: 400 11px/1.25 var(--f-body); }
+.famcard[aria-pressed="false"] { opacity: 0.38; }
+.famcard b { font: 600 17px/1.1 var(--f-mono); color: var(--ink); }
+.famcard .nm { font-weight: 600; color: var(--ink); }
+/* 3D sim tab */
+.s3 { position: relative; height: min(80vh, 860px); min-height: 520px; padding: 0; overflow: hidden; }
+.s3-view { position: absolute; inset: 0; }
+.s3-bar { position: absolute; left: 12px; right: 12px; top: 12px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; pointer-events: none; }
+.s3-bar > * { pointer-events: auto; }
+.s3-box { display: inline-flex; gap: 6px; align-items: center; font-size: 11px; color: var(--ink-2); background: rgba(22,22,26,0.82); border: 1px solid var(--rule); border-radius: 14px; padding: 3px 4px 3px 10px; backdrop-filter: blur(6px); }
+.s3-box select, .s3-box input { border-radius: 10px; font: 400 11.5px var(--f-body); }
+.s3-box input { width: 4.2ch; padding: 3px 5px; border: 1px solid var(--rule); background: var(--card-2); color: var(--ink); font-family: var(--f-mono); }
+.s3-go { font: 600 11.5px/1 var(--f-body); padding: 7px 12px; border-radius: 14px; border: 1px solid var(--water-dim); background: rgba(42,74,117,0.9); color: var(--ink); cursor: pointer; }
+.s3-go:disabled { opacity: 0.45; cursor: default; }
+.s3-layers { position: absolute; left: 12px; bottom: 12px; display: flex; gap: 4px; flex-wrap: wrap; }
+.s3-layers button { font: 500 11px/1 var(--f-body); padding: 6px 10px; border-radius: 14px; border: 1px solid var(--rule); background: rgba(22,22,26,0.8); color: var(--ink-3); cursor: pointer; backdrop-filter: blur(6px); }
+.s3-layers button[aria-pressed="true"] { color: var(--ink); border-color: var(--water-dim); }
+.s3-legend { position: absolute; left: 12px; bottom: 48px; display: grid; gap: 4px; font: 400 11px/1.2 var(--f-mono); color: var(--ink-2); background: rgba(22,22,26,0.75); border: 1px solid var(--rule); border-radius: 8px; padding: 7px 9px; pointer-events: none; }
+.s3-legend .lr { display: flex; gap: 6px; align-items: center; }
+.s3-legend i { width: 90px; height: 7px; border-radius: 4px; display: inline-block; }
+.s3-card { position: absolute; right: 12px; top: 56px; width: 230px; display: grid; gap: 8px; font-size: 11px; color: var(--ink-2); background: rgba(22,22,26,0.84); border: 1px solid var(--rule); border-radius: 10px; padding: 10px 12px; backdrop-filter: blur(6px); }
+.s3-card .big { font: 600 18px/1.1 var(--f-mono); color: var(--ink); }
+.s3-card svg { width: 100%; height: auto; display: block; }
+.s3-status { position: absolute; right: 12px; bottom: 12px; font: 400 11px var(--f-mono); color: var(--ink-3); background: rgba(22,22,26,0.75); border-radius: 8px; padding: 5px 8px; max-width: 46ch; }
+.s3-status:empty { display: none; }
+
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -189,7 +207,7 @@ table.cmp td.d { color: var(--ink-3); }
     <a href="validation.html" style="font-size:12px">Validation status →</a>
     <a href="reel.html" style="font-size:12px">Film →</a>
     <div class="tabs" role="tablist" aria-label="View">
-      <button type="button" role="tab" id="tab-simulate" aria-controls="simulate" aria-selected="true">Explore</button><button type="button" role="tab" id="tab-designs" aria-controls="designs" aria-selected="false">Design library<span id="tabcount"></span></button><button type="button" role="tab" id="tab-device3d" aria-controls="device3d" aria-selected="false">Your device, 3D</button>
+      <button type="button" role="tab" id="tab-simulate" aria-controls="simulate" aria-selected="true">Explore</button><button type="button" role="tab" id="tab-designs" aria-controls="designs" aria-selected="false">Design library<span id="tabcount"></span></button><button type="button" role="tab" id="tab-device3d" aria-controls="device3d" aria-selected="false">3D sim</button>
     </div>
   </header>
 
@@ -273,14 +291,6 @@ table.cmp td.d { color: var(--ink-3); }
     <div class="library">
       <aside class="panel rail" aria-label="Filters">
         <div class="group">
-          <div class="ghead"><h2>Runs</h2></div>
-          <div class="fl" id="setfl"></div>
-        </div>
-        <div class="group">
-          <div class="ghead"><h2>Concept</h2><button type="button" class="btn" id="famall">all</button></div>
-          <div class="famchips" id="famfl"></div>
-        </div>
-        <div class="group">
           <div class="ghead"><h2>Filters</h2></div>
           <label class="check"><input type="checkbox" id="f-arc" checked> Hide designs that arc</label>
           <label class="check"><input type="checkbox" id="f-lg"> Hide spray heavier than the air</label>
@@ -294,6 +304,7 @@ table.cmp td.d { color: var(--ink-3); }
       </aside>
 
       <div class="main">
+        <div class="famstrip" id="famstrip" role="group" aria-label="Design families"></div>
         <section class="panel">
           <div class="mapbar" style="margin-top:0">
             <label for="dx">Across <select id="dx"></select></label>
@@ -317,63 +328,29 @@ table.cmp td.d { color: var(--ink-3); }
     </div>
   </section>
 
-  <!-- ================= YOUR DEVICE, 3D ================= -->
-  <section id="device3d" role="tabpanel" aria-labelledby="tab-device3d" hidden style="display:grid;gap:14px">
-    <section class="panel">
-      <div class="rowhead"><h2>Your device in 3D</h2><span class="eyebrow" id="d3gpu">checking WebGPU …</span></div>
-      <p class="note" style="margin-top:8px">The partner electrode as built: 8 plates (rings 70–90 mm with 6 bent tabs, tips at r = 55.7 mm, canted 40°) at 31.25 mm pitch in the 150 mm tube, positive corona, 130 m³/h. One plate pitch is solved in full 3D on your GPU with the same solver code as our reference runs (StoneLab solver3d), periodic along the tube. Three steps: the tip corona, the airflow with its ionic wind, and the mist that gets through.</p>
-    </section>
-    <div class="d3grid">
-      <section class="panel">
-        <div class="rowhead"><h2>1 · Tip corona</h2><span class="eyebrow">zero airflow · about 1–3 minutes</span></div>
-        <div class="d3ctl">
-          <label for="d3rtip">Tip radius <select id="d3rtip"></select></label>
-          <label for="d3kv">Voltages, kV <input type="text" id="d3kv" value="8,9,10,11,12,13"></label>
-          <label for="d3fkv">Keep the field at <select id="d3fkv"></select></label>
-          <button type="button" class="btn primary" id="d3tiprun">Solve the corona</button>
-        </div>
-        <div class="scroll"><table class="cmp" id="d3iv"></table></div>
-        <div class="d3maps" id="d3maps" hidden><div><div class="eyebrow" id="d3m0t"></div><canvas id="d3m0" width="160" height="160" aria-label="Ion density at the plate plane"></canvas></div><div><div class="eyebrow" id="d3m1t"></div><canvas id="d3m1" width="160" height="160" aria-label="Ion density between plates"></canvas></div></div>
-        <div class="legend" id="d3mleg"></div>
-        <div class="d3log" id="d3tiplog"></div>
-      </section>
-      <section class="panel">
-        <div class="rowhead"><h2>2 · Airflow and ionic wind</h2><span class="eyebrow" id="d3flowsrc"></span></div>
-        <div class="d3ctl">
-          <label for="d3flow">Flow <select id="d3flow">
-            <option value="pre:on">ionic wind on, tabs leaning downstream (as installed)</option>
-            <option value="pre:off">corona off, tabs leaning downstream</option>
-            <option value="pre:on_flip">ionic wind on, tabs leaning upstream</option>
-            <option value="pre:off_flip">corona off, tabs leaning upstream</option>
-          </select></label>
-        </div>
-        <p class="note">These four flows are our reference LES runs (2.5 s each, 12 kV, 0.1 mm tips), downloaded on first use (26 MB each). You can also run the LES here: it is the same code, but long.</p>
-        <details style="margin-top:8px"><summary class="eyebrow">Run the LES in this browser</summary>
-          <div class="d3ctl">
-            <label for="d3lkv">Corona, kV <input type="text" id="d3lkv" value="12" style="width:6ch"></label>
-            <label for="d3lflip"><input type="checkbox" id="d3lflip"> tabs leaning upstream</label>
-            <label for="d3ldur">Length <select id="d3ldur"><option value="2.5">2.5 s, as our runs (≈ 45 min on a fast desktop GPU, hours on a laptop)</option><option value="1.0">1 s (≈ 20 min; shorter statistics)</option><option value="0.3">0.3 s (≈ 6 min; the flow is still settling)</option></select></label>
-            <button type="button" class="btn" id="d3lesrun">Run the LES</button><button type="button" class="btn" id="d3lesstop" hidden>Stop</button>
-          </div>
-          <div class="d3log" id="d3leslog"></div>
-        </details>
-        <div class="scroll"><table class="cmp" id="d3les"></table></div>
-      </section>
-    </div>
-    <section class="panel">
-      <div class="rowhead"><h2>3 · Mist capture through the 8 plates</h2><span class="eyebrow">seconds once the tables are here</span></div>
-      <div class="d3ctl">
-        <label for="d3field">Ions from <select id="d3field"><option value="les">the flow's own LES (12 kV, 0.1 mm)</option><option value="tip">your corona solve (step 1)</option></select></label>
-        <label for="d3n">Parcels per size <select id="d3n"><option value="5000">5,000</option><option value="20000" selected>20,000</option></select></label>
-        <label for="d3iner">Drop inertia <select id="d3iner"><option value="none">tracer drops</option><option value="centripetal">swirl flinging</option><option value="full">full</option></select></label>
-        <button type="button" class="btn primary" id="d3mistrun">Predict capture</button>
+  <!-- ================= 3D SIM ================= -->
+  <section id="device3d" role="tabpanel" aria-labelledby="tab-device3d" hidden>
+    <section class="panel s3">
+      <div class="s3-view" id="s3view"><div class="s3-legend" hidden></div></div>
+      <div class="s3-bar">
+        <label class="s3-box" title="Electrode geometry">Electrode <select id="s3geo"><option value="tabbed6">tabbed ring · 6 tips</option></select></label>
+        <label class="s3-box" title="Tip radius">Tip <select id="s3tip"></select></label>
+        <label class="s3-box" title="Corona voltage (positive)"><input id="s3kv" value="12" inputmode="decimal" aria-label="Voltage, kV"> kV</label>
+        <label class="s3-box" title="The air flow through the stack (LES mean flow)">Flow <select id="s3flow">
+          <option value="pre:on">ionic wind · tips downstream</option><option value="pre:off">no corona · tips downstream</option>
+          <option value="pre:on_flip">ionic wind · tips upstream</option><option value="pre:off_flip">no corona · tips upstream</option>
+          <option value="les">new LES run…</option></select></label>
+        <button type="button" class="s3-go" id="s3solve">Solve corona</button>
+        <button type="button" class="s3-go" id="s3cap">Capture</button>
+        <button type="button" class="s3-go" id="s3lesgo" hidden title="2.5 s of flow: about 45 min on a fast desktop GPU, hours on a laptop">Run LES · ~45 min</button>
       </div>
-      <div class="scroll"><table class="cmp" id="d3mist"></table></div>
-      <p class="note" id="d3mistnote" style="margin-top:8px"></p>
-      <div class="d3log" id="d3mistlog"></div>
+      <div class="s3-card" id="s3card" hidden></div>
+      <div class="s3-layers" id="s3layers"><button type="button" data-l="electrode" aria-pressed="true">electrode</button><button type="button" data-l="ions" aria-pressed="true">ions</button><button type="button" data-l="air" aria-pressed="true">air</button><button type="button" data-l="drops" aria-pressed="true">drops</button>
+        <span class="s3-box" id="s3dsize" hidden style="padding:3px 6px">drop <select id="s3d"></select></span></div>
+      <div class="s3-status" id="s3status"></div>
     </section>
-    <details class="panel"><summary>What this model leaves out</summary><p class="note" style="margin-top:8px">The reduction is measured the way the bench measures it: mist leaving with the corona on over mist leaving with it off. Drops follow the air (or the air plus their own inertia) and charge by field and diffusion charging in the ion field; gravity is off, which is right for a vertical tube. The grid is about 1 mm, so the tip jets are only a few cells wide; drops above 20 µm, the real supply current and the wall film are not in it. On the as-built device it predicts less capture than the bench measured.</p></details>
   </section>
+</section>
 </div>
 
 <script id="wcm-src">/*__WCMODEL__*/</script>
@@ -916,25 +893,21 @@ function drawTube(x, r) {
 }
 
 /* ======================= precomputed designs ======================= */
-const ROWS = DATA ? DATA.rows : [];
-for (const r of ROWS) { r.id = r.id.replace(/^brad_variants/, "disc_variants"); if (r.fam === "brad_variants") r.fam = "disc_variants"; }
-const SETS = [
-  { k: "v1", n: "Fast spray + resolved corona", c: "--set-v1", d: "first sweep: fast model for the spray, full electric field for the corona" },
-  { k: "rerun", n: "Fully resolved, v1 spray designs", c: "--set-rerun", d: "v1's spray designs rerun with spray CFD + resolved corona" },
-  { k: "new", n: "Fully resolved, new concepts", c: "--set-new", d: "ring, coflow, multi-tier and charged-film sprays, cooled walls" },
-];
-const SETK = Object.fromEntries(SETS.map(s => [s.k, s]));
+// one row per design, at the highest fidelity it was run at (a fully resolved rerun replaces its first-sweep run)
+const ROWS = (() => {
+  const all = DATA ? DATA.rows : [], rank = { v1: 0, rerun: 1, new: 1 }, best = new Map();
+  for (const r of all) { r.id = r.id.replace(/^brad_variants/, "disc_variants"); if (r.fam === "brad_variants") r.fam = "disc_variants"; const q = best.get(r.id); if (!q || rank[r.set] > rank[q.set]) best.set(r.id, r); }
+  return [...best.values()];
+})();
 const FAMS = [...new Set(ROWS.map(r => r.fam))];
 const FAMNAME = { corona_only: "corona only", cold_spray: "cold spray", charged_spray: "charged spray", rain_curtain: "rain curtain", disc_variants: "disc variants", multi_tier: "multi-tier", ring_spray: "ring spray", coflow_spray: "coflow spray", charged_film: "charged film", cooled_wall: "cooled wall" };
-const BY_ID_V1 = {}; for (const r of ROWS) if (r.set === "v1") BY_ID_V1[r.id] = r;
-const RERUN_IDS = new Set(ROWS.filter(r => r.set === "rerun").map(r => r.id));
 for (const r of ROWS) {
   const d = r.d;
   r.lg = (d.spray_flow_L_min / 60) / (1.15 * d.air_flow_m3_s);
   r.Wh = r.r.rec > 1e-3 ? (r.r.elecW + r.r.fanW + (r.r.pumpW || 0)) / r.r.rec : NaN;
   r.WhTot = r.r.rec > 1e-3 ? (r.r.elecW + r.r.fanW + (r.r.pumpW || 0) + (r.r.recoolW || 0)) / r.r.rec : NaN;
 }
-const ds = { sets: new Set(["v1", "rerun", "new"]), fams: new Set(FAMS), hideArc: true, hideLG: false, recool: false, x: "Wh", y: "out", color: "set", pareto: true, sort: "out", sortDir: 1, sel: null };
+const ds = { fams: new Set(FAMS), hideArc: true, hideLG: false, recool: false, x: "Wh", y: "out", color: "fam", pareto: true, sort: "out", sortDir: 1, sel: null };
 const RA = [
   { k: "out", n: "Total water out", u: "%", f: r => 100 * r.r.out, g: "Results" },
   { k: "Wh", n: "Energy per liter", u: "Wh/L", f: r => ds.recool ? r.WhTot : r.Wh, log: 1, g: "Results" },
@@ -947,9 +920,6 @@ const RA = [
   { k: "Ima", n: "Corona current", u: "mA", f: r => r.r.Ima, log: 1, g: "Results" },
   { k: "elecW", n: "Electrical power", u: "W", f: r => r.r.elecW, log: 1, g: "Results" },
   { k: "recoolW", n: "Spray recooling power", u: "W", f: r => r.r.recoolW ?? NaN, log: 1, g: "Results" },
-  { k: "bm_out", n: "Fast model: total water out", u: "%", f: r => r.bm ? 100 * r.bm.out : NaN, g: "Model comparison" },
-  { k: "bm_err", n: "Fast model − library: total water out", u: "pts", f: r => r.bm ? 100 * (r.bm.out - r.r.out) : NaN, g: "Model comparison" },
-  { k: "rom_out", n: "Old fast model: total water out (v1)", u: "%", f: r => r.rom ? 100 * r.rom.out : NaN, g: "Model comparison" },
   { k: "lg", n: "Spray water / air", u: "kg/kg", f: r => r.lg, g: "Design" },
   ...["air_flow_m3_s", "tube_diameter_m", "spray_section_length_m", "corona_section_length_m", "nozzle_height_frac", "disc_diameter_frac", "disc_spacing_m", "spray_flow_L_min", "spray_T_C", "spray_d_um", "spray_q_frac", "corona_voltage_kV"].map(k => {
     const p = PK[k] || { n: { spray_d_um: "Drop size", spray_q_frac: "Drop charge (× Rayleigh)" }[k], u: { spray_d_um: "µm", spray_q_frac: "" }[k] };
@@ -960,17 +930,14 @@ const RA = [
 ];
 const RK = Object.fromEntries(RA.map(a => [a.k, a]));
 function dsFiltered() {
-  return ROWS.filter(r => ds.sets.has(r.set) && ds.fams.has(r.fam) && (!ds.hideArc || r.r.arc >= 0) && (!ds.hideLG || r.lg <= LG_MAX));
+  return ROWS.filter(r => ds.fams.has(r.fam) && (!ds.hideArc || r.r.arc >= 0) && (!ds.hideLG || r.lg <= LG_MAX));
 }
 function buildDesigns() {
   if (!ROWS.length) { $("#designs").innerHTML = `<p class="note">No stored designs were bundled with this page.</p>`; return; }
   $("#tabcount").textContent = ROWS.length.toLocaleString();
   $("#snapnote").textContent = `Library snapshot from ${DATA.meta.exported}; more fully resolved runs will appear in later snapshots.`;
-  $("#setfl").innerHTML = SETS.map(s => `<label class="check" title="${s.d}"><input type="checkbox" data-set="${s.k}" checked><span class="dot" style="background:var(${s.c})"></span>${s.n}<span class="n">${ROWS.filter(r => r.set === s.k).length}</span></label>`).join("");
-  $("#setfl").querySelectorAll("input").forEach(i => i.onchange = () => { i.checked ? ds.sets.add(i.dataset.set) : ds.sets.delete(i.dataset.set); dsRender(); });
-  $("#famfl").innerHTML = FAMS.map(f => `<button type="button" data-f="${f}" aria-pressed="true">${FAMNAME[f] || f} <span style="opacity:.7">${ROWS.filter(r => r.fam === f).length}</span></button>`).join("");
-  $("#famfl").querySelectorAll("button").forEach(b => b.onclick = () => { const f = b.dataset.f; ds.fams.has(f) ? ds.fams.delete(f) : ds.fams.add(f); b.setAttribute("aria-pressed", ds.fams.has(f)); dsRender(); });
-  $("#famall").onclick = () => { const all = ds.fams.size === FAMS.length; ds.fams = new Set(all ? [] : FAMS); $("#famfl").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", !all)); dsRender(); };
+  const toggle = f => { ds.fams.has(f) ? ds.fams.delete(f) : ds.fams.add(f); dsRender(); };
+  $("#famstrip").onclick = e => { const b = e.target.closest(".famcard"); if (b) toggle(b.dataset.f); };
   $("#f-arc").onchange = e => { ds.hideArc = e.target.checked; dsRender(); };
   $("#f-lg").onchange = e => { ds.hideLG = e.target.checked; dsRender(); };
   $("#f-recool").onchange = e => { ds.recool = e.target.checked; dsRender(); };
@@ -980,13 +947,24 @@ function buildDesigns() {
     s.value = ds[key]; s.onchange = e => { ds[key] = e.target.value; dsRender(); };
   }
   const dc = $("#dc");
-  dc.innerHTML = `<option value="set">Which runs</option><option value="fam">Concept family</option>` + RA.filter(a => a.g !== "Design" || a.k === "d.spray_T_C" || a.k === "d.corona_voltage_kV").map(a => `<option value="${a.k}">${a.n}</option>`).join("");
+  dc.innerHTML = `<option value="fam">Design family</option>` + RA.filter(a => a.g !== "Design" || a.k === "d.spray_T_C" || a.k === "d.corona_voltage_kV").map(a => `<option value="${a.k}">${a.n}</option>`).join("");
   dc.value = ds.color; dc.onchange = e => { ds.color = e.target.value; dsRender(); };
   $("#dpar").onchange = e => { ds.pareto = e.target.checked; dsRender(); };
-  const best = dsFiltered().filter(r => r.set !== "v1").sort((a, b) => a.r.out - b.r.out)[0];
+  const best = dsFiltered().sort((a, b) => a.r.out - b.r.out)[0];
   ds.sel = best ? best : ROWS[0];
 }
 const FAMCOL = ["#4e79a7", "#e15759", "#59a14f", "#b07aa1", "#f28e2b", "#76b7b2", "#edc948", "#9c755f", "#ff9da7", "#bab0ac"];
+const famCol = f => FAMCOL[FAMS.indexOf(f) % FAMCOL.length];
+/** One card per family: its best water-out design (and that design's energy), the run count; toggles the family. */
+function famStrip(rows) {
+  const by = {};
+  for (const r of ROWS) if ((!ds.hideArc || r.r.arc >= 0) && (!ds.hideLG || r.lg <= LG_MAX)) (by[r.fam] ||= []).push(r);
+  const order = FAMS.slice().sort((a, b) => Math.min(...(by[a] || []).map(r => r.r.out), 9) - Math.min(...(by[b] || []).map(r => r.r.out), 9));
+  $("#famstrip").innerHTML = order.map(f => {
+    const rs = by[f] || [], b = rs.slice().sort((p, q) => p.r.out - q.r.out)[0], Wh = b ? RK.Wh.f(b) : NaN;
+    return `<button type="button" class="famcard" data-f="${f}" style="--c:${famCol(f)}" aria-pressed="${ds.fams.has(f)}" title="best total water out in ${FAMNAME[f] || f}; click to show or hide"><span class="nm">${FAMNAME[f] || f}</span><b>${b ? (100 * b.r.out).toFixed(0) + "%" : "–"}</b><span>${isFinite(Wh) ? Wh.toPrecision(2) + " Wh/L" : "–"} · ${rs.length}</span></button>`;
+  }).join("");
+}
 let scatPts = [];
 const scv = $("#scat"), sctx = scv.getContext("2d"), SM = { l: 64, r: 14, t: 12, b: 44 };
 function dsRender() {
@@ -1016,61 +994,61 @@ function dsRender() {
   let cLo = 0, cHi = 1;
   if (cm) { const v = pts.map(p => tr(cm, cm.f(p.r))).filter(isFinite).sort((a, b) => a - b); if (v.length) { cLo = v[Math.floor(0.02 * (v.length - 1))]; cHi = v[Math.ceil(0.98 * (v.length - 1))]; if (cHi - cLo < 1e-9) cHi = cLo + 1; } }
   const colorOf = r => {
-    if (ds.color === "set") return css(SETK[r.set].c);
-    if (ds.color === "fam") return FAMCOL[FAMS.indexOf(r.fam) % FAMCOL.length];
+    if (ds.color === "fam") return famCol(r.fam);
     const v = tr(cm, cm.f(r)); if (!isFinite(v)) return ink2; const c = vir((v - cLo) / (cHi - cLo)); return `rgb(${c})`;
   };
-  // y = x line for comparison axes
-  if ((ds.x === "bm_out" || ds.x === "rom_out") && ds.y === "out" || (ds.y === "bm_out" || ds.y === "rom_out") && ds.x === "out") {
-    const lo = Math.max(x0, y0), hi = Math.min(x1, y1); sctx.strokeStyle = ink2; sctx.setLineDash([4, 4]); sctx.beginPath(); sctx.moveTo(X(lo), Y(lo)); sctx.lineTo(X(hi), Y(hi)); sctx.stroke(); sctx.setLineDash([]);
-  }
   sctx.save(); sctx.beginPath(); sctx.rect(SM.l, SM.t, pw, ph); sctx.clip();
   scatPts = [];
   for (const p of pts) {
     const px = X(p.x), py = Y(p.y); scatPts.push({ px, py, r: p.r });
-    sctx.globalAlpha = 0.75; sctx.fillStyle = colorOf(p.r);
-    sctx.beginPath(); sctx.arc(px, py, p.r.set === "v1" ? 2.6 : 3.4, 0, 7); sctx.fill();
+    sctx.globalAlpha = 0.55; sctx.fillStyle = colorOf(p.r);
+    sctx.beginPath(); sctx.arc(px, py, 3, 0, 7); sctx.fill();
   }
   sctx.globalAlpha = 1;
   // Pareto front: lower-better on both when both axes are "costs" (out, Wh, dp, esc), else skip
   const lowBetter = { out: 1, Wh: 1, dp: 1, esc: 1, elecW: 1, recoolW: 1 }, highBetter = { rec: 1, vap: 1, arc: 1 };
   let front = [];
   const sx = lowBetter[ds.x] ? 1 : highBetter[ds.x] ? -1 : 0, sy = lowBetter[ds.y] ? 1 : highBetter[ds.y] ? -1 : 0;
+  // Pareto fronts: one per family in its color (the comparison), or one overall when colored by a value
   if (ds.pareto && sx && sy) {
-    const s = pts.slice().sort((a, b) => sx * (a.x - b.x) || sy * (a.y - b.y));
-    let best = Infinity; for (const p of s) if (sy * p.y < best) { best = sy * p.y; front.push(p); }
-    sctx.strokeStyle = ink; sctx.lineWidth = 1.5; sctx.beginPath();
-    front.forEach((p, i) => { const a = X(p.x), b = Y(p.y); i ? sctx.lineTo(a, b) : sctx.moveTo(a, b); }); sctx.stroke();
-    for (const p of front) { sctx.beginPath(); sctx.arc(X(p.x), Y(p.y), 4.5, 0, 7); sctx.strokeStyle = ink; sctx.stroke(); }
+    const groups = ds.color === "fam" ? FAMS.filter(f => ds.fams.has(f)).map(f => [famCol(f), pts.filter(p => p.r.fam === f)]) : [[ink, pts]];
+    for (const [c, gp] of groups) {
+      const s = gp.slice().sort((a, b) => sx * (a.x - b.x) || sy * (a.y - b.y)), fr = [];
+      let best = Infinity; for (const p of s) if (sy * p.y < best) { best = sy * p.y; fr.push(p); }
+      if (!fr.length) continue;
+      sctx.strokeStyle = c; sctx.lineWidth = 2.2; sctx.beginPath();
+      fr.forEach((p, i) => { const a = X(p.x), b = Y(p.y); if (!i) sctx.moveTo(a, b); else { sctx.lineTo(a, Y(fr[i - 1].y)); sctx.lineTo(a, b); } }); sctx.stroke();
+      sctx.fillStyle = c; for (const p of fr) { sctx.beginPath(); sctx.arc(X(p.x), Y(p.y), 3.6, 0, 7); sctx.fill(); }
+      front.push(...fr);
+    }
   }
   if (ds.sel) { const p = pts.find(q => q.r === ds.sel); if (p) star(sctx, X(p.x), Y(p.y)); }
   sctx.restore();
   sctx.strokeStyle = rule; sctx.strokeRect(SM.l + 0.5, SM.t + 0.5, pw, ph);
   // legend
   let lg = "";
-  if (ds.color === "set") lg = SETS.filter(s => ds.sets.has(s.k)).map(s => `<span><span class="dot" style="background:var(${s.c})"></span> ${s.n}</span>`).join("");
-  else if (ds.color === "fam") lg = FAMS.filter(f => ds.fams.has(f)).map(f => `<span><span class="dot" style="background:${FAMCOL[FAMS.indexOf(f) % FAMCOL.length]}"></span> ${FAMNAME[f] || f}</span>`).join("");
+  if (ds.color === "fam") lg = "";
   else lg = `<span>${cm.n}</span><span>${+(cm.log ? 10 ** cLo : cLo).toPrecision(3)} <span class="cbar" style="background:${virCSS}"></span> ${+(cm.log ? 10 ** cHi : cHi).toPrecision(3)} ${cm.u}</span>`;
-  $("#slegend").innerHTML = lg + `<span>${pts.length.toLocaleString()} of ${ROWS.length.toLocaleString()} runs shown</span>` + (front.length ? `<span>— Pareto front: ${front.length} designs no other run beats on both axes</span>` : "") + `<span>★ selected</span>`;
+  $("#slegend").innerHTML = lg + `<span>${pts.length.toLocaleString()} designs</span>` + (front.length ? `<span>lines: each family's best trade-offs</span>` : "") + `<span>★ selected</span>`;
+  famStrip(rows);
   dsTable(rows);
   dsDetail();
 }
 function dsTable(rows) {
   const cols = [
     { k: "id", n: "Design", f: r => r.id, s: r => r.id },
-    { k: "set", n: "Runs", f: r => `<span class="dot" style="background:var(${SETK[r.set].c})"></span>`, s: r => r.set },
+    { k: "fam", n: "Family", f: r => `<span class="dot" style="background:${famCol(r.fam)}"></span> ${FAMNAME[r.fam] || r.fam}`, s: r => r.fam },
     { k: "out", n: "Water out", f: r => (100 * r.r.out).toFixed(1) + "%", s: r => r.r.out, num: 1 },
     { k: "Wh", n: "Wh/L", f: r => fmtN(RK.Wh.f(r)), s: r => RK.Wh.f(r), num: 1 },
     { k: "dp", n: "Δp Pa", f: r => fmtN(r.r.dp), s: r => r.r.dp, num: 1 },
     { k: "arc", n: "Arc margin", f: r => r.r.arc.toFixed(2), s: r => r.r.arc, num: 1 },
     { k: "Ima", n: "Corona mA", f: r => fmtN(r.r.Ima), s: r => r.r.Ima, num: 1 },
     { k: "rec", n: "L/h", f: r => fmtN(r.r.rec), s: r => r.r.rec, num: 1 },
-    { k: "bm", n: "Fast model", f: r => r.bm ? (100 * r.bm.out).toFixed(1) + "%" : "…", s: r => r.bm ? r.bm.out : NaN, num: 1 },
   ];
   const col = cols.find(c => c.k === ds.sort) || cols[2];
   const v = r => { const s = col.s(r); return typeof s === "number" && !isFinite(s) ? Infinity : s; };
   const sorted = rows.slice().sort((a, b) => (v(a) < v(b) ? -1 : v(a) > v(b) ? 1 : 0) * ds.sortDir).slice(0, 60);
-  $("#tabletitle").textContent = `${rows.length.toLocaleString()} runs, top 60 by ${col.n.toLowerCase()}`;
+  $("#tabletitle").textContent = `Top 60 by ${col.n.toLowerCase()}`;
   const t = $("#dtable");
   t.innerHTML = `<thead><tr>${cols.map(c => `<th data-k="${c.k}" class="${c.num ? "n" : ""}" ${c.k === col.k ? `aria-sort="${ds.sortDir > 0 ? "ascending" : "descending"}"` : ""}>${c.n}${c.k === col.k ? (ds.sortDir > 0 ? " ↑" : " ↓") : ""}</th>`).join("")}</tr></thead>` +
     `<tbody>${sorted.map((r, i) => `<tr data-i="${ROWS.indexOf(r)}" aria-selected="${r === ds.sel}">${cols.map(c => `<td class="${c.num ? "n" : ""}">${c.f(r)}</td>`).join("")}</tr>`).join("")}</tbody>`;
@@ -1089,7 +1067,7 @@ function unrepresented(r) { return UNREP.filter(([k, test]) => r.d[k] !== undefi
 function dsDetail() {
   const r = ds.sel, box = $("#detail");
   if (!r) { box.innerHTML = `<p class="note">Click a point or a table row to inspect a design.</p>`; return; }
-  const R = r.r, s = SETK[r.set], pair = r.set === "v1" ? (RERUN_IDS.has(r.id) ? ROWS.find(q => q.set === "rerun" && q.id === r.id) : null) : r.set === "rerun" ? BY_ID_V1[r.id] : null;
+  const R = r.r;
   const Wh = RK.Wh.f(r);
   const kp = kpi("Total water out", (100 * R.out).toFixed(1) + "%", "liquid + vapor leaving the top", R.out > 1 ? "bad" : "", true) +
     kpi("Energy per liter", isFinite(Wh) ? Wh.toPrecision(3) + " Wh/L" : "–", ds.recool ? "electric + fan + pump + recooling" : `electric + fan + pump` + (R.recoolW ? ` · recooling adds ${(R.recoolW / R.rec).toPrecision(3)}` : ""), "", true) +
@@ -1097,9 +1075,8 @@ function dsDetail() {
     kpi("Arc margin", R.arc.toFixed(2), R.arc < 0 ? "arcs" : "no arcing", R.arc < 0 ? "bad" : "", true) +
     kpi("Field at the wall", R.Ewall !== undefined ? R.Ewall.toFixed(2) + " kV/cm" : "–", "corona stage", "", true) +
     kpi("Recovered", R.rec.toFixed(2) + " L/h", `vapor removed ${(100 * R.vap).toFixed(1)}% · liquid escaping ${(100 * R.esc).toFixed(2)}%`) +
-    kpi("Corona", R.Ima.toFixed(3) + " mA", R.Ima0 ? `${R.Ima0.toFixed(2)} mA without mist` : "") +
-    kpi("Fast model", r.bm ? (100 * r.bm.out).toFixed(1) + "%" : "…", r.bm ? `total water out · Δ ${(100 * (r.bm.out - R.out)).toFixed(1)} pts vs stored` : "running");
-  const p = r.d, flags = unrepresented(r);
+    kpi("Corona", R.Ima.toFixed(3) + " mA", R.Ima0 ? `${R.Ima0.toFixed(2)} mA without mist` : "");
+  const p = r.d;
   const prow = (n, v) => `<tr><td>${n}</td><td class="n">${v}</td></tr>`;
   const params = [
     ["Air flow rate", p.air_flow_m3_s.toFixed(3) + " m³/s"], ["Tube diameter", (100 * p.tube_diameter_m).toFixed(1) + " cm"],
@@ -1111,17 +1088,14 @@ function dsDetail() {
     ["Spray water / air", r.lg.toFixed(2) + " kg/kg"],
   ];
   let cmp = "";
-  if (r.set === "v1" && r.rom) cmp += `<div>Old fast model (wrong corona onset): total water out <b>${(100 * r.rom.out).toFixed(1)}%</b>, current <b>${r.rom.Ima.toFixed(2)} mA</b>, onset ${r.rom.Von ? r.rom.Von.toFixed(1) + " kV" : "–"}.</div>`;
-  if (pair) cmp += `<div>${pair.set === "rerun" ? "Same design, fully resolved" : "Same design, fast spray + resolved corona"}: total water out <b>${(100 * pair.r.out).toFixed(1)}%</b>, vapor removed ${(100 * pair.r.vap).toFixed(1)}%, liquid escaping ${(100 * pair.r.esc).toFixed(2)}%. <button type="button" class="btn" id="gopair">Inspect it</button></div>`;
   if (r.ss) cmp += `<div>Spray stage (CFD): air leaves it at <b>${r.ss.Tout?.toFixed(1)} °C</b>, wall film drains ${(100 * (r.ss.film || 0)).toFixed(1)}% of the inlet water${r.ss.recirc ? ", with reverse flow below the nozzle" : ""}.</div>`;
-  box.innerHTML = `<div class="rowhead"><div><span class="eyebrow">${FAMNAME[r.fam] || r.fam} · <span class="dot" style="background:var(${s.c})"></span> ${s.n}</span><h2 style="margin-top:4px">${r.id}</h2></div>
-    <span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="openSim">Open in simulator</button><button type="button" class="btn" id="rerunRes" ${r.set === "v1" ? "title=\"v1 used the fast spray model; the resolved model will differ in the spray stage\"" : ""}>Full simulation</button></span></div>
+  box.innerHTML = `<div class="rowhead"><div><span class="eyebrow"><span class="dot" style="background:${famCol(r.fam)}"></span> ${FAMNAME[r.fam] || r.fam}</span><h2 style="margin-top:4px">${r.id}</h2></div>
+    <span style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn primary" id="openSim">Open in simulator</button><button type="button" class="btn" id="rerunRes">Full simulation</button></span></div>
     <div class="kpis">${kp}</div>
     <div class="two"><div class="scroll"><table class="ptable"><tbody>${params.map(q => prow(...q)).join("")}</tbody></table></div>
-    <div class="val" style="margin:0;grid-template-columns:1fr">${cmp}${flags.length ? `<div><span class="flag">Not in the fast model:</span> ${flags.join("; ")}.</div>` : ""}</div></div>`;
+    <div class="val" style="margin:0;grid-template-columns:1fr">${cmp}</div></div>`;
   $("#openSim").onclick = () => openInSim(r);
   $("#rerunRes").onclick = () => { openInSim(r); runResolved(); setTimeout(() => $("#respanel").scrollIntoView({ behavior: "smooth" }), 50); };
-  if (pair) $("#gopair").onclick = () => { ds.sel = pair; if (!ds.sets.has(pair.set)) { ds.sets.add(pair.set); $(`#setfl input[data-set="${pair.set}"]`).checked = true; } dsRender(); };
 }
 function rowToU(r) {
   const p = r.d, a = r.a;
@@ -1408,127 +1382,133 @@ $("#tab-simulate").onclick = () => showTab("simulate");
 $("#tab-designs").onclick = () => showTab("designs");
 $("#tab-device3d").onclick = () => showTab("device3d");
 
-/* ======================= your device, 3D (StoneLab solver3d in a module worker) ======================= */
-let d3w = null, d3id = 0, d3busy = false, d3info = null, d3tip = null;
-const d3short = {};   // browser LES flows too short to trust
-const d3pend = {}, d3logs = {};
-const D3_MEASURED = 1 - 3.73 / 10.63;
-function d3call(type, args, logEl) {
+/* ======================= 3D sim (StoneLab solver3d in a module worker; sim3d.js draws) ======================= */
+let d3w = null, d3id = 0, d3open = false, d3dev = null, d3tipField = null, d3cap = null, d3busy = false;
+const d3pend = {}, d3loaded = new Set(), D3_BENCH = 1 - 3.73 / 10.63;
+const s3status = t => { $("#s3status").textContent = t; };
+function d3call(type, args = {}) {
   if (!d3w) {
     d3w = new Worker(URL.createObjectURL(new Blob([$("#d3-src").textContent], { type: "text/javascript" })), { type: "module" });
     d3w.onmessage = e => {
       const m = e.data;
-      if (m.lost) { $("#d3gpu").textContent = "the GPU device was lost: " + m.lost; return; }
-      if (m.log) { const el = d3logs[m.id]; if (el) { el.textContent += m.log + "\n"; el.scrollTop = el.scrollHeight; } return; }
+      if (m.lost) { s3status("GPU lost: " + m.lost); return; }
+      if (m.log) { s3status(m.log.trim()); return; }
       const p = d3pend[m.id]; if (!p) return;
-      delete d3pend[m.id]; delete d3logs[m.id];
+      delete d3pend[m.id];
       m.err ? p[1](new Error(m.err)) : p[0](m.ok);
     };
   }
   const id = ++d3id;
-  if (logEl) { d3logs[id] = logEl; logEl.textContent = ""; }
   return new Promise((res, rej) => { d3pend[id] = [res, rej]; d3w.postMessage({ id, type, ...args }); });
 }
-function d3Busy(on) { d3busy = on; for (const b of ["#d3tiprun", "#d3mistrun", "#d3lesrun"]) $(b).disabled = on || !d3info; }
-async function d3Open() {
-  if (d3info !== null) return;
-  if (!navigator.gpu) { d3info = false; $("#d3gpu").textContent = "this browser has no WebGPU (use a recent Chrome or Edge)"; d3Busy(false); return; }
-  d3info = false; d3Busy(true);
-  try {
-    d3info = await d3call("init", {});
-    $("#d3gpu").textContent = `WebGPU ready · largest buffer ${(d3info.maxBuffer / 2 ** 20).toFixed(0)} MiB`;
-    $("#d3rtip").innerHTML = d3info.tipRadii.map(r => `<option value="${r}"${r === "0.1" ? " selected" : ""}>${r} mm</option>`).join("");
-    d3FieldKV();
-  } catch (e) { d3info = false; $("#d3gpu").textContent = "WebGPU could not start: " + e.message; }
-  d3Busy(false);
-}
-const d3kVs = () => $("#d3kv").value.split(/[ ,;]+/).map(Number).filter(v => isFinite(v) && v > 0 && v < 40);
-function d3FieldKV() { const k = d3kVs(); $("#d3fkv").innerHTML = k.map(v => `<option value="${v}"${v === 12 ? " selected" : ""}>${v} kV</option>`).join(""); if (!k.includes(12) && k.length) $("#d3fkv").value = k[k.length - 1]; }
-$("#d3kv").oninput = d3FieldKV;
-$("#d3tiprun").onclick = async () => {
-  const kV = d3kVs(); if (!kV.length) return;
-  d3Busy(true);
-  try {
-    const r = await d3call("tip", { rTip: $("#d3rtip").value, kV, fieldKV: +$("#d3fkv").value }, $("#d3tiplog"));
-    d3tip = r;
-    $("#d3iv").innerHTML = `<thead><tr><th class="n">kV</th><th class="n">per plate</th><th class="n">8 plates</th><th class="n">power, 8 plates</th><th class="n">current balance</th></tr></thead><tbody>` +
-      r.rows.map(q => `<tr><td class="n">${q.kV}</td><td class="n">${q.I_uA > 0 ? q.I_uA.toFixed(2) + " µA" : "no corona"}</td><td class="n">${q.I_uA > 0 ? (8 * q.I_uA).toFixed(1) + " µA" : "–"}</td><td class="n">${q.I_uA > 0 ? (8 * q.P_W).toFixed(2) + " W" : "–"}</td><td class="n">${q.I_uA > 0 ? q.balance.toExponential(0) : "–"}${q.converged ? "" : ' <span class="flag">not converged</span>'}</td></tr>`).join("") +
-      `</tbody><caption class="eyebrow" style="caption-side:bottom;text-align:left;padding-top:6px">onset of an isolated tip of this radius ≈ ${(r.V_on_ref / 1e3).toFixed(1)} kV · grid ${r.nx}×${r.nx}×${r.nz}, h ${(r.h * 1e3).toFixed(2)} mm</caption>`;
-    d3Maps(r);
-    $("#d3field").value = "tip";
-  } catch (e) { $("#d3tiplog").textContent += "failed: " + e.message; }
-  d3Busy(false);
-};
-function d3Maps(r) {
-  if (!r.slices) { $("#d3maps").hidden = true; return; }
-  $("#d3maps").hidden = false;
-  let hi = 0;
-  for (const s of r.slices) for (const v of s.n) hi = Math.max(hi, v);
-  const lhi = Math.log10(Math.max(hi, 1)), llo = lhi - 4;
-  r.slices.forEach((s, k) => {
-    const cv = $("#d3m" + k), c = cv.getContext("2d"), img = c.createImageData(s.nx, s.ny);
-    for (let j = 0; j < s.ny; j++) for (let i = 0; i < s.nx; i++) {
-      const v = s.n[i + s.nx * j], p = 4 * (i + s.nx * (s.ny - 1 - j));
-      if (!(v > 0)) { img.data[p + 3] = s.E[i + s.nx * j] > 0 ? 40 : 0; continue; }
-      const col = vir((Math.log10(v) - llo) / (lhi - llo));
-      img.data[p] = col[0]; img.data[p + 1] = col[1]; img.data[p + 2] = col[2]; img.data[p + 3] = 255;
-    }
-    c.putImageData(img, 0, 0);
-    $("#d3m" + k + "t").textContent = `ion density, ${s.name} (z = ${(s.z * 1e3).toFixed(1)} mm)`;
-  });
-  $("#d3mleg").innerHTML = `<span>ions, 1/m³ (log)</span><span>${(10 ** llo).toPrecision(2)} <span class="cbar" style="background:${virCSS}"></span> ${(10 ** lhi).toPrecision(2)}</span><span>${r.fieldSource}</span>`;
-}
 const d3Base = () => new URL("device3d", location.href).href;
-const d3Pre = k => k.startsWith("pre:") ? k.slice(4) : null;
-const d3Baseline = k => k.startsWith("les:") ? (k.includes("_flip") ? "pre:off_flip" : "pre:off") : (k.includes("flip") ? "pre:off_flip" : "pre:off");
-// the ions for a flow: its own LES's when that run had the corona on, else the reference 12 kV run of the
-// same tab orientation (a corona-off flow is still charged by a corona in the capture step)
-const d3FieldOfFlow = k => k.startsWith("les:") && !k.startsWith("les:off") ? k : (k.includes("flip") ? "pre:on_flip" : "pre:on");
-$("#d3mistrun").onclick = async () => {
-  const flow = $("#d3flow").value, baseline = d3Baseline(flow);
-  const useTip = $("#d3field").value === "tip";
-  if (useTip && !d3tip?.hasField) { $("#d3mistlog").textContent = "Solve the corona in step 1 first (or pick the flow's own LES ions)."; return; }
-  d3Busy(true);
+async function d3load(names) {
+  const need = names.filter(n => !d3loaded.has(n));
+  if (!need.length) return;
+  await d3call("load", { base: d3Base(), names: need });
+  need.forEach(n => d3loaded.add(n));
+}
+const d3pre = k => k.startsWith("pre:") ? k.slice(4) : null;
+const d3baseline = k => k.includes("flip") ? "pre:off_flip" : "pre:off";
+const d3ionsOf = k => k.startsWith("les:") && !k.startsWith("les:off") ? k : (k.includes("flip") ? "pre:on_flip" : "pre:on");
+function d3lock(on) { d3busy = on; for (const b of ["#s3solve", "#s3cap"]) $(b).disabled = on || !d3dev; }
+async function d3Open() {
+  if (d3open) return;
+  d3open = true;
+  if (!navigator.gpu) { s3status("needs WebGPU (recent Chrome or Edge)"); return; }
+  if (!window.Sim3D) await new Promise(r => window.addEventListener("sim3d-ready", r, { once: true }));
+  Sim3D.init($("#s3view"));
+  d3lock(true);
   try {
-    const need = [...new Set([flow, baseline].map(d3Pre).filter(Boolean))];
-    if (need.length) await d3call("load", { base: d3Base(), names: need }, $("#d3mistlog"));
-    const field = useTip ? "tip" : d3FieldOfFlow(flow);
-    if (d3Pre(field)) await d3call("load", { base: d3Base(), names: [d3Pre(field)] }, $("#d3mistlog"));
-    const r = await d3call("mist", { field, flow, baseline, perClass: +$("#d3n").value, inertia: $("#d3iner").value }, $("#d3mistlog"));
-    const pct = v => (100 * v).toFixed(1) + "%";
-    $("#d3mist").innerHTML = `<thead><tr><th class="n">drop size</th><th class="n">predicted reduction</th><th></th><th class="n">escape, core (r < 35 mm)</th><th class="n">escape, annulus</th><th class="n">share of escapes from the core</th></tr></thead><tbody>` +
-      r.rows.map(q => `<tr><td class="n">${q.d_um.toFixed(0)} µm</td><td class="n"><b>${pct(q.reduction)}</b></td><td><span class="d3bar" style="width:${Math.max(0, 140 * q.reduction).toFixed(0)}px"></span></td><td class="n">${pct(q.escapeProbCore)}</td><td class="n">${pct(q.escapeProbAnnulus)}</td><td class="n">${pct(q.escapedCoreShare)}</td></tr>`).join("") +
-      `<tr><td class="n">bench</td><td class="n"><b>${pct(D3_MEASURED)}</b></td><td><span class="d3bar" style="width:${(140 * D3_MEASURED).toFixed(0)}px;background:var(--volt)"></span></td><td colspan="3" class="d">10.63 → 3.73 g/min, mixed sizes</td></tr></tbody>`;
-    $("#d3mistnote").innerHTML = (d3short[flow] ? `<span class="flag">This flow comes from a short LES run that has not settled; treat the result as a smoke test, not a prediction.</span> ` : "") +
-      `Flow: ${r.flow}. Ions: ${r.field}. Baseline (corona off): ${r.baseline}.`;
-  } catch (e) { $("#d3mistlog").textContent += "failed: " + e.message; }
-  d3Busy(false);
+    const info = await d3call("init");
+    $("#s3tip").innerHTML = info.tipRadii.map(r => `<option value="${r}"${r === "0.1" ? " selected" : ""}>${r} mm</option>`).join("");
+    d3dev = { ...info.device, plateZ0: 0.013125 };
+    Sim3D.setStack(d3dev);
+    s3status("electrode …");
+    Sim3D.setMesh(await d3call("mesh", { rTip: "0.1" }));
+    await d3showFlow();
+    s3status("");
+  } catch (e) { s3status("could not start: " + e.message); }
+  d3lock(false);
+}
+async function d3showFlow() {
+  const k = $("#s3flow").value;
+  if (d3pre(k)) await d3load([d3pre(k)]);
+  Sim3D.setFlow(await d3call("flowGrid", { flow: k, stride: 2 }));
+  const ions = d3tipField ? "tip" : d3ionsOf(k);
+  if (d3pre(ions)) await d3load([d3pre(ions)]);
+  const I = await d3call("ions", { field: ions, floor: 3e13, max: 45000 });
+  Sim3D.setIons(I.points, I.mirrored);
+  Sim3D.setDrops(null); d3cap = null; d3card();
+}
+let d3prevFlow = "pre:on";
+$("#s3flow").onchange = async () => {
+  $("#s3lesgo").hidden = $("#s3flow").value !== "les";
+  if ($("#s3flow").value === "les") return;
+  d3prevFlow = $("#s3flow").value;
+  d3lock(true);
+  try { await d3showFlow(); s3status(""); } catch (e) { s3status(e.message); }
+  d3lock(false);
 };
-$("#d3flow").onchange = () => { $("#d3flowsrc").textContent = $("#d3flow").value.startsWith("les:") ? "your LES run" : "reference LES"; };
-$("#d3lesrun").onclick = async () => {
-  const kV = Math.max(0, +$("#d3lkv").value || 0), flip = $("#d3lflip").checked, tEnd = +$("#d3ldur").value;
-  d3Busy(true); $("#d3lesstop").hidden = false;
+$("#s3solve").onclick = async () => {
+  const kV = +$("#s3kv").value;
+  if (!(kV > 0 && kV < 40)) { s3status("voltage 1–40 kV"); return; }
+  d3lock(true);
   try {
-    const r = await d3call("les", { kV, rTip: "0.1", flip, tEnd, statsStart: Math.min(0.5, 0.2 * tEnd) }, $("#d3leslog"));
-    const s = r.summary, f = (v, d = 3) => isFinite(v) ? v.toPrecision(d) : "–";
-    // our reference runs average 2 s after 0.5 s of spin-up; much less is the start-up transient, not the flow
-    const short = s.statsWindow < 1 || s.status !== "completed";
-    d3short[r.flowKey] = short;
-    $("#d3les").innerHTML = (short ? `<caption class="flag" style="caption-side:top;text-align:left;padding-bottom:6px">${s.status !== "completed" ? "stopped early" : "short run"}: ${s.statsWindow.toFixed(2)} s of statistics. The flow has not settled, so these numbers (and capture on this flow) are not a prediction.</caption>` : "") +
-      `<tbody><tr><td>status</td><td class="n">${s.status}, ${s.steps} steps, ${(s.runSeconds / 60).toFixed(0)} min</td></tr>
-      <tr><td>pressure drop per plate</td><td class="n">${f(s.dp_per_pitch_Pa)} Pa</td></tr><tr><td>swirl number</td><td class="n">${f(s.swirlNumber, 2)}</td></tr>
-      <tr><td>mean swirl in the tip gap</td><td class="n">${f(s.gap_ut_mean, 2)} m/s</td></tr><tr><td>eddy diffusivity in the gap</td><td class="n">${f(s.D_fluct_gap * 1e4, 3)} cm²/s (pipe ${f(s.D_pipe_gap * 1e4, 3)})</td></tr>` +
-      (s.ehd ? `<tr><td>corona current with flow</td><td class="n">${f(s.ehd.I_uA, 4)} µA per plate</td></tr><tr><td>Coulomb force: radial / azimuthal / along the flow</td><td class="n">${(s.ehd.F_radial_N * 1e3).toFixed(2)} / ${(s.ehd.F_azimuthal_N * 1e3).toFixed(2)} / ${(s.ehd.F_axial_along_flow_N * 1e3).toFixed(3)} mN</td></tr>` : "") + "</tbody>";
-    const label = `your LES: ${kV ? kV + " kV" : "corona off"}${flip ? ", tabs upstream" : ""}, ${tEnd} s`;
-    let opt = [...$("#d3flow").options].find(o => o.value === r.flowKey);
-    if (!opt) { opt = new Option(label, r.flowKey); $("#d3flow").add(opt); }
-    $("#d3flow").value = r.flowKey; $("#d3flow").onchange();
-  } catch (e) { $("#d3leslog").textContent += "failed: " + e.message; }
-  $("#d3lesstop").hidden = true; d3Busy(false);
+    const r = await d3call("tip", { rTip: $("#s3tip").value, kV: [kV], fieldKV: kV });
+    d3tipField = r.hasField ? { kV, rTip: $("#s3tip").value, I: r.rows[0].I_uA, Von: r.V_on_ref } : null;
+    Sim3D.setMesh(await d3call("mesh", { rTip: $("#s3tip").value }));
+    if (r.hasField) { const I = await d3call("ions", { field: "tip", floor: 3e13, max: 45000 }); Sim3D.setIons(I.points, I.mirrored); }
+    else Sim3D.setIons(null);
+    Sim3D.setDrops(null); d3cap = null; d3card(); s3status("");
+  } catch (e) { s3status(e.message); }
+  d3lock(false);
 };
-$("#d3lesstop").onclick = () => d3w?.postMessage({ type: "abort" });
+$("#s3cap").onclick = async () => {
+  const flow = $("#s3flow").value, baseline = d3baseline(flow), field = d3tipField ? "tip" : d3ionsOf(flow);
+  d3lock(true);
+  try {
+    await d3load([...new Set([flow, baseline, field].map(d3pre).filter(Boolean))]);
+    d3cap = await d3call("mist", { field, flow, baseline, perClass: 20000, inertia: "none" });
+    $("#s3d").innerHTML = d3cap.rows.map((q, i) => `<option value="${i}"${i === d3cap.rows.length - 1 ? " selected" : ""}>${q.d_um.toFixed(0)} µm</option>`).join("");
+    $("#s3dsize").hidden = false;
+    Sim3D.setDrops(d3cap.rows[+$("#s3d").value].charged.sample);
+    d3card(); s3status("");
+  } catch (e) { s3status(e.message); }
+  d3lock(false);
+};
+$("#s3d").onchange = () => { if (d3cap) Sim3D.setDrops(d3cap.rows[+$("#s3d").value].charged.sample); };
+$("#s3layers").querySelectorAll("button").forEach(b => b.onclick = () => { const on = b.getAttribute("aria-pressed") !== "true"; b.setAttribute("aria-pressed", on); Sim3D.setLayer(b.dataset.l, on); });
+function d3card() {
+  const c = $("#s3card"), t = d3tipField;
+  if (!t && !d3cap) { c.hidden = true; return; }
+  let h = "";
+  if (t) h += `<div><div class="eyebrow">corona · ${t.kV} kV · tip ${t.rTip} mm</div><div class="big">${t.I > 0 ? (8 * t.I).toFixed(0) + " µA" : "none"}</div><div class="eyebrow">${t.I > 0 ? `${t.I.toFixed(1)} µA per plate · ${(8e-3 * t.I * t.kV).toFixed(2)} W` : `onset ≈ ${(t.Von / 1e3).toFixed(1)} kV`}</div></div>`;
+  if (d3cap) {
+    const W = 206, row = 20, H = row * (d3cap.rows.length + 1) + 6, x0 = 40, sx = v => x0 + (W - x0 - 6) * Math.max(0, Math.min(1, v));
+    const bars = d3cap.rows.map((q, i) => `<text x="0" y="${i * row + 14}" fill="var(--ink-3)" font-size="10">${q.d_um.toFixed(0)} µm</text><rect x="${x0}" y="${i * row + 4}" width="${sx(q.reduction) - x0}" height="12" rx="2" fill="var(--water)"/><text x="${sx(q.reduction) + 3}" y="${i * row + 14}" fill="var(--ink)" font-size="10">${(100 * q.reduction).toFixed(0)}%</text>`).join("");
+    const yb = d3cap.rows.length * row + 4;
+    h += `<div><div class="eyebrow">mist removed</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Predicted mist reduction by drop size">${bars}
+      <line x1="${sx(D3_BENCH)}" x2="${sx(D3_BENCH)}" y1="0" y2="${yb + 12}" stroke="var(--volt)" stroke-dasharray="3 2"/><text x="${sx(D3_BENCH) - 2}" y="${yb + 12}" fill="var(--volt)" font-size="10" text-anchor="end">bench ${(100 * D3_BENCH).toFixed(0)}%</text></svg></div>`;
+  }
+  c.innerHTML = h; c.hidden = false;
+}
+$("#s3lesgo").onclick = async () => {
+  const kV = +$("#s3kv").value || 0, flip = d3prevFlow.includes("flip");
+  $("#s3lesgo").hidden = true;
+  d3lock(true);
+  try {
+    const r = await d3call("les", { kV, rTip: $("#s3tip").value, flip, tEnd: 2.5, statsStart: 0.5 });
+    const o = new Option(`LES · ${kV} kV · tips ${flip ? "upstream" : "downstream"}`, r.flowKey);
+    $("#s3flow").add(o, $("#s3flow").options[$("#s3flow").options.length - 1]);
+    $("#s3flow").value = r.flowKey; d3prevFlow = r.flowKey;
+    d3tipField = null;
+    await d3showFlow(); s3status(r.summary.status === "completed" ? "" : "LES " + r.summary.status);
+  } catch (e) { $("#s3flow").value = d3prevFlow; s3status(e.message); }
+  d3lock(false);
+};
 
-/* ======================= validation ======================= */
+/* ======================= validation/* ======================= validation ======================= */
 async function selfCheck() {
   const n = 64, arr = new Float32Array(n * S_IN), xs = [];
   let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -1573,7 +1553,7 @@ scv.addEventListener("mousemove", ev => {
   let best = null, bd = 64; for (const p of scatPts) { const d = (p.px - x) ** 2 + (p.py - y) ** 2; if (d < bd) { bd = d; best = p; } }
   if (!best) { tip.hidden = true; scv.style.cursor = ""; return; }
   const r = best.r; scv.style.cursor = "pointer";
-  tip.innerHTML = `<b>${r.id}</b> · ${SETK[r.set].n}<br>total water out ${(100 * r.r.out).toFixed(1)}%<br>${isFinite(RK.Wh.f(r)) ? RK.Wh.f(r).toPrecision(3) + " Wh/L" : "no recovery"} · Δp ${r.r.dp.toFixed(1)} Pa<br>arc margin ${r.r.arc.toFixed(2)} · ${r.r.Ima.toFixed(2)} mA` + (r.bm ? `<br>fast model ${(100 * r.bm.out).toFixed(1)}%` : "");
+  tip.innerHTML = `<b>${r.id}</b> · ${FAMNAME[r.fam] || r.fam}<br>total water out ${(100 * r.r.out).toFixed(1)}%<br>${isFinite(RK.Wh.f(r)) ? RK.Wh.f(r).toPrecision(3) + " Wh/L" : "no recovery"} · Δp ${r.r.dp.toFixed(1)} Pa<br>arc margin ${r.r.arc.toFixed(2)} · ${r.r.Ima.toFixed(2)} mA` ;
   tip.hidden = false; const tw = tip.offsetWidth; tip.style.left = Math.min(x + 14, rc.width - tw - 4) + "px"; tip.style.top = (y + 14) + "px";
   scv._hover = r;
 });
@@ -1582,3 +1562,4 @@ scv.addEventListener("click", () => { if (scv._hover) { ds.sel = scv._hover; dsR
 </script>
 
 <script type="module">/*__VIEW3D__*/</script>
+<script type="module">/*__SIM3D__*/</script>

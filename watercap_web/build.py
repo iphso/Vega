@@ -29,7 +29,7 @@ device3d = esc(D3.read_text())
 pybundle = esc(json.dumps(watercap_browser.bundle(None), separators=(",", ":")))
 for key, val in [("/*__WCMODEL__*/", (H / "wcmodel.js").read_text()), ("/*__WCGPU__*/", (H / "wcgpu.js").read_text()),
                  ("/*__FIT__*/null", fit), ("/*__DESIGNS__*/null", designs), ("/*__SITE__*/null", json.dumps(site, separators=(",", ":"))), ("/*__RESWORKER__*/", resworker), ("/*__DEVICE3D__*/", device3d),
-                 ("/*__PYBUNDLE__*/null", pybundle), ("/*__VIEW3D__*/", esc((H / "view3d.js").read_text()))]:
+                 ("/*__PYBUNDLE__*/null", pybundle), ("/*__VIEW3D__*/", esc((H / "view3d.js").read_text())), ("/*__SIM3D__*/", esc((H / "sim3d.js").read_text()))]:
     assert s.count(key) == 1, key
     s = s.replace(key, val)
 (H / "workbench.html").write_text(s)
