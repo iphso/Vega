@@ -95,15 +95,24 @@ const TIERS = [
 ];
 const TK = Object.fromEntries(TIERS.map(t => [t.k, t]));
 // what a run will cost, from the design (the spray stage's CFD dominates Resolved when there is spray)
+const EST = new Map();   // dKey|tier -> minutes (the worker's cost model for disc designs)
 function estimate(x, d, t) {
-  if (t.k === "resolved") return d.spray_flow_L_min > 0 ? "~3–8 min" : "~1 min";
+  if (t.k === "resolved") return sprayed(d) ? "~3–8 min" : "~1 min";
+  if (x.kind === "disc" && (t.k === "3dq" || t.k === "3df")) {
+    const k = dKey(d) + "|" + t.k;
+    if (!EST.has(k)) { EST.set(k, null); d3call("estimate3d", { design: d, aux: condAux(), tier: t.k === "3dq" ? "quick" : "full" }).then(e => { EST.set(k, e.minutes); if (x === sel) renderSide(); }).catch(() => {}); }
+    const m = EST.get(k);
+    return m == null ? "…" : m < 1 ? "<1 min" : `~${Math.round(m)} min`;
+  }
   return t.est;
 }
-let D3DISC = false;   // disc designs in 3D: on once the device3d worker offers it
-function tierAvail(x, t) {
+const condAux = () => ({ inlet_T_C: cond.inlet_T_C, inlet_RH: cond.inlet_RH, inlet_lwc_g_m3: cond.inlet_lwc_g_m3, mist_mmd_um: cond.mist_mmd_um, mist_gsd: cond.mist_gsd, ambient_T_C: cond.ambient_T_C });
+// the 3D tier models the corona stage: a design with a spray stage waits for the spray in 3D
+const sprayed = d => d.spray_flow_L_min > 0;
+function tierAvail(x, t, d = x.d) {
   if (x.kind === "tabbed") return t === "3dq" || t === "3df";
   if (t === "fast" || t === "resolved") return true;
-  return D3DISC;
+  return !sprayed(d);
 }
 // results live under the design's id, or under id::draft while its parameters are being edited; a result
 // counts when it was made under the current conditions for exactly these parameters
@@ -253,25 +262,70 @@ async function d3init() {
     const info = await d3call("init");
     if (!window.Sim3D) await new Promise(r => window.addEventListener("sim3d-ready", r, { once: true }));
     Sim3D.init($("#s3view"));
-    Sim3D.setStack({ ...info.device, plateZ0: 0.013125 });
     return info;
   })();
   return d3ready;
 }
 async function d3show(x, d, flowKey, fieldKey, drops) {
-  await d3init();
+  const gen = ++showGen;
+  const info = await d3init();
   const rTip = String(d.tip_radius_mm);
   if (!d3mesh[rTip]) d3mesh[rTip] = await d3call("mesh", { rTip });
-  Sim3D.setMesh(d3mesh[rTip]);
   if (flowKey.startsWith("pre:")) await d3load([flowKey.slice(4)]);
-  Sim3D.setFlow(await d3call("flowGrid", { flow: flowKey, stride: 2 }));
-  if (fieldKey) { if (fieldKey.startsWith("pre:")) await d3load([fieldKey.slice(4)]); const I = await d3call("ions", { field: fieldKey, floor: 3e13, max: 45000 }); Sim3D.setIons(I.points, I.mirrored); }
+  const grid = await d3call("flowGrid", { flow: flowKey, stride: 2 });
+  let I = null;
+  if (fieldKey) { if (fieldKey.startsWith("pre:")) await d3load([fieldKey.slice(4)]); I = await d3call("ions", { field: fieldKey, floor: 3e13, max: 45000 }); }
+  if (gen !== showGen) return;
+  Sim3D.setStack({ ...info.device, plateZ0: 0.013125 });
+  Sim3D.setMesh(d3mesh[rTip]); Sim3D.setFlow(grid);
+  if (I) Sim3D.setIons(I.points, I.mirrored);
   Sim3D.setDrops(drops || null);
 }
 const leanKey = d => d.tab_lean === "upstream" ? "_flip" : "";
+// what the worker currently holds for display, per slot ("disc:quick" / "disc:full"): whose run it is
+const d3owner = {}, d3drops = {};
+async function run3DDisc(x, d, tier) {
+  const key = x.id + "|" + tier, ck = condKey(cond), dk = dKey(d), t0 = performance.now(), wt = tier === "3dq" ? "quick" : "full";
+  const mins = EST.get(dk + "|" + tier) || (tier === "3dq" ? 0.5 : 10);
+  running[key] = { frac: 0.02, note: "starting" }; render();
+  const tick = setInterval(() => { if (running[key]) { running[key].frac = Math.min(0.95, (performance.now() - t0) / 60000 / mins); renderSide(); } }, 2000);
+  try {
+    const r = await d3call("design3d", { design: d, aux: condAux(), tier: wt, perClass: 20000 }, s => { running[key].note = s.replace(/\s*\.\.\.$/, "").slice(0, 60); });
+    const M = r.metrics, Q = d.air_flow_m3_s, w = waterIn(Q, cond);
+    const capLh = M.capture_mass_frac * w.mist;
+    // pressure drop: the LES's on the full tier; the quick flow has none, so the best lower tier's
+    const lower = valid(x, "resolved", d) || valid(x, "fast", d);
+    const dp = M.dp_Pa ?? lower?.m.dp ?? NaN, fan = isFinite(dp) ? dp * Q / 0.6 : 0;
+    const m = metric(capLh / (w.vapor + w.mist), capLh, M.power_W + fan, dp, 1 - d.corona_voltage_kV * 1e3 / sparkV(d.tube_diameter_m / 2 * (1 - d.disc_diameter_frac), d.corona_polarity),
+      { "mist removed": [100 * M.capture_mass_frac, "%"], "corona current": [M.current_mA, "mA"], "electrical": [M.power_W, "W"], "fan": [fan, "W"], "corona onset": [M.V_on_kV, "kV"] });
+    const slot = "disc:" + wt;
+    const v = { cond: ck, dk, m, at: Date.now(), by: "", secs: (performance.now() - t0) / 1e3, bySize: M.capture_by_size.map(q => [q.d_um, q.capture]),
+      view: { kind: "disc", slot, stack: r.stack } };
+    resOf(x, d)[tier] = v;
+    d3owner[slot] = rkey(x, d) + "|" + dk; d3drops[slot] = r.drops;
+    if (rkey(x, d) === x.id) putResult(x.id, tier, v);
+  } catch (e) { toast("3D run failed: " + e.message); }
+  clearInterval(tick); delete running[key]; d3busy = false; render(); if (x === sel) renderView();
+}
+// each show fetches its pieces first and draws only if no newer show started meanwhile
+let showGen = 0;
+async function d3showDisc(d, view, bySize) {
+  const gen = ++showGen;
+  await d3init();
+  const st = view.stack, shown = Math.min(st.discs, 10);
+  const mesh = await d3call("mesh", { electrode: { kind: "disc", diameter_m: 2 * st.rd, thickness_mm: st.thickness * 1e3 } });
+  const grid = await d3call("flowGrid", { flow: view.slot, stride: 2 });
+  const I = await d3call("ions", { field: view.slot, floor: 3e13, max: 45000 });
+  if (gen !== showGen) return;
+  Sim3D.setStack({ R: st.R, plates: shown, pitch: st.spacing, thickness: st.thickness, plateZ0: st.discZ0 });
+  Sim3D.setMesh(mesh); Sim3D.setFlow(grid); Sim3D.setIons(I.points, I.mirrored);
+  const drops = d3drops[view.slot];
+  Sim3D.setDrops(drops && bySize ? drops[nearestClass(bySize.map(([d_um]) => ({ d_um })))] : null);
+}
 async function run3D(x, d, tier) {
   const key = x.id + "|" + tier, ck = condKey(cond), dk = dKey(d), t0 = performance.now();
   if (d3busy) { toast("a 3D run is already going"); return; }
+  if (x.kind === "disc") { d3busy = true; return run3DDisc(x, d, tier); }
   d3busy = true;
   const note = s => { running[key] = { ...running[key], note: s.replace(/\s*\.\.\.$/, "") }; renderSide(); };
   running[key] = { frac: 0.03, note: "starting" }; render();
@@ -282,11 +336,13 @@ async function run3D(x, d, tier) {
     running[key].frac = 0.1;
     const tip = await d3call("tip", { rTip: String(d.tip_radius_mm), kV: [d.corona_voltage_kV], fieldKV: d.corona_voltage_kV }, note);
     I_uA = tip.rows[0]?.I_uA ?? 0;
+    d3owner.tip = rkey(x, d) + "|" + dk;
     if (tier === "3dq") { flow = "pre:on" + fl; field = "tip"; }
     else {
       running[key].frac = 0.2; note("LES");
       const r = await d3call("les", { kV: d.corona_voltage_kV, rTip: String(d.tip_radius_mm), flip: !!fl, tEnd: 2.5, statsStart: 0.5 }, s => { const m = /t=([\d.]+)/.exec(s); if (m) running[key].frac = 0.2 + 0.7 * Math.min(1, +m[1] / 2.5); note(s.slice(0, 60)); });
       flow = r.flowKey; field = r.fieldKey || "tip"; if (r.summary.ehd) I_uA = r.summary.ehd.I_uA;
+      d3owner[flow] = d3owner[field] = rkey(x, d) + "|" + dk;
       lesRuns[rkey(x, d)] = r.summary;
     }
     running[key].frac = 0.92; note("capture");
@@ -424,17 +480,24 @@ function renderHead() {
 }
 let axiTimer = null;
 function renderView() {
-  const x = sel, d = curD(), is3 = x.kind === "tabbed";
+  const x = sel, d = curD(), b = best(x, d);
+  // a disc design shows its 3D run while the worker still holds it, else the axisymmetric view
+  const v3 = x.kind === "disc" && b && !b.stale && b.r.view?.kind === "disc" && d3owner[b.r.view.slot] === rkey(x, d) + "|" + dKey(d) ? b.r.view : null;
+  const is3 = x.kind === "tabbed" || !!v3;
+  if (v3) { $("#paneAxi").hidden = true; $("#pane3d").hidden = false; d3showDisc(d, v3, b.r.bySize).catch(e => toast(e.message)); return; }
   $("#paneAxi").hidden = is3; $("#pane3d").hidden = !is3;
   if (!is3) {
+    showGen++;
     clearTimeout(axiTimer);
     axiTimer = setTimeout(() => {   // the fast model's profiles drive the axisymmetric view
       const xx = fastX(d), r = WCModel.simulate(xx, { ...MODEL_OPT, fit: FIT, profile: true });
       window.__wbLast = { x: xx, r }; window.View3D?.update(xx, r);
     }, 30);
   } else {
-    const b = best(x, d), v = b && !b.stale ? b.r.view : null;
-    d3show(x, d, v?.flow || "pre:on" + leanKey(d), v?.field || "pre:on" + leanKey(d), null).catch(e => toast(e.message));
+    // a run's own fields live only in this page's worker: use them while they are this design's, else the references
+    const v = b && !b.stale ? b.r.view : null, me = rkey(x, d) + "|" + dKey(d), ref = "pre:on" + leanKey(d);
+    const mine = k => k && (k.startsWith("pre:") || d3owner[k] === me) ? k : null;
+    d3show(x, d, mine(v?.flow) || ref, mine(v?.field) || ref, null).catch(e => toast(e.message));
   }
 }
 
@@ -457,9 +520,9 @@ function renderSide() {
     : `<div class="kpi" style="grid-column:1/3"><span class="s">Run it at any fidelity below.</span></div>`;
   const ago = t => { const s = (Date.now() - t) / 1e3; return s < 90 ? "just now" : s < 5400 ? Math.round(s / 60) + " min ago" : s < 129600 ? Math.round(s / 3600) + " h ago" : new Date(t).toLocaleDateString(); };
   $("#ladder").innerHTML = TIERS.map(t => {
-    const av = tierAvail(x, t.k), run = running[x.id + "|" + t.k], r = valid(x, t.k, d), old = results[rkey(x, d)]?.[t.k];
+    const av = tierAvail(x, t.k, d), run = running[x.id + "|" + t.k], r = valid(x, t.k, d), old = results[rkey(x, d)]?.[t.k];
     let st;
-    if (!av) st = x.kind === "tabbed" ? "not for this electrode" : "coming soon";
+    if (!av) st = x.kind === "tabbed" ? "not for this electrode" : "spray stage not in 3D yet";
     else if (run) st = run.note || "running";
     else if (r) st = t.k === "fast" ? `${fmt.cap(r.m)} · ${fmt.Wh(r.m)}` : `${fmt.cap(r.m)} · ${fmt.Wh(r.m)} · ${r.by === "library" ? "library" : ago(r.at)}${r.by && r.by !== "library" ? " · " + r.by.split("@")[0] : ""}`;
     else st = (old ? "out of date · " : "") + estimate(x, d, t);

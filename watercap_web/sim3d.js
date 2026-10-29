@@ -73,6 +73,8 @@ function setStack(d) {
   dev = d;
   if (tube) stack.remove(tube);
   const L = d.plates * d.pitch;
+  if (ionsObj) { stack.remove(ionsObj); ionsObj = null; }
+  if (dropsObj) { stack.remove(dropsObj); dropsObj = null; }
   const g = new THREE.CylinderGeometry(d.R, d.R, L + 0.06, 96, 1, true);
   g.translate(0, L / 2, 0);
   tube = new THREE.Mesh(g, new THREE.MeshPhysicalMaterial({ color: COL.tube, transparent: true, opacity: 0.08, roughness: 0.15, side: THREE.DoubleSide, depthWrite: false }));
@@ -84,13 +86,16 @@ function setStack(d) {
   }
   tube.add(edges);
   stack.add(tube);
+  // frame the stack: distance from its larger dimension
+  const span = Math.max(L, 2.4 * d.R), dist = 2.7 * span;
   controls.target.set(0, L * 0.46, 0);
-  camera.position.set(0.46, L * 0.95, 0.56);
+  camera.position.set(0.58 * dist, L * 0.46 + 0.42 * dist, 0.7 * dist);
 }
 
 /** The plate surface (plate-local: lower face at z = 0), drawn at each pitch; `mirrored` flips it (counter-flow frame). */
-let meshGeom = null, mirroredFrame = false, plateZ = 0;
+let meshGeom = null, mirroredFrame = false, plateZ = 0, centered = false;
 function setMesh(m) {
+  centered = m.kind === "disc";   // disc meshes sit on their mid-plane; plate meshes start at their lower face
   meshGeom = new THREE.BufferGeometry();
   const P = m.positions, N = m.normals, p = new Float32Array(P.length), n = new Float32Array(N.length);
   for (let i = 0; i < P.length; i += 3) { p[i] = P[i]; p[i + 1] = P[i + 2]; p[i + 2] = -P[i + 1]; n[i] = N[i]; n[i + 1] = N[i + 2]; n[i + 2] = -N[i + 1]; }
@@ -103,7 +108,7 @@ function placePlates() {
   plates.clear();
   if (!meshGeom || !dev) return;
   const mat = new THREE.MeshStandardMaterial({ color: COL.plate, metalness: 0.35, roughness: 0.38, side: THREE.DoubleSide });
-  const lower = (plateZ || dev.plateZ0 + 0.5 * dev.thickness) - 0.5 * dev.thickness;
+  const lower = (plateZ || dev.plateZ0 + 0.5 * dev.thickness) - (centered ? 0 : 0.5 * dev.thickness);
   for (let k = 0; k < dev.plates; k++) {
     const o = new THREE.Mesh(meshGeom, mat);
     if (mirroredFrame) { o.scale.y = -1; o.position.y = k * dev.pitch + dev.pitch - lower; } else o.position.y = k * dev.pitch + lower;
@@ -200,13 +205,15 @@ function stepAir(dt) {
 function setDrops(smp) {
   if (dropsObj) { stack.remove(dropsObj); dropsObj.geometry.dispose(); dropsObj = null; }
   if (smp && dev) {
-    const n = smp.length / 4, pos = new Float32Array(3 * n), col = new Float32Array(3 * n), v = new THREE.Vector3();
+    const L = dev.plates * dev.pitch, keep = [];
+    for (let i = 0; i < smp.length / 4; i++) if (smp[4 * i + 3] === 1 || smp[4 * i + 2] <= L) keep.push(i);   // drawn stack only
+    const n = keep.length, pos = new Float32Array(3 * n), col = new Float32Array(3 * n), v = new THREE.Vector3();
     const cols = { 1: new THREE.Color(COL.out), 2: new THREE.Color(COL.wall), 3: new THREE.Color(COL.plateHit) };
-    for (let i = 0; i < n; i++) {
-      const f = smp[4 * i + 3], c = cols[f] || cols[1];
-      const z = f === 1 ? dev.plates * dev.pitch + 0.006 : smp[4 * i + 2];
-      S(smp[4 * i], smp[4 * i + 1], z, v); pos[3 * i] = v.x; pos[3 * i + 1] = v.y; pos[3 * i + 2] = v.z;
-      col[3 * i] = c.r; col[3 * i + 1] = c.g; col[3 * i + 2] = c.b;
+    for (let j = 0; j < n; j++) {
+      const i = keep[j], f = smp[4 * i + 3], c = cols[f] || cols[1];
+      const z = f === 1 ? L + 0.006 : smp[4 * i + 2];
+      S(smp[4 * i], smp[4 * i + 1], z, v); pos[3 * j] = v.x; pos[3 * j + 1] = v.y; pos[3 * j + 2] = v.z;
+      col[3 * j] = c.r; col[3 * j + 1] = c.g; col[3 * j + 2] = c.b;
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
