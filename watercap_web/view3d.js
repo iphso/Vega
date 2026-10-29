@@ -23,13 +23,13 @@ const cssGrad = name => "linear-gradient(90deg," + LUT[name].map((c, i) => `rgb(
 
 // fields on the cut-away plane: fast = from the 1D profiles, full = from a full simulation
 const FIELDS = {
-  w: { n: "Humidity", unit: "g/kg", map: "vapor",
+  w: { n: "Humidity", unit: "g/kg", map: "vapor", span: 1,
        fast: (P, k) => 1e3 * P.w[k], full: R => R.fields.w.map(v => 1e3 * v) },
   mist: { n: "Liquid in the air", unit: "% of inflow", map: "ice",
-          fast: (P, k) => 100 * P.mist[k] / Math.max(P.mist_in, 1e-12),
+          fast: (P, k) => 100 * P.mist[k] / Math.max(P.mist_in, 1e-12), fastRange: [0, 100],
           full: R => R.fields.sprayLiq ? R.fields.sprayLiq.map(v => Math.log10(Math.max(1e3 * v, 1e-3))) : R.fields.l.map(v => Math.log10(Math.max(1e3 * v, 1e-3))),
           fullUnit: "g/m³, log₁₀", fullLog: true },
-  T: { n: "Air temperature", unit: "°C", map: "inferno", fast: (P, k) => P.T[k], full: R => R.fields.T },
+  T: { n: "Air temperature", unit: "°C", map: "inferno", span: 1, fast: (P, k) => P.T[k], full: R => R.fields.T },
   E: { n: "Electric field", unit: "kV/cm, log₁₀", map: "inferno", fullOnly: true },
   none: { n: "Off" },
 };
@@ -299,12 +299,17 @@ function paintPlane() {
   }
   const fin = Array.from(vals).filter(isFinite).sort((a, b) => a - b);
   let lo = fin.length ? fin[Math.floor(0.01 * (fin.length - 1))] : 0, hi = fin.length ? fin[Math.ceil(0.995 * (fin.length - 1))] : 1;
+  // the fast model's profiles are cross-section averages and often nearly flat (a quiet corona section,
+  // a design without spray): a percentile range would stretch rounding noise over the whole colormap,
+  // so each field keeps a minimum span, and the plane never fades to the colormap's black end
+  if (!full && f.fastRange) { lo = Math.min(lo, f.fastRange[0]); hi = Math.max(hi, f.fastRange[1]); }
+  if (!full && f.span && hi - lo < f.span) { const m = (lo + hi) / 2; lo = m - f.span / 2; hi = m + f.span / 2; }
   if (hi - lo < 1e-9) hi = lo + 1e-6;
   for (let p = 0; p < W * H; p++) {
     const v = vals[p];
     if (!isFinite(v)) { img.data[4 * p + 3] = 0; continue; }
-    const t = Math.min(1, Math.max(0, (v - lo) / (hi - lo))), c = cmap(f.map, t);
-    img.data[4 * p] = c[0]; img.data[4 * p + 1] = c[1]; img.data[4 * p + 2] = c[2]; img.data[4 * p + 3] = 45 + 115 * t;
+    const t = Math.min(1, Math.max(0, (v - lo) / (hi - lo))), c = cmap(f.map, 0.3 + 0.7 * t);
+    img.data[4 * p] = c[0]; img.data[4 * p + 1] = c[1]; img.data[4 * p + 2] = c[2]; img.data[4 * p + 3] = 110 + 70 * t;
   }
   ctx.putImageData(img, 0, 0);
   planeTex.needsUpdate = true;

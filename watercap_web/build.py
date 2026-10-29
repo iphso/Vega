@@ -16,11 +16,15 @@ designs = (H / "designs.json").read_text()
 # stonelab and wasm-compute-kit's Python binding), run under Pyodide by pyworker.js
 sys.path.insert(0, str(H.parent / "scripts"))
 import watercap_browser  # noqa: E402
+import watercap_site  # noqa: E402
+site = dict(months=watercap_site.MONTHS, depths={"surface": "surface", "20m": "20 m", "30m": "30 m"},
+            climate={m: dict(air_T_C=c[0], exhaust_T_C=round(watercap_site.exhaust_T_C(m), 2), interpolated=m not in watercap_site.EXHAUST_REF,
+                             sea={k: c[i] for k, i in watercap_site.SEA_DEPTHS.items()}) for m, c in watercap_site.CLIMATE.items()})
 esc = lambda t: t.replace("</script", "<\\/script")
 resworker = esc((H / "pyworker.js").read_text())
 pybundle = esc(json.dumps(watercap_browser.bundle(None), separators=(",", ":")))
 for key, val in [("/*__WCMODEL__*/", (H / "wcmodel.js").read_text()), ("/*__WCGPU__*/", (H / "wcgpu.js").read_text()),
-                 ("/*__FIT__*/null", fit), ("/*__DESIGNS__*/null", designs), ("/*__RESWORKER__*/", resworker),
+                 ("/*__FIT__*/null", fit), ("/*__DESIGNS__*/null", designs), ("/*__SITE__*/null", json.dumps(site, separators=(",", ":"))), ("/*__RESWORKER__*/", resworker),
                  ("/*__PYBUNDLE__*/null", pybundle), ("/*__VIEW3D__*/", esc((H / "view3d.js").read_text()))]:
     assert s.count(key) == 1, key
     s = s.replace(key, val)

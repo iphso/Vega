@@ -2090,3 +2090,36 @@ Details: StoneLab `docs/realism_roadmap.md` (Experiments 2–3, rungs 1–2, the
 - **Bug: corona-mist coupling.** Three fixed relaxed iterations could stop on the "quenched" side of a swing.
   - **129 of 990 stored resolved designs** showed a dead corona and outlet water above the inlet because of it. With the fix (`march_section(adaptive_iters)`), their median outlet goes from 6.5 to 0.86.
   - None beats the library's best, so the top rankings are unaffected. The library has not been regenerated yet.
+
+## Watercap: the partner's real electrode, and how far the model is from it (2026-10-27)
+
+Partner feedback (Brad) with a STEP of the emitter (Onshape AP242). Files + parse/onset scripts: `partner/brad_2026-10-27/`.
+- **Device:** 150 mm ID grounded SS tube, 350 mm long; 8 plates at 31.25 mm pitch (stack 219 mm, centred); positive polarity, ~12 kV (30 kV supply at ~40%). Bench fan ~130 m³/h (~2 m/s, residence in the stack ~0.11 s).
+- **Plate (from the STEP):** 0.5 mm sheet, an annular ring OD 90 / ID 70 mm (open centre), 3 x Ø4.3 tie-rod holes at r = 40 mm, 6 hooked arms ending in tabs bent 40° out of plane; the tab corners are the emitters, at r = 55.7 mm (gap to wall 19.3 mm), 4.4 mm above the plate.
+- **Measurement:** 10.63 g/min leaving without corona, 3.73 with: 65% reduction. At 130 m³/h that is 4.2 g/kg, below any ambient humidity, so it must be liquid only (or the flow differs) -- ask. Deutsch-equivalent migration velocity 0.37 m/s.
+- **The model cannot represent this device yet.** Axisymmetric smooth-disc onset (ionization criterion, 30 C, 25 g/m³): plate as a Ø90 disc 28.8 kV; as a Ø111 disc out to the tips 23.1 kV. So the current tiers predict zero corona and zero capture at 12 kV. An isolated hyperboloid tip at 19.3 mm: 4.8 / 6.0 / 8.5 / 11.6 kV for tip radius 0.05 / 0.1 / 0.25 / 0.5 mm (neighbour shielding will raise these). The tips are the whole device; they need the 3D unit cell (60° sector x one pitch).
+- **Core bypass hypothesis:** the r < 35 mm core inside the rings is near field-free and carries 25% of the flow (1/7-power profile); radial mixing time (~1 s) >> residence (0.11 s). Most of the 35% that escapes may be core flow. Testable: blank the centre or measure the outlet radially.
+- **Seawater ceiling:** exhaust saturated 27 C (Jan) / 34 C (Aug), seawater at 20 m 15.2 / 22.3 C: vapour ceiling 52% / 51% of the exhaust vapour if cooled to seawater itself, 42% / 41% through a closed fresh loop with a 3 K exchanger approach (`watercap_site.py` prints every month: 32-49%). Fresh water must stay in a closed loop (direct seawater contact contaminates the product).
+
+### Seawater recooling and the pilot site (2026-10-27)
+
+- `scripts/watercap_site.py`: the partner's monthly table as aux (`site_aux(month, intake="20m", base=...)`): saturated exhaust at the tube inlet, ambient, seawater at the intake depth. Exhaust T is partner data only for Jan (27 C) and Aug (34 C); other months are our linear interpolation in the ambient wet bulb, flagged `exhaust_interpolated`.
+- `watercap_resolved`: aux `seawater_T_C` adds seawater recooling options. Spray >= sea + 3 K: seawater pumping only (20 m head, 5 K rise, eff 0.7, ~0.014 W per W rejected) plus the fresh loop's exchanger loss (50 kPa). Colder: chiller with its condenser on seawater. The cheapest option is taken (`recool_mode`). Design key `wall_coolant="seawater"` cools the wall at sea + 3 K and charges the wall heat's pumping (`wall_cooling_power_W`). StoneLab `spray_cfd` now exports `wall_heat_W` (one additive outlet key). Without `seawater_T_C`, every number is unchanged (the stored library stays reproducible).
+- Check, cooled_wall-0070 at resolved_coarse (spray 2.2 L/min, wall U 60):
+  | case | recovered L/h | recool mode | recool W | wall pump W | Wh/L total |
+  |---|---|---|---|---|---|
+  | stored aux (35 C exhaust, 25 C ambient) | 5.47 | chiller_air | 267 | 0 | 216 |
+  | Aug site, spray 18.3 C | 4.72 | chiller_seawater | 293 | 0 | 255 |
+  | + seawater-cooled wall | 5.07 | chiller_seawater | 291 | 14 | 240 |
+  | + spray at sea + 3 K (25.3 C) | 4.00 | seawater_hx | 19 | 14 | 237 |
+- **Finding:** with seawater-only recooling the whole thermal side (recool + spray pump + wall pump) is ~38 W, < 10 Wh/L; 899 W of the 237 Wh/L is the corona (this library design's ~40 kV disc operating point). Once seawater is in, energy per litre is a corona-power question, i.e. set by the electrode model. The seawater wall rejects ~1 kW for 14 W of pumping.
+- Plant constants (approach, head, rise, exchanger loss) are order-of-magnitude placeholders, not a design.
+
+## Watercap: the partner's literature, reviewed (2026-10-28)
+
+Brad sent 38 DOIs (Cremaschi/Auburn, Reznikov, modified Kelvin-Thomson, corona condensation, MD). None had been read before; finding 1 rested on the classical bound plus Auburn's thesis. Four parallel reviews, per-paper notes stating what was actually read, synthesis in `partner/brad_literature/README.md` (uncommitted with the rest of `partner/`).
+
+- **Finding 1 holds.** No paper shows net vapour removal from sub/saturated air without a cold sink or supersaturation. All sub-saturation theories use a dipole term added to Kelvin-Thomson (fitted to 1-10 molecule clusters; double-counts surface vapour enrichment on um drops); even at face value it gives <=1e-4 at corona-achievable charge. Auburn measured 0.6-3.1% vs 1.7% uncertainty; their 2026 growth law has no evaporation term (predicts condensation at 50% RH). Both scripts re-run and reproduce.
+- **Partner's "asymptotic curve" quantified:** single-ion clusters hold ~9-100 H2O, 260-2950x latent heat at 12 kV; a 1 mA corona of such clusters is ~1e-3 g/min vs 6.9 g/min removed in his rig.
+- **"Corona intensifies what's already happening" is what the literature shows:** cold walls (+16-57%, vanishing as cooling rises), nozzle expansion (ions reach but never exceed equilibrium wetness), steam-jet mixing. Ion nucleation needs S ~4 (Wilson 1897).
+- **Steam-vent test bed** sits at S ~3-11, the ion-nucleation regime; cooling-tower plumes at ~1.0-1.4, so vent results will overstate tower performance. Model would need an ion-nucleus class (S >~3), steam-jet mixing with corona suppression, and an EHD multiplier at sub-dew-point walls.

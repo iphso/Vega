@@ -87,6 +87,8 @@ select { font: 400 12px var(--f-body); padding: 4px 6px; border-radius: 6px; bor
 .v3-labels span { position: absolute; left: 0; top: 0; font-size: 11px; color: var(--ink-2); white-space: nowrap; pointer-events: none; padding-left: 6px; margin-top: -8px; border-left: 1px solid var(--ink-3); }
 /* outcome */
 .side { display: grid; gap: 10px; }
+.kpisrc { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kpisrc .eyebrow.full { color: var(--spray); }
 .kpis { display: grid; grid-template-columns: 1fr; gap: 8px; }
 .kpis.more { grid-template-columns: 1fr 1fr; }
 .kpi { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 11px; display: grid; gap: 1px; }
@@ -203,6 +205,7 @@ table.cmp td.d { color: var(--ink-3); }
 
       <aside class="side" aria-live="polite">
         <div class="banner" id="loaded" hidden></div>
+        <div class="kpisrc"><span class="eyebrow" id="kpisrc">Fast model · updates as you edit</span><button type="button" class="btn primary" id="resrun2">Run full simulation</button></div>
         <div class="kpis" id="targets"></div>
         <div class="panel budget" style="padding:10px 12px"><div class="rowhead"><h2>Water budget</h2></div><div class="bar" id="bud"></div><div class="bl" id="budleg"></div><div class="bl" id="budtxt" style="color:var(--ink-3)"></div></div>
         <details class="panel" style="padding:10px 12px"><summary>More outcomes</summary><div class="kpis more" id="kpis" style="margin-top:10px"></div><div class="eyebrow" id="runinfo" style="margin-top:8px"></div></details>
@@ -313,6 +316,8 @@ table.cmp td.d { color: var(--ink-3); }
 <script>
 const FIT = /*__FIT__*/null;
 const DATA = /*__DESIGNS__*/null;
+// the partner's pilot site by month (scripts/watercap_site.py): tube inlet = saturated tower exhaust
+const SITE = /*__SITE__*/null;
 const $ = s => document.querySelector(s);
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -382,11 +387,13 @@ const PARAMS = [
   { g: "Resolved model only", k: "spray_cone_half_angle_deg", n: "Spray cone half-angle", u: "°", lo: 5, hi: 60, v: 30, d: 0, res: 1 },
   { g: "Resolved model only", k: "wall_U_W_m2K", n: "Wall cooling to ambient (U)", u: "W/m²K", lo: 0, hi: 100, v: 0, d: 0, res: 1 },
   { g: "Resolved model only", k: "ambient_T_C", n: "Ambient temperature", u: "°C", lo: 0, hi: 40, v: 25, d: 1, res: 1 },
+  { g: "Resolved model only", k: "seawater_T_C", n: "Seawater intake temperature", u: "°C", lo: 10, hi: 32, v: 18.9, d: 1, res: 1, sea: 1 },
 ];
 const PK = Object.fromEntries(PARAMS.map(p => [p.k, p]));
+const SITE_KEYS = ["inlet_T_C", "inlet_RH", "ambient_T_C", "seawater_T_C"];   // what a site month sets
 const DEFAULTS = Object.fromEntries(PARAMS.map(p => [p.k, p.v]));
-const state = { u: { ...DEFAULTS }, pol: -1, spol: 1, sprayMode: "atomizer", supply: "V", xKey: "spray_T_C", yKey: "corona_voltage_kV", metric: "out", arc: true, loaded: null };
-const visible = p => (!p.mode || p.mode === state.sprayMode) && (!p.supply || p.supply === state.supply);
+const state = { u: { ...DEFAULTS }, pol: -1, spol: 1, sprayMode: "atomizer", supply: "V", site: "", intake: "20m", sea: 0, wallSea: 0, xKey: "spray_T_C", yKey: "corona_voltage_kV", metric: "out", arc: true, loaded: null };
+const visible = p => (!p.mode || p.mode === state.sprayMode) && (!p.supply || p.supply === state.supply) && (!p.sea || state.sea);
 
 const METRICS = [
   { k: "out", n: "Total water out, % of inlet", f: o => 100 * o[O.outlet_total_water_frac], better: "low", cap: 110, fmt: v => v.toFixed(1) + "%" },
@@ -459,19 +466,31 @@ function buildRail() {
     d.innerHTML = `<label for="in-${p.k}">${p.n}<b id="v-${p.k}"></b></label><input id="in-${p.k}" type="range" min="0" max="1000" step="1">`;
     groups[p.g].appendChild(d);
     const inp = d.querySelector("input");
-    inp.addEventListener("input", () => { state.u[p.k] = fromT(p, inp.value / 1000); state.loaded = null; syncRail(); schedule(); });
+    inp.addEventListener("input", () => { state.u[p.k] = fromT(p, inp.value / 1000); state.loaded = null; if (SITE_KEYS.includes(p.k)) state.site = ""; syncRail(); schedule(); });
   }
   groups["Spray stage"].insertAdjacentHTML("beforeend", `<div class="derived" id="sprayderived"></div>`);
   groups["Corona stage"].insertAdjacentHTML("beforeend", `<div class="toggles"><span>Corona polarity <span class="seg" id="polseg"><button type="button" data-v="-1">negative</button><button type="button" data-v="1">positive</button></span></span>
     <span>Spray charge vs corona <span class="seg" id="spolseg"><button type="button" data-v="1">same sign</button><button type="button" data-v="-1">opposite</button></span></span></div><div class="derived" id="coronaderived"></div>`);
   groups["Air & inlet"].insertAdjacentHTML("beforeend", `<div class="derived" id="airderived"></div>`);
+  groups["Air & inlet"].querySelector(".ghead").insertAdjacentHTML("afterend", `<div class="toggles"><label for="sitesel">Site <select id="sitesel"><option value="">custom</option>${SITE.months.map(m => `<option value="${m}">pilot site, ${m}</option>`).join("")}</select></label>
+    <label for="intakesel" id="intakewrap">Seawater intake <select id="intakesel">${Object.keys(SITE.depths).map(k => `<option value="${k}">${SITE.depths[k]}</option>`).join("")}</select></label></div><div class="derived" id="sitederived"></div>`);
+  groups["Resolved model only"].insertAdjacentHTML("beforeend", `<div class="toggles"><span>Seawater cooling <span class="seg" id="seaseg"><button type="button" data-v="0">none</button><button type="button" data-v="1">available</button></span></span>
+    <span id="wallseawrap">Cooled wall exchanges with <span class="seg" id="wallseaseg"><button type="button" data-v="0">ambient air</button><button type="button" data-v="1">seawater loop</button></span></span></div>`);
+  const applySite = () => {
+    const m = state.site; if (!m) return;
+    const c = SITE.climate[m];
+    Object.assign(state.u, { inlet_T_C: c.exhaust_T_C, inlet_RH: 1, ambient_T_C: c.air_T_C, seawater_T_C: c.sea[state.intake] });
+    state.sea = 1;
+  };
+  $("#sitesel").onchange = e => { state.site = e.target.value; applySite(); state.loaded = null; syncRail(); schedule(); };
+  $("#intakesel").onchange = e => { state.intake = e.target.value; applySite(); state.loaded = null; syncRail(); schedule(); };
   const seg = (id, key) => $(id).querySelectorAll("button").forEach(b => b.onclick = () => {
     const v = isNaN(+b.dataset.v) ? b.dataset.v : +b.dataset.v; if (state[key] === v) return;
     state[key] = v; state.loaded = null;
     if (key === "sprayMode" || key === "supply") fixAxes();
     syncRail(); schedule();
   });
-  seg("#modeseg", "sprayMode"); seg("#supseg", "supply"); seg("#polseg", "pol"); seg("#spolseg", "spol");
+  seg("#modeseg", "sprayMode"); seg("#supseg", "supply"); seg("#polseg", "pol"); seg("#spolseg", "spol"); seg("#seaseg", "sea"); seg("#wallseaseg", "wallSea");
 }
 // keep the map axes on visible inputs after a mode switch (swap to the input that replaced it)
 function fixAxes() {
@@ -488,7 +507,12 @@ function syncRail() {
     $("#sl-" + p.k).classList.toggle("onaxis", p.k === state.xKey || p.k === state.yKey);
     $("#in-" + p.k).value = Math.round(1000 * toT(p, state.u[p.k]));
   }
-  for (const [id, key] of [["#modeseg", "sprayMode"], ["#supseg", "supply"], ["#polseg", "pol"], ["#spolseg", "spol"]])
+  $("#sitesel").value = state.site; $("#intakesel").value = state.intake; $("#intakewrap").hidden = !state.site; $("#wallseawrap").hidden = !state.sea;
+  if (state.sea && !state.site && state.u.seawater_T_C == null) state.u.seawater_T_C = DEFAULTS.seawater_T_C;
+  $("#sitederived").innerHTML = state.site ? `tube inlet: saturated exhaust at <b>${SITE.climate[state.site].exhaust_T_C.toFixed(1)} °C</b>` +
+    (SITE.climate[state.site].interpolated ? ` <span class="flag" title="the partner gave exhaust temperatures for Jan and Aug only; other months follow the wet bulb">interpolated</span>` : "") +
+    ` · outside air ${SITE.climate[state.site].air_T_C.toFixed(1)} °C · seawater ${state.u.seawater_T_C.toFixed(1)} °C` : "";
+  for (const [id, key] of [["#modeseg", "sprayMode"], ["#supseg", "supply"], ["#polseg", "pol"], ["#spolseg", "spol"], ["#seaseg", "sea"], ["#wallseaseg", "wallSea"]])
     $(id).querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v) === String(state[key])));
   const { x, ex } = toModel(state.u), u = state.u, A = PI * u.tube_diameter_m ** 2 / 4;
   $("#airderived").innerHTML = `face velocity <b>${(u.air_flow_m3_s / A).toFixed(2)} m/s</b> · mist in <b>${(u.inlet_lwc_g_m3 * u.air_flow_m3_s * 3.6).toFixed(2)} L/h</b>`;
@@ -504,7 +528,7 @@ function syncRail() {
 }
 function applyPreset(i) {
   const p = PRESETS[i];
-  state.u = { ...DEFAULTS, ...p.x }; state.sprayMode = p.mode || "atomizer"; state.supply = p.supply || "V"; state.pol = -1; state.spol = 1; state.loaded = null;
+  state.u = { ...DEFAULTS, ...p.x }; state.sprayMode = p.mode || "atomizer"; state.supply = p.supply || "V"; state.pol = -1; state.spol = 1; state.loaded = null; state.site = ""; state.sea = 0; state.wallSea = 0;
   state.xKey = p.ax[0]; state.yKey = p.ax[1]; state.metric = p.m;
   fillAxisSelects(); $("#msel").value = state.metric;
   syncRail(); schedule();
@@ -569,7 +593,7 @@ for(let k=0;k<${S_OUT};k++)out[i*${S_OUT}+k]=r[OUTK[k]];}postMessage({out,id},[o
 // the map and the stored-design batch share one engine; runs are serialized
 let queue = Promise.resolve();
 const runEngine = (arr, n) => (queue = queue.then(() => engine.run(arr, n)));
-function schedule() { dirty = true; if (!busy) compute(); window.View3D?.setResolved(null); updateReadout(); }
+function schedule() { dirty = true; if (!busy) compute(); window.View3D?.setResolved(resMatches(resLast) ? resLast : null); updateReadout(); }
 async function compute() {
   if (!engine) return;
   busy = true; dirty = false;
@@ -749,6 +773,19 @@ function updateReadout() {
   const vout = vin * (1 - r.vapor_removed_frac), liqOut = r.liquid_escape_frac * (min_ + spray);
   const arcWhy = arc >= 0 ? "positive = no arcing" : ex.arcS < r.arc_margin ? "electrospray voltage over sparkover" : r.spray_space_charge_kV_cm > 24 ? `spray space charge ${r.spray_space_charge_kV_cm.toPrecision(2)} kV/cm vs 24 breakdown` : "corona voltage over sparkover";
   const corOn = r.corona_current_mA > 1e-4;
+  const F = resMatches(resLast) ? resLast.metrics : null;
+  $("#kpisrc").textContent = F ? `Full simulation (${resLast.preset === "resolved" ? "fine" : "standard"}) · edit any input to go back to the fast model` : "Fast model · updates as you edit";
+  $("#kpisrc").classList.toggle("full", !!F);
+  if (F) {
+    const fast = (v, f) => `fast model ${f(v)}`;
+    const fSpec = spec, pct = v => (100 * v).toFixed(1) + "%";
+    $("#targets").innerHTML =
+      kpi("Total water out", pct(F.outlet_total_water_frac), `liquid + vapor leaving the top · ${fast(r.outlet_total_water_frac, pct)}`, F.outlet_total_water_frac > 1 ? "bad" : "", true) +
+      kpi("Energy per liter", isFinite(F.specific_energy_Wh_L) && F.recovered_L_h > 1e-3 ? F.specific_energy_Wh_L.toPrecision(3) + " Wh/L" : "–", `electric + fan over ${F.recovered_L_h.toFixed(2)} L/h · ${isFinite(fSpec) ? fast(fSpec, v => v.toPrecision(3) + " Wh/L") : "fast model: nothing recovered"}`, "", true) +
+      kpi("Pressure drop", F.pressure_drop_Pa.toFixed(1) + " Pa", fast(r.pressure_drop_Pa, v => v.toFixed(1) + " Pa"), "", true) +
+      kpi("Arc margin", F.arc_margin.toFixed(2), `positive = no arcing · ${fast(arc, v => v.toFixed(2))}`, F.arc_margin < 0 ? "bad" : F.arc_margin < 0.15 ? "warn" : "", true) +
+      kpi("Field at the wall", F.wall_field_kV_cm.toFixed(2) + " kV/cm", `breakdown ≈ 24 kV/cm · ${fast(r.wall_field_kV_cm, v => v.toFixed(2) + " kV/cm")}`, "", true);
+  } else
   $("#targets").innerHTML =
     kpi("Total water out", (100 * r.outlet_total_water_frac).toFixed(1) + "%", `liquid + vapor leaving the top, of ${(vin + min_).toFixed(1)} L/h in`, r.outlet_total_water_frac > 1 ? "bad" : "", true) +
     kpi("Energy per liter", isFinite(spec) ? spec.toPrecision(3) + " Wh/L" : "–", isFinite(spec) ? `electric ${elecW.toFixed(1)} W + fan ${r.fan_power_W.toFixed(1)} W over ${rec.toFixed(2)} L/h` : "nothing recovered", "", true) +
@@ -1031,7 +1068,7 @@ function rowToU(r) {
 }
 function openInSim(r) {
   state.u = rowToU(r); state.sprayMode = "atomizer"; state.supply = "V"; state.pol = r.d.corona_polarity < 0 ? -1 : 1; state.spol = r.d.spray_polarity_rel < 0 ? -1 : 1;
-  state.loaded = r; fixAxes(); syncRail(); showTab("simulate"); schedule(); scrollTo({ top: 0 });
+  state.loaded = r; state.site = ""; state.sea = 0; state.wallSea = 0; fixAxes(); syncRail(); showTab("simulate"); schedule(); scrollTo({ top: 0 });
 }
 function renderLoaded(res, ex) {
   const b = $("#loaded"), r = state.loaded;
@@ -1072,7 +1109,8 @@ async function runStored() {
 let resWorker = null, resJob = 0, resT0 = 0, resLast = null, resBooted = false;
 function resolvedInputs() {
   // a design loaded from the precomputed runs is passed verbatim (an exact re-run); otherwise the rail
-  if (state.loaded) return { design: { ...state.loaded.d }, aux: { ...state.loaded.a, ambient_T_C: state.u.ambient_T_C }, from: state.loaded.id };
+  const sea = d => state.sea ? { ...d, seawater_T_C: state.u.seawater_T_C } : d;   // without it the plant has no seawater option
+  if (state.loaded) return { design: { ...state.loaded.d }, aux: sea({ ...state.loaded.a, ambient_T_C: state.u.ambient_T_C }), from: state.loaded.id };
   const { x } = toModel(state.u), u = state.u;
   const design = { air_flow_m3_s: x.air_flow_m3_s, tube_diameter_m: x.tube_diameter_m, spray_section_length_m: x.spray_section_length_m,
     corona_section_length_m: x.corona_section_length_m, nozzle_height_frac: x.nozzle_height_frac, disc_diameter_frac: x.disc_diameter_frac,
@@ -1080,9 +1118,12 @@ function resolvedInputs() {
     spray_d_um: x.spray_d_um, spray_gsd: Math.max(x.spray_gsd, 1), spray_q_frac: x.spray_q_frac, spray_v0: x.spray_v0,
     corona_voltage_kV: x.corona_voltage_kV, corona_polarity: x.corona_polarity, spray_polarity_rel: x.spray_polarity_rel,
     spray_cone_half_angle_deg: u.spray_cone_half_angle_deg, wall_U_W_m2K: u.wall_U_W_m2K };
-  const aux = { inlet_T_C: x.inlet_T_C, inlet_RH: x.inlet_RH, inlet_lwc_g_m3: x.inlet_lwc_g_m3, mist_mmd_um: x.mist_mmd_um, mist_gsd: x.mist_gsd, ambient_T_C: u.ambient_T_C };
+  if (state.sea && state.wallSea) design.wall_coolant = "seawater";
+  const aux = sea({ inlet_T_C: x.inlet_T_C, inlet_RH: x.inlet_RH, inlet_lwc_g_m3: x.inlet_lwc_g_m3, mist_mmd_um: x.mist_mmd_um, mist_gsd: x.mist_gsd, ambient_T_C: u.ambient_T_C });
   return { design, aux, from: null };
 }
+// a full-simulation result describes the rail only while every design and inlet input is unchanged
+function resMatches(R) { if (!R) return false; const i = resolvedInputs(); return JSON.stringify([i.design, i.aux]) === JSON.stringify([R.inp.design, R.inp.aux]); }
 function resLog(t) { const el = $("#reslog"); el.textContent += t + "\n"; el.scrollTop = el.scrollHeight; }
 function runResolved() {
   // one worker for the page's lifetime (dropped only on cancel or error): it keeps Python loaded
@@ -1091,7 +1132,7 @@ function runResolved() {
   const fastRun = lastRun ? { r: lastRun.r, ex: lastRun.ex } : null;
   resT0 = performance.now();
   $("#resprog").hidden = false; $("#reslog").textContent = ""; $("#respbar").style.width = "0%";
-  $("#resrun").disabled = true; $("#rescancel").hidden = false;
+  $("#resrun").disabled = $("#resrun2").disabled = true; $("#rescancel").hidden = false;
   $("#resstatus").textContent = "running: spray stage";
   resLog(inp.from ? `running ${inp.from} from the library` : "running this design");
   const nPer = Math.max(1, Math.round(inp.design.corona_section_length_m / inp.design.disc_spacing_m));
@@ -1129,11 +1170,12 @@ function runResolved() {
     bundle: resBooted ? null : JSON.parse(document.getElementById("pybundle").textContent) });
 }
 function finishResolved(failed) {
-  $("#resrun").disabled = false; $("#rescancel").hidden = true;
+  $("#resrun").disabled = $("#resrun2").disabled = false; $("#rescancel").hidden = true;
   if (failed && resWorker) { resWorker.terminate(); resWorker = null; }
   if (!failed && resLast) renderResolved();
 }
 $("#resrun").onclick = runResolved;
+$("#resrun2").onclick = () => { $("#respanel").scrollIntoView({ behavior: "smooth", block: "start" }); runResolved(); };
 $("#rescancel").onclick = () => { resJob++; $("#resstatus").textContent = "cancelled"; finishResolved(true); };
 
 // which kernels did the grid solves (wck: wasm-compute-kit; scipy: its fallback) and how often
@@ -1143,6 +1185,7 @@ function solverNote(R) {
   return `${v.factorizations} sparse factorizations on ${k}, ${v.analyses} symbolic analyses` + (v.fallbacks ? `, ${v.fallbacks} pivoting fallbacks to SuperLU` : "") +
     `; droplet parcels on ${v.threads > 1 ? v.threads + " threads" : "one thread"}`;
 }
+const RECOOL = { dry_cooler: "dry cooler", chiller_air: "chiller to air", seawater_hx: "seawater exchanger", chiller_seawater: "chiller to seawater" };
 function renderResolved() {
   const R = resLast, m = R.metrics;
   $("#resout").hidden = false;
@@ -1153,6 +1196,8 @@ function renderResolved() {
     ["Total water out", 100 * m.outlet_total_water_frac, fr && 100 * fr.outlet_total_water_frac, stored && 100 * stored.r.out, v => v.toFixed(2) + "%"],
     ["Energy per liter (electric + fan)", m.specific_energy_Wh_L, fastSpec, stored && stored.r.spec, v => v.toPrecision(3) + " Wh/L"],
     ["… adding pump and spray recooling", m.specific_energy_total_Wh_L, null, stored && stored.r.specTot, v => v.toPrecision(3) + " Wh/L"],
+    [`Spray recooling${m.recool_mode && m.recool_mode !== "none" ? " (" + RECOOL[m.recool_mode] + ")" : ""}`, m.recool_power_W, null, null, v => v.toFixed(2) + " W"],
+    ...(m.wall_cooling_power_W > 0 ? [["Wall cooling, seawater pumping", m.wall_cooling_power_W, null, null, v => v.toFixed(2) + " W"]] : []),
     ["Pressure drop", m.pressure_drop_Pa, fr && fr.pressure_drop_Pa, stored && stored.r.dp, v => v.toFixed(2) + " Pa"],
     ["Arc margin", m.arc_margin, fr && Math.min(fr.arc_margin, fex.arcS), stored && stored.r.arc, v => v.toFixed(3)],
     ["Field at the wall", m.wall_field_kV_cm, fr && fr.wall_field_kV_cm, stored && stored.r.Ewall, v => v.toFixed(3) + " kV/cm"],
@@ -1172,7 +1217,8 @@ function renderResolved() {
     (R.sprayDiag.recirculating ? " · the spray drives reverse flow in the tube" : "") +
     (R.inp.from ? " · library values are from an earlier run: droplet sampling differs, and its corona power predates a correction" : "");
   fillResField(); drawResMap(); drawCorMap(); drawPeriods();
-  window.View3D?.setResolved(R);
+  window.View3D?.setResolved(resMatches(R) ? R : null);
+  updateReadout();
 }
 const RES_FIELDS = [
   { k: "T", n: "Air temperature, °C", f: F => F.T },

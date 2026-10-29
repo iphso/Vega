@@ -30,6 +30,18 @@ DRY_COOLER_W_PER_W of the heat); below that it needs a chiller at
 CHILLER_CARNOT_FRAC of the Carnot COP. `specific_energy_Wh_L` keeps the ROM's
 definition (electrical + fan); `specific_energy_total_Wh_L` adds pump and
 spray recooling.
+
+Seawater (aux `seawater_T_C`, e.g. from watercap_site): the spray water stays
+in a closed fresh-water loop (direct seawater contact would salt the product)
+and is recooled through a plate heat exchanger against seawater. Above
+seawater + SEAWATER_HX_APPROACH_K that costs only pumping: seawater through
+the exchanger (SEAWATER_HEAD_PA, warming by SEAWATER_RISE_K) and the fresh
+loop's own exchanger pressure loss (FRESH_HX_DP_PA). Colder sprays need a
+chiller whose condenser rejects to seawater instead of air. The cheapest
+available option is taken (a dry cooler still wins on a cold day). Design key
+`wall_coolant="seawater"` cools the tube wall (wall_U) from the same loop: the
+coolant sits at seawater + approach and the wall heat is pumped away the same
+way. Without `seawater_T_C` every number is unchanged.
 """
 import os
 import sys
@@ -48,6 +60,14 @@ DRY_COOLER_APPROACH_K = 5.0
 DRY_COOLER_W_PER_W = 0.02
 CHILLER_CARNOT_FRAC = 0.5
 CHILLER_LIFT_K = 5.0          # condenser above ambient, evaporator below the spray temperature
+# seawater recooling -- order-of-magnitude plant values, not a design; see the module docstring
+SEAWATER_HX_APPROACH_K = 3.0  # titanium plate exchanger, fresh loop vs seawater
+SEAWATER_RISE_K = 5.0         # seawater outlet above intake (outfall permits are typically a few K)
+SEAWATER_HEAD_PA = 2.0e5      # intake lift + strainer + exchanger, ~20 m of water
+SEAWATER_PUMP_EFF = 0.7
+FRESH_HX_DP_PA = 5.0e4        # fresh-water side of the exchanger, on top of the nozzle pressure
+CP_SEAWATER = 3990.0          # J/kg/K
+RHO_SEAWATER = 1025.0
 
 RESOLVED_PRESETS = {
     "resolved_coarse": dict(cfd=dict(nr=20, dz=0.015, n_mist_bins=4, n_spray_bins=4, n_per_bin=150, outer_iters=40,
@@ -107,15 +127,50 @@ for _k in list(RESOLVED_PRESETS):
         dr_core=0.012, n_per_bin=600))   # resolved radial core + parcel count: dp GCI <= 2.5% (Experiment 13)
 
 
-def recool_power_W(Q_heat, T_spray, T_amb):
-    if Q_heat <= 0:
-        return 0.0
-    if T_spray >= T_amb + DRY_COOLER_APPROACH_K:
-        return DRY_COOLER_W_PER_W * Q_heat
+def _chiller_W(Q_heat, T_spray, T_sink):
     Tc = T_spray - CHILLER_LIFT_K + 273.15
-    Th = T_amb + CHILLER_LIFT_K + 273.15
+    Th = T_sink + CHILLER_LIFT_K + 273.15
     cop = CHILLER_CARNOT_FRAC * Tc / max(Th - Tc, 1.0)
     return Q_heat / cop
+
+
+def seawater_pump_W(Q_heat):
+    """Seawater pumping to carry Q_heat away at SEAWATER_RISE_K."""
+    if Q_heat <= 0:
+        return 0.0
+    vol = Q_heat / (CP_SEAWATER * SEAWATER_RISE_K) / RHO_SEAWATER
+    return vol * SEAWATER_HEAD_PA / SEAWATER_PUMP_EFF
+
+
+def recool_options(Q_heat, T_spray, T_amb, T_sea=None):
+    """Power (W) of every way to reject Q_heat so the spray returns at T_spray; the caller takes the minimum."""
+    if Q_heat <= 0:
+        return {"none": 0.0}
+    opts = {}
+    if T_spray >= T_amb + DRY_COOLER_APPROACH_K:
+        opts["dry_cooler"] = DRY_COOLER_W_PER_W * Q_heat
+    else:
+        opts["chiller_air"] = _chiller_W(Q_heat, T_spray, T_amb)
+    if T_sea is not None:
+        if T_spray >= T_sea + SEAWATER_HX_APPROACH_K:
+            opts["seawater_hx"] = seawater_pump_W(Q_heat)
+        else:
+            W = _chiller_W(Q_heat, T_spray, T_sea + SEAWATER_HX_APPROACH_K)
+            opts["chiller_seawater"] = W + seawater_pump_W(Q_heat + W)   # the condenser rejects Q + W
+    return opts
+
+
+def recool_power_W(Q_heat, T_spray, T_amb, T_sea=None):
+    return min(recool_options(Q_heat, T_spray, T_amb, T_sea).values())
+
+
+def wall_coolant_T(c, aux):
+    """Temperature the cooled wall (wall_U) exchanges with: ambient air, or the seawater loop."""
+    if c.get("wall_coolant", "ambient") == "seawater":
+        if aux.get("seawater_T_C") is None:
+            raise ValueError('wall_coolant="seawater" needs aux["seawater_T_C"]')
+        return aux["seawater_T_C"] + SEAWATER_HX_APPROACH_K
+    return aux.get("ambient_T_C", 25.0)
 
 
 def build_cfd(c, aux, cfd_kw):
@@ -144,7 +199,7 @@ def build_cfd(c, aux, cfd_kw):
                                 q_frac_rayleigh=c.get("spray_q_frac", 0.0), polarity=pol_s))
     kw = dict(cfd_kw)
     kw["wall_U"] = c.get("wall_U_W_m2K", 0.0)
-    kw["T_amb"] = aux.get("ambient_T_C", 25.0)
+    kw["T_amb"] = wall_coolant_T(c, aux)
     return SprayCFD(R, Ls, Ls + Lc, inlet, inj, CFDConfig(**kw)), pol_c
 
 
@@ -433,7 +488,17 @@ def simulate(c, aux, preset_name="resolved_coarse", seed=0, verbose=False, keep=
     dp = max(o["dp_Pa"], 0.0) + dp_discs
     fan_W = dp * c["air_flow_m3_s"] / rom.FAN_EFF
     elec_W = c["corona_voltage_kV"] * 1e3 * I_c
-    recool_W = recool_power_W(o["heat_absorbed_W"], c["spray_T_C"], aux.get("ambient_T_C", 25.0)) if o["spray_in"] > 0 else 0.0
+    T_sea = aux.get("seawater_T_C")
+    if o["spray_in"] > 0:
+        r_opts = recool_options(o["heat_absorbed_W"], c["spray_T_C"], aux.get("ambient_T_C", 25.0), T_sea)
+        recool_mode = min(r_opts, key=r_opts.get)
+        recool_W = r_opts[recool_mode]
+        if T_sea is not None:     # the fresh loop also pushes through the exchanger
+            from stonelab.spray_tower import PUMP_EFF
+            recool_W += o["spray_in"] / rom.RHO_L * FRESH_HX_DP_PA / PUMP_EFF
+    else:
+        recool_mode, recool_W = "none", 0.0
+    wall_cool_W = seawater_pump_W(o.get("wall_heat_W", 0.0)) if c.get("wall_coolant", "ambient") == "seawater" else 0.0
     # arc: the ROM's sparkover estimate (uncalibrated) and the resolved spray-cloud field
     V_spark = rom.sparkover_voltage(R - c["disc_diameter_frac"] * R, pol_c)
     arc_margin = min(1 - c["corona_voltage_kV"] * 1e3 / V_spark, d["spray_arc_margin"])
@@ -445,7 +510,8 @@ def simulate(c, aux, preset_name="resolved_coarse", seed=0, verbose=False, keep=
         "electrical_power_W": float(elec_W),
         "fan_power_W": float(fan_W),
         "pump_power_W": float(o["pump_W"]),
-        "recool_power_W": float(recool_W),
+        "recool_power_W": float(recool_W), "recool_mode": recool_mode,
+        "wall_cooling_power_W": float(wall_cool_W), "wall_heat_W": float(o.get("wall_heat_W", 0.0)),
         "pressure_drop_Pa": float(dp),
         "disc_dp_Pa": float(dp_discs), "disc_dp_correlation_Pa": float(dp_discs_corr),
         "cell_G_Pa_m": None if cell_G is None else float(cell_G),
@@ -462,7 +528,7 @@ def simulate(c, aux, preset_name="resolved_coarse", seed=0, verbose=False, keep=
         "corona_fell_back_frac": float(liq_back / max(o["mist_in"] + o["spray_in"], 1e-12)),
         "escape_by_kind": esc_by_kind,
         "specific_energy_Wh_L": float((elec_W + fan_W) / max(recovered, 1e-3)),
-        "specific_energy_total_Wh_L": float((elec_W + fan_W + o["pump_W"] + recool_W) / max(recovered, 1e-3)),
+        "specific_energy_total_Wh_L": float((elec_W + fan_W + o["pump_W"] + recool_W + wall_cool_W) / max(recovered, 1e-3)),
         "water_balance_residual": float(d["water_residual"]),
         "energy_residual": float(d["energy_residual"]),
         "momentum_number": float(d["momentum_number"]),

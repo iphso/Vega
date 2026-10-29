@@ -23,7 +23,8 @@ HERE = Path(__file__).resolve().parent
 STONELAB = HERE.parents[1] / "StoneLab" / "src" / "stonelab"
 VEGA_FILES = ["watercap_oracle.py", "watercap_ehd.py", "watercap_resolved.py", "watercap_campaign.py",
               "export_watercap_viewer_data.py", "watercap_browser.py"]
-STONELAB_FILES = ["spray_tower.py", "spray_cfd.py", "ehd.py", "ehd_particles.py", "gridsolve.py", "corona_air.py", "ehd_flow.py"]
+STONELAB_FILES = ["spray_tower.py", "spray_cfd.py", "ehd.py", "ehd_particles.py", "gridsolve.py", "corona_air.py", "ehd_flow.py",
+                  "corona_onset.py", "spray_sst.py", "ccn.py"]  # + their relative imports
 # the grid solves' kernels (stonelab.gridsolve finds them as a sibling checkout): kernels.wasm under Pyodide
 WCK = HERE.parents[1] / "wasm-compute-kit" / "python" / "wck"
 WCK_FILES = ["__init__.py", "_backend.py", "_kernels_wasm.py", "particles.py", "spray.py"]
@@ -123,6 +124,9 @@ def bundle(out=HERE.parent / "viewer" / "public" / "data" / "watercap" / "pybund
     # stonelab's own __init__ imports the whole package (flow, elastic, ...); the worker needs four modules
     files["StoneLab/src/stonelab/__init__.py"] = ""
     files.update({f"StoneLab/src/stonelab/{f}": (STONELAB / f).read_text() for f in STONELAB_FILES})
+    # runstore (run recording) needs fcntl, which Pyodide lacks; the browser never records, so its
+    # solver hook is the pass-through it is natively when recording is off
+    files["StoneLab/src/stonelab/runstore.py"] = "def hook(solver):\n    return lambda fn: fn\n"
     files.update({f"wasm-compute-kit/python/wck/{f}": (WCK / f).read_text() for f in WCK_FILES})
     b = dict(files=files, built=time.strftime("%Y-%m-%d %H:%M"))
     if out is None:
