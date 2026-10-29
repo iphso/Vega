@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Water Capture Simulator</title>
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/"}}</script>
+<style>
+/* One simulator: designs on the left, the selected design in the middle, its metrics and the fidelity it was
+   run at on the right. Vega's look: near-black ground, quiet panels, the model front and center.
+   Water = blue, spray = teal, electric = amber, escaping = orange. */
+:root {
+  --bg: #0c0c0e; --panel: #16161a; --card: #1c1c21; --card-2: #202027;
+  --ink: #e8e8ec; --ink-2: #8a8a94; --ink-3: #55555e; --rule: #2a2a30;
+  --water: #5b9dff; --water-dim: #2a4a75; --spray: #3ccfb4; --volt: #ffb547; --esc: #ff9a4d;
+  --good: #7ee0a8; --bad: #ff8a7a;
+  --f-body: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 400 13px/1.45 var(--f-body); height: 100%; }
+button { font: inherit; color: inherit; }
+select, input { font: 400 12px var(--f-body); padding: 4px 6px; border-radius: 6px; border: 1px solid var(--rule); background: var(--card-2); color: var(--ink); }
+input[type=number] { width: 100%; font-family: var(--f-mono); }
+h2 { font: 600 10.5px/1.2 var(--f-body); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-3); margin: 0; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.btn { font: 500 12px/1 var(--f-body); padding: 7px 11px; border-radius: 8px; border: 1px solid var(--rule); background: var(--card-2); cursor: pointer; }
+.btn:hover { border-color: var(--ink-3); }
+.btn.primary { background: var(--water-dim); border-color: var(--water-dim); font-weight: 600; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+
+.app { display: grid; grid-template-rows: auto 1fr; height: 100vh; }
+header.top { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid var(--rule); flex-wrap: wrap; }
+header.top h1 { font: 600 14px/1.2 var(--f-body); margin: 0; }
+.cond { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 16px; background: var(--panel); cursor: pointer; font-size: 12px; color: var(--ink-2); }
+.cond b { color: var(--ink); font-weight: 500; }
+.store { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+.grid3 { display: grid; grid-template-columns: 300px minmax(0, 1fr) 320px; min-height: 0; }
+@media (max-width: 1100px) { .grid3 { grid-template-columns: 1fr; } .app { height: auto; } }
+.col { min-height: 0; overflow: auto; border-right: 1px solid var(--rule); }
+.col:last-child { border-right: 0; }
+
+/* designs */
+.lhead { position: sticky; top: 0; background: var(--bg); z-index: 2; padding: 10px 12px 8px; display: grid; gap: 8px; border-bottom: 1px solid var(--rule); }
+.lrow { display: flex; gap: 6px; align-items: center; }
+.lrow input[type=search] { flex: 1; }
+.fams { display: flex; flex-wrap: wrap; gap: 4px; }
+.fams button { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 3px 7px; border-radius: 12px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); cursor: pointer; }
+.fams button[aria-pressed="false"] { opacity: 0.35; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); padding: 4px 9px; font-size: 11px; color: var(--ink-2); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--water-dim); color: var(--ink); }
+.gtitle { padding: 10px 12px 4px; }
+.item { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 2px 8px; align-items: center; padding: 7px 12px; border-left: 2px solid transparent; cursor: pointer; }
+.item:hover { background: var(--panel); }
+.item[aria-selected="true"] { background: var(--card); border-left-color: var(--water); }
+.item .nm { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item .mx { grid-column: 2 / 4; display: flex; gap: 10px; font: 400 11px var(--f-mono); color: var(--ink-2); }
+.item .mx b { color: var(--ink); font-weight: 500; }
+.tier { font: 600 9.5px/1 var(--f-body); letter-spacing: 0.04em; padding: 3px 5px; border-radius: 4px; border: 1px solid var(--rule); color: var(--ink-2); }
+.tier.t-resolved { color: var(--spray); border-color: #2c6b60; }
+.tier.t-3dq, .tier.t-3df { color: var(--volt); border-color: #6b5326; }
+.stale { opacity: 0.45; }
+#map { width: 100%; display: block; }
+.more { padding: 8px 12px 16px; }
+
+/* stage */
+.stage-wrap { display: grid; grid-template-rows: auto minmax(360px, 1fr) auto; min-height: 100%; }
+.dhead { display: flex; align-items: center; gap: 10px; padding: 12px 16px; flex-wrap: wrap; }
+.dhead .name { font: 600 16px/1.2 var(--f-body); background: transparent; border: 1px solid transparent; padding: 2px 4px; border-radius: 6px; min-width: 12ch; width: min(42ch, 100%); }
+.dhead .name:hover:not([readonly]) { border-color: var(--rule); }
+.dhead .fam { font-size: 12px; color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; }
+.dhead .acts { margin-left: auto; display: flex; gap: 6px; }
+.view { position: relative; margin: 0 16px; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: #0f0f12; min-height: 360px; }
+.view > .pane { position: absolute; inset: 0; }
+/* the axisymmetric view (view3d.js) */
+.stage { position: absolute; inset: 0; }
+.stage canvas { display: block; }
+.v3-top { position: absolute; left: 10px; right: 10px; top: 10px; display: flex; justify-content: space-between; gap: 8px; pointer-events: none; }
+.v3-top > * { pointer-events: auto; }
+.v3-views { display: inline-flex; gap: 4px; }
+.v3-views button, .s3-layers button { font: 500 11px/1 var(--f-body); padding: 6px 10px; border-radius: 14px; border: 1px solid var(--rule); background: rgba(22,22,26,0.8); color: var(--ink-2); cursor: pointer; }
+.v3-views button[aria-pressed="true"], .s3-layers button[aria-pressed="true"] { color: var(--ink); border-color: var(--water-dim); background: rgba(42,74,117,0.85); }
+.v3-fieldbox { display: inline-flex; gap: 6px; align-items: center; font-size: 11px; color: var(--ink-2); background: rgba(22,22,26,0.8); border: 1px solid var(--rule); border-radius: 14px; padding: 3px 4px 3px 10px; }
+.v3-badge { display: none !important; }
+.v3-labels span { position: absolute; left: 0; top: 0; font-size: 11px; color: var(--ink-2); white-space: nowrap; pointer-events: none; padding-left: 6px; margin-top: -8px; border-left: 1px solid var(--ink-3); }
+.v3-legend, .s3-legend { position: absolute; left: 10px; bottom: 10px; display: grid; gap: 4px; font: 400 11px/1.2 var(--f-mono); color: var(--ink-2); background: rgba(22,22,26,0.75); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 8px; pointer-events: none; }
+.v3-legend .lr, .s3-legend .lr { display: flex; gap: 6px; align-items: center; }
+.v3-legend i, .s3-legend i { width: 90px; height: 7px; border-radius: 4px; display: inline-block; }
+.v3-key { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 10px; font-size: 11px; color: var(--ink-2); pointer-events: none; }
+.v3-key i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+.s3-layers { position: absolute; right: 10px; bottom: 10px; display: flex; gap: 4px; }
+.s3-legend { bottom: 10px; }
+/* parameters */
+.params { padding: 14px 16px 24px; display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+.pgroup { display: grid; gap: 6px; align-content: start; }
+.prow { display: grid; grid-template-columns: minmax(0, 1fr) 92px; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.prow .u { font-size: 10.5px; color: var(--ink-3); }
+.prow.fixed input { opacity: 0.55; }
+
+/* metrics + fidelity */
+.side { padding: 14px; display: grid; gap: 14px; align-content: start; }
+.kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kpi { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 10px; display: grid; gap: 2px; }
+.kpi .k { font: 600 9.5px/1.2 var(--f-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.kpi .v { font: 600 21px/1.1 var(--f-body); font-variant-numeric: tabular-nums; }
+.kpi .s { font-size: 11px; color: var(--ink-3); }
+.kpi .v.bad { color: var(--bad); }
+.kpis.stale .v { color: var(--ink-3); }
+.ladder { display: grid; gap: 6px; }
+.rung { display: grid; grid-template-columns: 74px minmax(0, 1fr) auto; gap: 8px; align-items: center; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 7px 9px; cursor: pointer; }
+.rung[aria-current="true"] { border-color: var(--water-dim); background: var(--card); }
+.rung.na { opacity: 0.4; cursor: default; }
+.rung .tn { font: 600 12px var(--f-body); }
+.rung .ts { font: 400 11px var(--f-mono); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rung .bar { grid-column: 1 / 4; height: 3px; border-radius: 2px; background: var(--card-2); overflow: hidden; }
+.rung .bar span { display: block; height: 100%; width: 0; background: var(--spray); transition: width .4s; }
+.extra { display: grid; gap: 8px; }
+.extra table { width: 100%; border-collapse: collapse; font: 400 11.5px var(--f-mono); }
+.extra td { padding: 3px 0; border-bottom: 1px solid var(--rule); color: var(--ink-2); }
+.extra td.n { text-align: right; color: var(--ink); }
+details summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
+.capbars svg { width: 100%; display: block; }
+
+/* conditions popover */
+.pop { position: fixed; top: 52px; left: 16px; width: 380px; max-width: calc(100vw - 32px); background: var(--panel); border: 1px solid var(--rule); border-radius: 10px; padding: 14px; z-index: 20; display: grid; gap: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); }
+.pop .prow { grid-template-columns: minmax(0, 1fr) 110px; }
+.toast { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 8px 12px; font-size: 12px; z-index: 30; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Water capture simulator</h1>
+    <button type="button" class="cond" id="condbtn" aria-haspopup="dialog"><span>Conditions</span><b id="condtxt"></b></button>
+    <span class="store" id="storetxt"></span>
+    <a href="validation.html" style="font-size:12px;color:var(--ink-2)">How it's validated</a>
+  </header>
+  <div class="grid3">
+    <!-- designs -->
+    <section class="col" aria-label="Designs">
+      <div class="lhead">
+        <div class="lrow"><input type="search" id="q" placeholder="Search designs" aria-label="Search designs"><span class="seg" id="lmode"><button type="button" data-m="list" aria-pressed="true">list</button><button type="button" data-m="map" aria-pressed="false">map</button></span></div>
+        <div class="lrow"><label for="sort" style="font-size:11px;color:var(--ink-2)">Sort</label><select id="sort" style="flex:1"><option value="cap">water captured</option><option value="Wh">energy per litre</option><option value="dp">pressure drop</option><option value="arc">arc margin</option><option value="name">name</option></select></div>
+        <div class="fams" id="fams"></div>
+      </div>
+      <canvas id="map" hidden aria-label="Designs: energy per litre against water captured"></canvas>
+      <div id="list"></div>
+    </section>
+    <!-- the design -->
+    <section class="col">
+      <div class="stage-wrap">
+        <div class="dhead">
+          <input class="name" id="dname" aria-label="Design name">
+          <span class="fam" id="dfam"></span>
+          <span class="acts"><button type="button" class="btn" id="dsave" hidden>Save</button><button type="button" class="btn" id="dsavenew">Save as new design</button><button type="button" class="btn" id="ddel" hidden>Delete</button></span>
+        </div>
+        <div class="view" id="viewbox">
+          <div class="pane" id="paneAxi">
+            <div class="stage" id="view3d" aria-label="The design">
+              <div class="v3-top"><div class="v3-views"><button type="button" data-view="whole" aria-pressed="true">whole</button><button type="button" data-view="spray">spray</button><button type="button" data-view="discs">discs</button></div>
+                <label class="v3-fieldbox">plane <select class="v3-field" aria-label="Field on the cut plane"></select></label><span class="v3-badge"></span></div>
+              <div class="v3-labels"><span></span><span></span><span></span><span></span></div>
+              <div class="v3-legend" hidden></div>
+              <div class="v3-key"><span><i style="background:var(--water)"></i>mist</span><span><i style="background:var(--spray)"></i>spray</span><span><i style="background:var(--esc)"></i>escaping</span><span><i style="background:var(--volt)"></i>corona</span></div>
+            </div>
+          </div>
+          <div class="pane" id="pane3d" hidden>
+            <div class="s3-view" id="s3view" style="position:absolute;inset:0"><div class="s3-legend" hidden></div></div>
+            <div class="s3-layers" id="s3layers"><button type="button" data-l="electrode" aria-pressed="true">electrode</button><button type="button" data-l="ions" aria-pressed="true">ions</button><button type="button" data-l="air" aria-pressed="true">air</button><button type="button" data-l="drops" aria-pressed="true">drops</button></div>
+          </div>
+        </div>
+        <div class="params" id="params"></div>
+      </div>
+    </section>
+    <!-- metrics -->
+    <aside class="col side" aria-live="polite">
+      <div><div class="lrow" style="justify-content:space-between;margin-bottom:8px"><h2>Metrics</h2><span class="tier" id="ktier"></span></div><div class="kpis" id="kpis"></div></div>
+      <div><h2 style="margin-bottom:8px">Fidelity</h2><div class="ladder" id="ladder"></div></div>
+      <div class="extra" id="extra"></div>
+    </aside>
+  </div>
+</div>
+<div class="pop" id="condpop" role="dialog" aria-label="Operating conditions" hidden></div>
+<div class="toast" id="toast" hidden></div>
+
+<script id="wcm-src">/*__WCMODEL__*/</script>
+<script id="wcg-src">/*__WCGPU__*/</script>
+<script id="res-src" type="text/plain">/*__RESWORKER__*/</script>
+<script id="d3-src" type="text/plain">/*__DEVICE3D__*/</script>
+<script id="pybundle" type="application/json">/*__PYBUNDLE__*/null</script>
+<script>
+const FIT = /*__FIT__*/null;
+const DATA = /*__DESIGNS__*/null;
+const SITE = /*__SITE__*/null;
+/*__SIMAPP__*/
+</script>
+<script type="module">/*__VIEW3D__*/</script>
+<script type="module">/*__SIM3D__*/</script>
+</body>
+</html>

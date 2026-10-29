@@ -27,12 +27,25 @@ import os  # noqa: E402
 D3 = Path(os.environ.get("DEVICE3D_WORKER", H.parent.parent / "StoneLab-3d" / "apps" / "device3d" / "dist" / "device3d-worker.js"))
 device3d = esc(D3.read_text())
 pybundle = esc(json.dumps(watercap_browser.bundle(None), separators=(",", ":")))
-for key, val in [("/*__WCMODEL__*/", (H / "wcmodel.js").read_text()), ("/*__WCGPU__*/", (H / "wcgpu.js").read_text()),
-                 ("/*__FIT__*/null", fit), ("/*__DESIGNS__*/null", designs), ("/*__SITE__*/null", json.dumps(site, separators=(",", ":"))), ("/*__RESWORKER__*/", resworker), ("/*__DEVICE3D__*/", device3d),
-                 ("/*__PYBUNDLE__*/null", pybundle), ("/*__VIEW3D__*/", esc((H / "view3d.js").read_text())), ("/*__SIM3D__*/", esc((H / "sim3d.js").read_text()))]:
-    assert s.count(key) == 1, key
-    s = s.replace(key, val)
-(H / "workbench.html").write_text(s)
+PARTS = [("/*__WCMODEL__*/", (H / "wcmodel.js").read_text()), ("/*__WCGPU__*/", (H / "wcgpu.js").read_text()),
+         ("/*__FIT__*/null", fit), ("/*__DESIGNS__*/null", designs), ("/*__SITE__*/null", json.dumps(site, separators=(",", ":"))), ("/*__RESWORKER__*/", resworker), ("/*__DEVICE3D__*/", device3d),
+         ("/*__PYBUNDLE__*/null", pybundle), ("/*__VIEW3D__*/", esc((H / "view3d.js").read_text())), ("/*__SIM3D__*/", esc((H / "sim3d.js").read_text())),
+         ("/*__SIMAPP__*/", esc((H / "sim_app.js").read_text()))]
+
+
+def inline(src):
+    for key, val in PARTS:
+        if key == "/*__SIMAPP__*/" and key not in src:
+            continue
+        assert src.count(key) == 1, key
+        src = src.replace(key, val)
+    return src
+
+
+(H / "workbench.html").write_text(inline(s))
+# the simulator: one panel (designs, the design, metrics + fidelity); what the site serves
+sim = inline((H / "sim.src.html").read_text())
+(H / "sim.html").write_text(sim)
 
 PYODIDE_CORE = ["pyodide.js", "pyodide.asm.js", "pyodide.asm.wasm", "python_stdlib.zip", "pyodide-lock.json"]
 PYODIDE_PACKAGES = ["numpy", "scipy", "openblas"]
@@ -62,7 +75,7 @@ def stage_site(dst):
     import shutil
     dst = Path(dst)
     dst.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(H / "workbench.html", dst / "index.html")
+    shutil.copyfile(H / "sim.html", dst / "index.html")
     src = H / "pyodide"
     if not src.is_dir():
         raise SystemExit("no pyodide/: run with --pyodide-from first")
