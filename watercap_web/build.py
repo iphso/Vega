@@ -22,9 +22,13 @@ site = dict(months=watercap_site.MONTHS, depths={"surface": "surface", "20m": "2
                              sea={k: c[i] for k, i in watercap_site.SEA_DEPTHS.items()}) for m, c in watercap_site.CLIMATE.items()})
 esc = lambda t: t.replace("</script", "<\\/script")
 resworker = esc((H / "pyworker.js").read_text())
+# the 3D device tier: StoneLab's solver3d bundled as a module worker (StoneLab apps/device3d, `node apps/device3d/build.mjs`)
+import os  # noqa: E402
+D3 = Path(os.environ.get("DEVICE3D_WORKER", H.parent.parent / "StoneLab-3d" / "apps" / "device3d" / "dist" / "device3d-worker.js"))
+device3d = esc(D3.read_text())
 pybundle = esc(json.dumps(watercap_browser.bundle(None), separators=(",", ":")))
 for key, val in [("/*__WCMODEL__*/", (H / "wcmodel.js").read_text()), ("/*__WCGPU__*/", (H / "wcgpu.js").read_text()),
-                 ("/*__FIT__*/null", fit), ("/*__DESIGNS__*/null", designs), ("/*__SITE__*/null", json.dumps(site, separators=(",", ":"))), ("/*__RESWORKER__*/", resworker),
+                 ("/*__FIT__*/null", fit), ("/*__DESIGNS__*/null", designs), ("/*__SITE__*/null", json.dumps(site, separators=(",", ":"))), ("/*__RESWORKER__*/", resworker), ("/*__DEVICE3D__*/", device3d),
                  ("/*__PYBUNDLE__*/null", pybundle), ("/*__VIEW3D__*/", esc((H / "view3d.js").read_text()))]:
     assert s.count(key) == 1, key
     s = s.replace(key, val)

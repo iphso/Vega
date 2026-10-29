@@ -169,6 +169,15 @@ table.cmp td.d { color: var(--ink-3); }
 .ptable td:first-child { color: var(--ink-2); }
 .ptable td { white-space: normal; }
 .flag { color: var(--volt); font: 500 11px var(--f-mono); }
+/* device3d tab */
+.d3grid { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 900px) { .d3grid { grid-template-columns: minmax(0, 1fr); } }
+.d3ctl { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; font-size: 12.5px; color: var(--ink-2); margin: 8px 0; }
+.d3ctl input[type=text] { font: 400 12px var(--f-mono); width: 16ch; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--rule); background: var(--card-2); color: var(--ink); }
+.d3log { font: 400 11px/1.45 var(--f-mono); color: var(--ink-3); max-height: 7.5em; overflow: auto; white-space: pre-wrap; margin-top: 6px; }
+.d3maps { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.d3maps canvas { width: 100%; aspect-ratio: 1; border-radius: 6px; background: var(--card-2); image-rendering: pixelated; }
+.d3bar { height: 10px; border-radius: 3px; background: var(--water); display: inline-block; vertical-align: middle; }
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
@@ -180,7 +189,7 @@ table.cmp td.d { color: var(--ink-3); }
     <a href="validation.html" style="font-size:12px">Validation status →</a>
     <a href="reel.html" style="font-size:12px">Film →</a>
     <div class="tabs" role="tablist" aria-label="View">
-      <button type="button" role="tab" id="tab-simulate" aria-controls="simulate" aria-selected="true">Explore</button><button type="button" role="tab" id="tab-designs" aria-controls="designs" aria-selected="false">Design library<span id="tabcount"></span></button>
+      <button type="button" role="tab" id="tab-simulate" aria-controls="simulate" aria-selected="true">Explore</button><button type="button" role="tab" id="tab-designs" aria-controls="designs" aria-selected="false">Design library<span id="tabcount"></span></button><button type="button" role="tab" id="tab-device3d" aria-controls="device3d" aria-selected="false">Your device, 3D</button>
     </div>
   </header>
 
@@ -307,11 +316,70 @@ table.cmp td.d { color: var(--ink-3); }
       </div>
     </div>
   </section>
+
+  <!-- ================= YOUR DEVICE, 3D ================= -->
+  <section id="device3d" role="tabpanel" aria-labelledby="tab-device3d" hidden style="display:grid;gap:14px">
+    <section class="panel">
+      <div class="rowhead"><h2>Your device in 3D</h2><span class="eyebrow" id="d3gpu">checking WebGPU …</span></div>
+      <p class="note" style="margin-top:8px">The partner electrode as built: 8 plates (rings 70–90 mm with 6 bent tabs, tips at r = 55.7 mm, canted 40°) at 31.25 mm pitch in the 150 mm tube, positive corona, 130 m³/h. One plate pitch is solved in full 3D on your GPU with the same solver code as our reference runs (StoneLab solver3d), periodic along the tube. Three steps: the tip corona, the airflow with its ionic wind, and the mist that gets through.</p>
+    </section>
+    <div class="d3grid">
+      <section class="panel">
+        <div class="rowhead"><h2>1 · Tip corona</h2><span class="eyebrow">zero airflow · about 1–3 minutes</span></div>
+        <div class="d3ctl">
+          <label for="d3rtip">Tip radius <select id="d3rtip"></select></label>
+          <label for="d3kv">Voltages, kV <input type="text" id="d3kv" value="8,9,10,11,12,13"></label>
+          <label for="d3fkv">Keep the field at <select id="d3fkv"></select></label>
+          <button type="button" class="btn primary" id="d3tiprun">Solve the corona</button>
+        </div>
+        <div class="scroll"><table class="cmp" id="d3iv"></table></div>
+        <div class="d3maps" id="d3maps" hidden><div><div class="eyebrow" id="d3m0t"></div><canvas id="d3m0" width="160" height="160" aria-label="Ion density at the plate plane"></canvas></div><div><div class="eyebrow" id="d3m1t"></div><canvas id="d3m1" width="160" height="160" aria-label="Ion density between plates"></canvas></div></div>
+        <div class="legend" id="d3mleg"></div>
+        <div class="d3log" id="d3tiplog"></div>
+      </section>
+      <section class="panel">
+        <div class="rowhead"><h2>2 · Airflow and ionic wind</h2><span class="eyebrow" id="d3flowsrc"></span></div>
+        <div class="d3ctl">
+          <label for="d3flow">Flow <select id="d3flow">
+            <option value="pre:on">ionic wind on, tabs leaning downstream (as installed)</option>
+            <option value="pre:off">corona off, tabs leaning downstream</option>
+            <option value="pre:on_flip">ionic wind on, tabs leaning upstream</option>
+            <option value="pre:off_flip">corona off, tabs leaning upstream</option>
+          </select></label>
+        </div>
+        <p class="note">These four flows are our reference LES runs (2.5 s each, 12 kV, 0.1 mm tips), downloaded on first use (26 MB each). You can also run the LES here: it is the same code, but long.</p>
+        <details style="margin-top:8px"><summary class="eyebrow">Run the LES in this browser</summary>
+          <div class="d3ctl">
+            <label for="d3lkv">Corona, kV <input type="text" id="d3lkv" value="12" style="width:6ch"></label>
+            <label for="d3lflip"><input type="checkbox" id="d3lflip"> tabs leaning upstream</label>
+            <label for="d3ldur">Length <select id="d3ldur"><option value="2.5">2.5 s, as our runs (≈ 45 min on a fast desktop GPU, hours on a laptop)</option><option value="1.0">1 s (≈ 20 min; shorter statistics)</option><option value="0.3">0.3 s (≈ 6 min; the flow is still settling)</option></select></label>
+            <button type="button" class="btn" id="d3lesrun">Run the LES</button><button type="button" class="btn" id="d3lesstop" hidden>Stop</button>
+          </div>
+          <div class="d3log" id="d3leslog"></div>
+        </details>
+        <div class="scroll"><table class="cmp" id="d3les"></table></div>
+      </section>
+    </div>
+    <section class="panel">
+      <div class="rowhead"><h2>3 · Mist capture through the 8 plates</h2><span class="eyebrow">seconds once the tables are here</span></div>
+      <div class="d3ctl">
+        <label for="d3field">Ions from <select id="d3field"><option value="les">the flow's own LES (12 kV, 0.1 mm)</option><option value="tip">your corona solve (step 1)</option></select></label>
+        <label for="d3n">Parcels per size <select id="d3n"><option value="5000">5,000</option><option value="20000" selected>20,000</option></select></label>
+        <label for="d3iner">Drop inertia <select id="d3iner"><option value="none">tracer drops</option><option value="centripetal">swirl flinging</option><option value="full">full</option></select></label>
+        <button type="button" class="btn primary" id="d3mistrun">Predict capture</button>
+      </div>
+      <div class="scroll"><table class="cmp" id="d3mist"></table></div>
+      <p class="note" id="d3mistnote" style="margin-top:8px"></p>
+      <div class="d3log" id="d3mistlog"></div>
+    </section>
+    <details class="panel"><summary>What this model leaves out</summary><p class="note" style="margin-top:8px">The reduction is measured the way the bench measures it: mist leaving with the corona on over mist leaving with it off. Drops follow the air (or the air plus their own inertia) and charge by field and diffusion charging in the ion field; gravity is off, which is right for a vertical tube. The grid is about 1 mm, so the tip jets are only a few cells wide; drops above 20 µm, the real supply current and the wall film are not in it. On the as-built device it predicts less capture than the bench measured.</p></details>
+  </section>
 </div>
 
 <script id="wcm-src">/*__WCMODEL__*/</script>
 <script id="wcg-src">/*__WCGPU__*/</script>
 <script id="res-src" type="text/plain">/*__RESWORKER__*/</script>
+<script id="d3-src" type="text/plain">/*__DEVICE3D__*/</script>
 <script id="pybundle" type="application/json">/*__PYBUNDLE__*/null</script>
 <script>
 const FIT = /*__FIT__*/null;
@@ -1332,12 +1400,133 @@ function drawPeriods() {
 
 /* ======================= tabs ======================= */
 function showTab(t) {
-  for (const k of ["simulate", "designs"]) { $("#" + k).hidden = k !== t; $("#tab-" + k).setAttribute("aria-selected", k === t); }
+  for (const k of ["simulate", "designs", "device3d"]) { $("#" + k).hidden = k !== t; $("#tab-" + k).setAttribute("aria-selected", k === t); }
   try { history.replaceState(null, "", "#" + t); } catch (e) { /* hash is a convenience */ }
-  if (t === "designs") dsRender(); else render();
+  if (t === "designs") dsRender(); else if (t === "device3d") d3Open(); else render();
 }
 $("#tab-simulate").onclick = () => showTab("simulate");
 $("#tab-designs").onclick = () => showTab("designs");
+$("#tab-device3d").onclick = () => showTab("device3d");
+
+/* ======================= your device, 3D (StoneLab solver3d in a module worker) ======================= */
+let d3w = null, d3id = 0, d3busy = false, d3info = null, d3tip = null;
+const d3short = {};   // browser LES flows too short to trust
+const d3pend = {}, d3logs = {};
+const D3_MEASURED = 1 - 3.73 / 10.63;
+function d3call(type, args, logEl) {
+  if (!d3w) {
+    d3w = new Worker(URL.createObjectURL(new Blob([$("#d3-src").textContent], { type: "text/javascript" })), { type: "module" });
+    d3w.onmessage = e => {
+      const m = e.data;
+      if (m.lost) { $("#d3gpu").textContent = "the GPU device was lost: " + m.lost; return; }
+      if (m.log) { const el = d3logs[m.id]; if (el) { el.textContent += m.log + "\n"; el.scrollTop = el.scrollHeight; } return; }
+      const p = d3pend[m.id]; if (!p) return;
+      delete d3pend[m.id]; delete d3logs[m.id];
+      m.err ? p[1](new Error(m.err)) : p[0](m.ok);
+    };
+  }
+  const id = ++d3id;
+  if (logEl) { d3logs[id] = logEl; logEl.textContent = ""; }
+  return new Promise((res, rej) => { d3pend[id] = [res, rej]; d3w.postMessage({ id, type, ...args }); });
+}
+function d3Busy(on) { d3busy = on; for (const b of ["#d3tiprun", "#d3mistrun", "#d3lesrun"]) $(b).disabled = on || !d3info; }
+async function d3Open() {
+  if (d3info !== null) return;
+  if (!navigator.gpu) { d3info = false; $("#d3gpu").textContent = "this browser has no WebGPU (use a recent Chrome or Edge)"; d3Busy(false); return; }
+  d3info = false; d3Busy(true);
+  try {
+    d3info = await d3call("init", {});
+    $("#d3gpu").textContent = `WebGPU ready · largest buffer ${(d3info.maxBuffer / 2 ** 20).toFixed(0)} MiB`;
+    $("#d3rtip").innerHTML = d3info.tipRadii.map(r => `<option value="${r}"${r === "0.1" ? " selected" : ""}>${r} mm</option>`).join("");
+    d3FieldKV();
+  } catch (e) { d3info = false; $("#d3gpu").textContent = "WebGPU could not start: " + e.message; }
+  d3Busy(false);
+}
+const d3kVs = () => $("#d3kv").value.split(/[ ,;]+/).map(Number).filter(v => isFinite(v) && v > 0 && v < 40);
+function d3FieldKV() { const k = d3kVs(); $("#d3fkv").innerHTML = k.map(v => `<option value="${v}"${v === 12 ? " selected" : ""}>${v} kV</option>`).join(""); if (!k.includes(12) && k.length) $("#d3fkv").value = k[k.length - 1]; }
+$("#d3kv").oninput = d3FieldKV;
+$("#d3tiprun").onclick = async () => {
+  const kV = d3kVs(); if (!kV.length) return;
+  d3Busy(true);
+  try {
+    const r = await d3call("tip", { rTip: $("#d3rtip").value, kV, fieldKV: +$("#d3fkv").value }, $("#d3tiplog"));
+    d3tip = r;
+    $("#d3iv").innerHTML = `<thead><tr><th class="n">kV</th><th class="n">per plate</th><th class="n">8 plates</th><th class="n">power, 8 plates</th><th class="n">current balance</th></tr></thead><tbody>` +
+      r.rows.map(q => `<tr><td class="n">${q.kV}</td><td class="n">${q.I_uA > 0 ? q.I_uA.toFixed(2) + " µA" : "no corona"}</td><td class="n">${q.I_uA > 0 ? (8 * q.I_uA).toFixed(1) + " µA" : "–"}</td><td class="n">${q.I_uA > 0 ? (8 * q.P_W).toFixed(2) + " W" : "–"}</td><td class="n">${q.I_uA > 0 ? q.balance.toExponential(0) : "–"}${q.converged ? "" : ' <span class="flag">not converged</span>'}</td></tr>`).join("") +
+      `</tbody><caption class="eyebrow" style="caption-side:bottom;text-align:left;padding-top:6px">onset of an isolated tip of this radius ≈ ${(r.V_on_ref / 1e3).toFixed(1)} kV · grid ${r.nx}×${r.nx}×${r.nz}, h ${(r.h * 1e3).toFixed(2)} mm</caption>`;
+    d3Maps(r);
+    $("#d3field").value = "tip";
+  } catch (e) { $("#d3tiplog").textContent += "failed: " + e.message; }
+  d3Busy(false);
+};
+function d3Maps(r) {
+  if (!r.slices) { $("#d3maps").hidden = true; return; }
+  $("#d3maps").hidden = false;
+  let hi = 0;
+  for (const s of r.slices) for (const v of s.n) hi = Math.max(hi, v);
+  const lhi = Math.log10(Math.max(hi, 1)), llo = lhi - 4;
+  r.slices.forEach((s, k) => {
+    const cv = $("#d3m" + k), c = cv.getContext("2d"), img = c.createImageData(s.nx, s.ny);
+    for (let j = 0; j < s.ny; j++) for (let i = 0; i < s.nx; i++) {
+      const v = s.n[i + s.nx * j], p = 4 * (i + s.nx * (s.ny - 1 - j));
+      if (!(v > 0)) { img.data[p + 3] = s.E[i + s.nx * j] > 0 ? 40 : 0; continue; }
+      const col = vir((Math.log10(v) - llo) / (lhi - llo));
+      img.data[p] = col[0]; img.data[p + 1] = col[1]; img.data[p + 2] = col[2]; img.data[p + 3] = 255;
+    }
+    c.putImageData(img, 0, 0);
+    $("#d3m" + k + "t").textContent = `ion density, ${s.name} (z = ${(s.z * 1e3).toFixed(1)} mm)`;
+  });
+  $("#d3mleg").innerHTML = `<span>ions, 1/m³ (log)</span><span>${(10 ** llo).toPrecision(2)} <span class="cbar" style="background:${virCSS}"></span> ${(10 ** lhi).toPrecision(2)}</span><span>${r.fieldSource}</span>`;
+}
+const d3Base = () => new URL("device3d", location.href).href;
+const d3Pre = k => k.startsWith("pre:") ? k.slice(4) : null;
+const d3Baseline = k => k.startsWith("les:") ? (k.includes("_flip") ? "pre:off_flip" : "pre:off") : (k.includes("flip") ? "pre:off_flip" : "pre:off");
+// the ions for a flow: its own LES's when that run had the corona on, else the reference 12 kV run of the
+// same tab orientation (a corona-off flow is still charged by a corona in the capture step)
+const d3FieldOfFlow = k => k.startsWith("les:") && !k.startsWith("les:off") ? k : (k.includes("flip") ? "pre:on_flip" : "pre:on");
+$("#d3mistrun").onclick = async () => {
+  const flow = $("#d3flow").value, baseline = d3Baseline(flow);
+  const useTip = $("#d3field").value === "tip";
+  if (useTip && !d3tip?.hasField) { $("#d3mistlog").textContent = "Solve the corona in step 1 first (or pick the flow's own LES ions)."; return; }
+  d3Busy(true);
+  try {
+    const need = [...new Set([flow, baseline].map(d3Pre).filter(Boolean))];
+    if (need.length) await d3call("load", { base: d3Base(), names: need }, $("#d3mistlog"));
+    const field = useTip ? "tip" : d3FieldOfFlow(flow);
+    if (d3Pre(field)) await d3call("load", { base: d3Base(), names: [d3Pre(field)] }, $("#d3mistlog"));
+    const r = await d3call("mist", { field, flow, baseline, perClass: +$("#d3n").value, inertia: $("#d3iner").value }, $("#d3mistlog"));
+    const pct = v => (100 * v).toFixed(1) + "%";
+    $("#d3mist").innerHTML = `<thead><tr><th class="n">drop size</th><th class="n">predicted reduction</th><th></th><th class="n">escape, core (r < 35 mm)</th><th class="n">escape, annulus</th><th class="n">share of escapes from the core</th></tr></thead><tbody>` +
+      r.rows.map(q => `<tr><td class="n">${q.d_um.toFixed(0)} µm</td><td class="n"><b>${pct(q.reduction)}</b></td><td><span class="d3bar" style="width:${Math.max(0, 140 * q.reduction).toFixed(0)}px"></span></td><td class="n">${pct(q.escapeProbCore)}</td><td class="n">${pct(q.escapeProbAnnulus)}</td><td class="n">${pct(q.escapedCoreShare)}</td></tr>`).join("") +
+      `<tr><td class="n">bench</td><td class="n"><b>${pct(D3_MEASURED)}</b></td><td><span class="d3bar" style="width:${(140 * D3_MEASURED).toFixed(0)}px;background:var(--volt)"></span></td><td colspan="3" class="d">10.63 → 3.73 g/min, mixed sizes</td></tr></tbody>`;
+    $("#d3mistnote").innerHTML = (d3short[flow] ? `<span class="flag">This flow comes from a short LES run that has not settled; treat the result as a smoke test, not a prediction.</span> ` : "") +
+      `Flow: ${r.flow}. Ions: ${r.field}. Baseline (corona off): ${r.baseline}.`;
+  } catch (e) { $("#d3mistlog").textContent += "failed: " + e.message; }
+  d3Busy(false);
+};
+$("#d3flow").onchange = () => { $("#d3flowsrc").textContent = $("#d3flow").value.startsWith("les:") ? "your LES run" : "reference LES"; };
+$("#d3lesrun").onclick = async () => {
+  const kV = Math.max(0, +$("#d3lkv").value || 0), flip = $("#d3lflip").checked, tEnd = +$("#d3ldur").value;
+  d3Busy(true); $("#d3lesstop").hidden = false;
+  try {
+    const r = await d3call("les", { kV, rTip: "0.1", flip, tEnd, statsStart: Math.min(0.5, 0.2 * tEnd) }, $("#d3leslog"));
+    const s = r.summary, f = (v, d = 3) => isFinite(v) ? v.toPrecision(d) : "–";
+    // our reference runs average 2 s after 0.5 s of spin-up; much less is the start-up transient, not the flow
+    const short = s.statsWindow < 1 || s.status !== "completed";
+    d3short[r.flowKey] = short;
+    $("#d3les").innerHTML = (short ? `<caption class="flag" style="caption-side:top;text-align:left;padding-bottom:6px">${s.status !== "completed" ? "stopped early" : "short run"}: ${s.statsWindow.toFixed(2)} s of statistics. The flow has not settled, so these numbers (and capture on this flow) are not a prediction.</caption>` : "") +
+      `<tbody><tr><td>status</td><td class="n">${s.status}, ${s.steps} steps, ${(s.runSeconds / 60).toFixed(0)} min</td></tr>
+      <tr><td>pressure drop per plate</td><td class="n">${f(s.dp_per_pitch_Pa)} Pa</td></tr><tr><td>swirl number</td><td class="n">${f(s.swirlNumber, 2)}</td></tr>
+      <tr><td>mean swirl in the tip gap</td><td class="n">${f(s.gap_ut_mean, 2)} m/s</td></tr><tr><td>eddy diffusivity in the gap</td><td class="n">${f(s.D_fluct_gap * 1e4, 3)} cm²/s (pipe ${f(s.D_pipe_gap * 1e4, 3)})</td></tr>` +
+      (s.ehd ? `<tr><td>corona current with flow</td><td class="n">${f(s.ehd.I_uA, 4)} µA per plate</td></tr><tr><td>Coulomb force: radial / azimuthal / along the flow</td><td class="n">${(s.ehd.F_radial_N * 1e3).toFixed(2)} / ${(s.ehd.F_azimuthal_N * 1e3).toFixed(2)} / ${(s.ehd.F_axial_along_flow_N * 1e3).toFixed(3)} mN</td></tr>` : "") + "</tbody>";
+    const label = `your LES: ${kV ? kV + " kV" : "corona off"}${flip ? ", tabs upstream" : ""}, ${tEnd} s`;
+    let opt = [...$("#d3flow").options].find(o => o.value === r.flowKey);
+    if (!opt) { opt = new Option(label, r.flowKey); $("#d3flow").add(opt); }
+    $("#d3flow").value = r.flowKey; $("#d3flow").onchange();
+  } catch (e) { $("#d3leslog").textContent += "failed: " + e.message; }
+  $("#d3lesstop").hidden = true; d3Busy(false);
+};
+$("#d3lesstop").onclick = () => d3w?.postMessage({ type: "abort" });
 
 /* ======================= validation ======================= */
 async function selfCheck() {
@@ -1364,6 +1553,7 @@ function fillValidation(chk) {
 /* ======================= boot ======================= */
 buildRail(); buildSelects(); syncRail(); updateReadout(); buildDesigns();
 if (location.hash === "#designs") showTab("designs");
+if (location.hash === "#device3d") showTab("device3d");
 (async () => {
   const chips = $("#chips");
   try { engine = await gpuEngine(); } catch (e) { engine = cpuEngine(); chips.innerHTML = `<span class="chip warn" title="${e.message}">no WebGPU: sweeps at ${engine.res}×${engine.res} on CPU</span>`; }
