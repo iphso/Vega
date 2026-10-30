@@ -627,3 +627,51 @@ $("#condbtn").onclick = () => { const p = $("#condpop"); p.hidden = !p.hidden; i
   let first = null; try { first = designs.find(x => x.id === localStorage.getItem("wc.sel")); } catch (e) { /* convenience */ }
   select(first || designs.find(x => x.id === "tabbed-ring") || designs[0]);
 })().catch(e => toast("could not start: " + e.message, 10000));
+
+/* ---- panes: drag the dividers, x a pane closed (the rest take its room), reopen it from the header.
+   The layout is a per-viewer convenience, kept in localStorage. */
+(() => {
+  const DEF = { designs: 300, metrics: 320, view: 0.62, closed: [] }, NAMES = { designs: "Designs", view: "View", params: "Parameters", metrics: "Metrics" };
+  let L = { ...DEF };
+  try { L = { ...DEF, ...JSON.parse(localStorage.getItem("wc.layout") || "{}") }; } catch (e) { /* convenience */ }
+  const save = () => { try { localStorage.setItem("wc.layout", JSON.stringify(L)); } catch (e) { /* convenience */ } };
+  const pane = k => document.querySelector(`.pn[data-pane="${k}"]`), open = k => !L.closed.includes(k);
+  function apply() {
+    for (const k of Object.keys(NAMES)) pane(k).hidden = !open(k);
+    const center = open("view") || open("params");
+    $("#center").hidden = !center;
+    $("#g1").hidden = !(open("designs") && (center || open("metrics")));
+    $("#g2").hidden = !(open("metrics") && center);
+    $("#gh").hidden = !(open("view") && open("params"));
+    // the centre takes the slack; with no centre the metrics (else the designs) do
+    const grow = center ? "center" : open("metrics") ? "metrics" : "designs";
+    for (const k of ["designs", "metrics"]) { const el = pane(k), g = grow === k; el.style.flex = g ? "1 1 0" : "none"; el.style.width = g ? "" : L[k] + "px"; }
+    pane("view").style.flex = open("params") ? `${L.view} 1 0` : "1 1 0";
+    pane("params").style.flex = open("view") ? `${1 - L.view} 1 0` : "1 1 0";
+    $("#reopen").innerHTML = L.closed.map(k => `<button type="button" data-k="${k}">+ ${NAMES[k]}</button>`).join("");
+    save();
+  }
+  document.querySelectorAll(".pn .px").forEach(b => b.onclick = () => {
+    const k = b.closest(".pn").dataset.pane;
+    if (Object.keys(NAMES).filter(open).length <= 1) return;          // keep one pane
+    L.closed = [...L.closed, k]; apply();
+  });
+  $("#reopen").onclick = e => { const k = e.target.dataset?.k; if (!k) return; L.closed = L.closed.filter(x => x !== k); apply(); };
+  function drag(g, axis, onMove) {
+    g.addEventListener("pointerdown", e => {
+      e.preventDefault(); g.setPointerCapture(e.pointerId); g.classList.add("drag"); document.body.classList.add("dragging", axis);
+      const x0 = e.clientX, y0 = e.clientY, s0 = { ...L };
+      const mv = ev => { onMove(ev.clientX - x0, ev.clientY - y0, s0); apply(); };
+      const up = () => { g.classList.remove("drag"); document.body.classList.remove("dragging", axis); g.removeEventListener("pointermove", mv); g.removeEventListener("pointerup", up); g.removeEventListener("pointercancel", up); };
+      g.addEventListener("pointermove", mv); g.addEventListener("pointerup", up); g.addEventListener("pointercancel", up);
+    });
+    g.addEventListener("dblclick", () => { for (const k of ["designs", "metrics", "view"]) L[k] = DEF[k]; apply(); });   // reset sizes
+  }
+  const W = () => $("#work").clientWidth, clampW = v => Math.max(180, Math.min(W() - 260, v));
+  drag($("#g1"), "v", (dx, dy, s0) => { L.designs = clampW(s0.designs + dx); });
+  drag($("#g2"), "v", (dx, dy, s0) => { L.metrics = clampW(s0.metrics - dx); });
+  drag($("#gh"), "h", (dx, dy, s0) => { L.view = Math.max(0.15, Math.min(0.88, s0.view + dy / Math.max(1, $("#center").clientHeight - 40))); });
+  // the map is drawn at its pane's width
+  new ResizeObserver(() => { if (lst.mode === "map") renderMap(); }).observe(pane("designs"));
+  apply();
+})();

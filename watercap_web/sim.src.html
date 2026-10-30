@@ -37,10 +37,30 @@ header.top h1 { font: 600 14px/1.2 var(--f-body); margin: 0; }
 .cond { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px; border: 1px solid var(--rule); border-radius: 16px; background: var(--panel); cursor: pointer; font-size: 12px; color: var(--ink-2); }
 .cond b { color: var(--ink); font-weight: 500; }
 .store { margin-left: auto; font-size: 11px; color: var(--ink-3); }
-.grid3 { display: grid; grid-template-columns: 300px minmax(0, 1fr) 320px; min-height: 0; }
-@media (max-width: 1100px) { .grid3 { grid-template-columns: 1fr; } .app { height: auto; } }
-.col { min-height: 0; overflow: auto; border-right: 1px solid var(--rule); }
-.col:last-child { border-right: 0; }
+/* panes: Designs | (View / Parameters) | Metrics. Dividers drag; x closes a pane and the rest take its room. */
+.work { display: flex; min-height: 0; }
+.pn { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.center { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1 1 0; }
+.pn[hidden], .gut[hidden], .center[hidden] { display: none; }
+.ph { flex: none; display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 4px 0 12px; font: 500 11px/1 var(--f-body); color: var(--ink-3); border-bottom: 1px solid var(--rule); user-select: none; }
+.px { border: 0; background: none; color: var(--ink-3); font-size: 15px; line-height: 1; width: 22px; height: 22px; border-radius: 5px; cursor: pointer; }
+.px:hover { background: var(--card); color: var(--ink); }
+.pb { flex: 1 1 0; min-height: 0; overflow: auto; }
+.gut { flex: none; position: relative; z-index: 3; }
+.gut.v { width: 1px; background: var(--rule); cursor: col-resize; }
+.gut.h { height: 1px; background: var(--rule); cursor: row-resize; }
+.gut::after { content: ""; position: absolute; inset: -4px; }
+.gut.v::after { inset: 0 -4px; } .gut.h::after { inset: -4px 0; }
+.gut:hover, .gut.drag { background: var(--water); }
+body.dragging { user-select: none; } body.dragging.v { cursor: col-resize; } body.dragging.h { cursor: row-resize; }
+body.dragging iframe, body.dragging canvas { pointer-events: none; }
+.reopen { display: inline-flex; gap: 6px; }
+.reopen button { font: 500 11px/1 var(--f-body); padding: 5px 9px; border-radius: 14px; border: 1px dashed var(--rule); background: none; color: var(--ink-2); cursor: pointer; }
+.reopen button:hover { border-color: var(--ink-3); color: var(--ink); }
+@media (max-width: 1100px) {
+  .app { height: auto; } .work { display: block; } .gut { display: none !important; }
+  .pn, .center { width: auto !important; flex: none !important; } .pn[data-pane="view"] .view { height: 60vh; flex: none; }
+}
 
 /* designs */
 .lhead { position: sticky; top: 0; background: var(--bg); z-index: 2; padding: 10px 12px 8px; display: grid; gap: 8px; border-bottom: 1px solid var(--rule); }
@@ -67,13 +87,12 @@ header.top h1 { font: 600 14px/1.2 var(--f-body); margin: 0; }
 .more { padding: 8px 12px 16px; }
 
 /* stage */
-.stage-wrap { display: grid; grid-template-rows: auto minmax(360px, 1fr) auto; min-height: 100%; }
 .dhead { display: flex; align-items: center; gap: 10px; padding: 12px 16px; flex-wrap: wrap; }
 .dhead .name { font: 600 16px/1.2 var(--f-body); background: transparent; border: 1px solid transparent; padding: 2px 4px; border-radius: 6px; min-width: 12ch; width: min(42ch, 100%); }
 .dhead .name:hover:not([readonly]) { border-color: var(--rule); }
 .dhead .fam { font-size: 12px; color: var(--ink-2); display: inline-flex; gap: 6px; align-items: center; }
 .dhead .acts { margin-left: auto; display: flex; gap: 6px; }
-.view { position: relative; margin: 0 16px; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: #0f0f12; min-height: 360px; }
+.view { position: relative; margin: 10px 12px 12px; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: #0f0f12; flex: 1 1 0; min-height: 160px; }
 .view > .pane { position: absolute; inset: 0; }
 /* the axisymmetric view (view3d.js) */
 .stage { position: absolute; inset: 0; }
@@ -135,12 +154,15 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
   <header class="top">
     <h1>Water capture simulator</h1>
     <button type="button" class="cond" id="condbtn" aria-haspopup="dialog"><span>Conditions</span><b id="condtxt"></b></button>
+    <span class="reopen" id="reopen" aria-label="Closed panes"></span>
     <span class="store" id="storetxt"></span>
     <a href="validation.html" style="font-size:12px;color:var(--ink-2)">How it's validated</a>
   </header>
-  <div class="grid3">
+  <div class="work" id="work">
     <!-- designs -->
-    <section class="col" aria-label="Designs">
+    <section class="pn" data-pane="designs" aria-label="Designs">
+      <div class="ph"><span>Designs</span><button type="button" class="px" aria-label="Close Designs">×</button></div>
+      <div class="pb">
       <div class="lhead">
         <div class="lrow"><input type="search" id="q" placeholder="Search designs" aria-label="Search designs"><span class="seg" id="lmode"><button type="button" data-m="list" aria-pressed="true">list</button><button type="button" data-m="map" aria-pressed="false">map</button></span></div>
         <div class="lrow"><label for="sort" style="font-size:11px;color:var(--ink-2)">Sort</label><select id="sort" style="flex:1"><option value="cap">water captured</option><option value="Wh">energy per litre</option><option value="dp">pressure drop</option><option value="arc">arc margin</option><option value="name">name</option></select></div>
@@ -148,15 +170,18 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
       </div>
       <canvas id="map" hidden aria-label="Designs: energy per litre against water captured"></canvas>
       <div id="list"></div>
+      </div>
     </section>
+    <div class="gut v" id="g1" role="separator" aria-orientation="vertical" aria-label="Resize Designs"></div>
     <!-- the design -->
-    <section class="col">
-      <div class="stage-wrap">
+    <div class="center" id="center">
         <div class="dhead">
           <input class="name" id="dname" aria-label="Design name">
           <span class="fam" id="dfam"></span>
           <span class="acts"><button type="button" class="btn" id="dsave" hidden>Save</button><button type="button" class="btn" id="dsavenew">Save as new design</button><button type="button" class="btn" id="ddel" hidden>Delete</button></span>
         </div>
+        <section class="pn" data-pane="view" aria-label="View" style="flex: 1 1 0">
+        <div class="ph"><span>View</span><button type="button" class="px" aria-label="Close View">×</button></div>
         <div class="view" id="viewbox">
           <div class="pane" id="paneAxi">
             <div class="stage" id="view3d" aria-label="The design">
@@ -172,14 +197,22 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
             <div class="s3-layers" id="s3layers"><button type="button" data-l="electrode" aria-pressed="true">electrode</button><button type="button" data-l="ions" aria-pressed="true">ions</button><button type="button" data-l="air" aria-pressed="true">air</button><button type="button" data-l="drops" aria-pressed="true">drops</button></div>
           </div>
         </div>
-        <div class="params" id="params"></div>
-      </div>
-    </section>
+        </section>
+        <div class="gut h" id="gh" role="separator" aria-orientation="horizontal" aria-label="Resize View and Parameters"></div>
+        <section class="pn" data-pane="params" aria-label="Parameters" style="flex: 1 1 0">
+          <div class="ph"><span>Parameters</span><button type="button" class="px" aria-label="Close Parameters">×</button></div>
+          <div class="pb"><div class="params" id="params"></div></div>
+        </section>
+    </div>
+    <div class="gut v" id="g2" role="separator" aria-orientation="vertical" aria-label="Resize Metrics"></div>
     <!-- metrics -->
-    <aside class="col side" aria-live="polite">
-      <div><div class="lrow" style="justify-content:space-between;margin-bottom:8px"><h2>Metrics</h2><span class="tier" id="ktier"></span></div><div class="kpis" id="kpis"></div></div>
+    <aside class="pn" data-pane="metrics" aria-label="Metrics" aria-live="polite">
+      <div class="ph"><span>Metrics</span><span style="margin-left:auto;margin-right:6px" class="tier" id="ktier"></span><button type="button" class="px" aria-label="Close Metrics">×</button></div>
+      <div class="pb side">
+      <div class="kpis" id="kpis"></div>
       <div><h2 style="margin-bottom:8px">Fidelity</h2><div class="ladder" id="ladder"></div></div>
       <div class="extra" id="extra"></div>
+      </div>
     </aside>
   </div>
 </div>
