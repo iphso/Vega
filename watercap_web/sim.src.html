@@ -69,6 +69,13 @@ body.dragging iframe, body.dragging canvas { pointer-events: none; }
 .fams { display: flex; flex-wrap: wrap; gap: 4px; }
 .fams button { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 3px 7px; border-radius: 12px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); cursor: pointer; }
 .fams button[aria-pressed="false"] { opacity: 0.35; }
+.fams button .n { font: 400 10px var(--f-mono); color: var(--ink-3); }
+.fams button:hover { border-color: var(--ink-3); opacity: 1; }
+.tog { font-size: 11px; padding: 4px 9px; border-radius: 12px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink-2); cursor: pointer; white-space: nowrap; }
+.tog[aria-pressed="true"] { background: var(--water-dim); border-color: var(--water-dim); color: var(--ink); }
+.mapwrap { position: relative; }
+.maptip { position: absolute; z-index: 4; pointer-events: none; display: grid; gap: 2px; max-width: 200px; background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 5px 8px; font-size: 11px; color: var(--ink-2); }
+.maptip b { color: var(--ink); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 8px; overflow: hidden; }
 .seg button { border: 0; background: var(--panel); padding: 4px 9px; font-size: 11px; color: var(--ink-2); cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--water-dim); color: var(--ink); }
@@ -165,10 +172,10 @@ details summary { cursor: pointer; color: var(--ink-2); font-size: 12px; }
       <div class="pb">
       <div class="lhead">
         <div class="lrow"><input type="search" id="q" placeholder="Search designs" aria-label="Search designs"><span class="seg" id="lmode"><button type="button" data-m="list" aria-pressed="true">list</button><button type="button" data-m="map" aria-pressed="false">map</button></span></div>
-        <div class="lrow"><label for="sort" style="font-size:11px;color:var(--ink-2)">Sort</label><select id="sort" style="flex:1"><option value="cap">water captured</option><option value="Wh">energy per litre</option><option value="dp">pressure drop</option><option value="arc">arc margin</option><option value="name">name</option></select></div>
+        <div class="lrow"><label for="sort" style="font-size:11px;color:var(--ink-2)">Sort</label><select id="sort" style="flex:1"><option value="cap">water captured</option><option value="Wh">energy per litre</option><option value="dp">pressure drop</option><option value="arc">arc margin</option><option value="name">name</option></select><button type="button" class="tog" id="noarc" aria-pressed="false" title="Hide designs that arc">no arcing</button></div>
         <div class="fams" id="fams"></div>
       </div>
-      <canvas id="map" hidden aria-label="Designs: energy per litre against water captured"></canvas>
+      <div class="mapwrap"><canvas id="map" hidden aria-label="Designs: energy per litre against water captured"></canvas><div class="maptip" id="maptip" hidden></div></div>
       <div id="list"></div>
       </div>
     </section>

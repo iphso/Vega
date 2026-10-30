@@ -360,7 +360,10 @@ async function run3D(x, d, tier) {
 const nearestClass = rows => { let b = 0; rows.forEach((q, i) => { if (Math.abs(Math.log(q.d_um / cond.mist_mmd_um)) < Math.abs(Math.log(rows[b].d_um / cond.mist_mmd_um))) b = i; }); return b; };
 
 /* ======================= list + map ======================= */
-const lst = { q: "", sort: "cap", fams: null, mode: "list" };
+const lst = { q: "", sort: "cap", fams: null, mode: "list", noArc: false, hoverFam: null, hoverId: null };
+// the families closest to the reference electrode: what the page opens on
+const START_FAMS = ["tabbed_ring", "disc_variants"];
+const arcs = x => { const b = best(x); return !!b && isFinite(b.r.m.arc) && b.r.m.arc < 0; };
 // numbers as people read them: 2 significant figures below 100, whole numbers above, never an exponent
 const num = (v, sig = 2) => !isFinite(v) ? "–" : Math.abs(v) >= 100 ? Math.round(v).toLocaleString() : (+v.toPrecision(sig)).toString();
 const fmt = { cap: m => isFinite(m.cap) ? (100 * m.cap).toFixed(m.cap < 0.1 ? 1 : 0) + "%" : "–", Wh: m => isFinite(m.Wh) ? num(m.Wh) + " Wh/L" : "–", dp: m => isFinite(m.dp) ? num(m.dp) + " Pa" : "–", arc: m => isFinite(m.arc) ? m.arc.toFixed(2) : "–" };
@@ -371,7 +374,7 @@ function sortVal(x) {
 }
 function shown() {
   const q = lst.q.toLowerCase();
-  return designs.filter(x => lst.fams.has(x.fam) && (!q || x.name.toLowerCase().includes(q) || (FAMNAME[x.fam] || "").includes(q)));
+  return designs.filter(x => lst.fams.has(x.fam) && !(lst.noArc && arcs(x)) && (!q || x.name.toLowerCase().includes(q) || (FAMNAME[x.fam] || "").includes(q)));
 }
 function renderList() {
   const xs = shown();
@@ -389,14 +392,28 @@ function renderList() {
     (lib.length > LIM ? `<div class="more"><button type="button" class="btn" id="listmore">show all ${lib.length}</button></div>` : "");
   $("#list").querySelectorAll(".item").forEach(el => el.onclick = () => select(designs.find(x => x.id === el.dataset.id)));
   $("#listmore")?.addEventListener("click", e => { e.target.parentElement.outerHTML = lib.slice(LIM).map(row).join(""); $("#list").querySelectorAll(".item").forEach(el => el.onclick = () => select(designs.find(x => x.id === el.dataset.id))); });
-  $("#fams").innerHTML = famsPresent().map(f => `<button type="button" data-f="${f}" aria-pressed="${lst.fams.has(f)}"><span class="dot" style="background:${famCol(f)}"></span>${FAMNAME[f] || f}</button>`).join("");
-  $("#fams").querySelectorAll("button").forEach(b => b.onclick = e => {
-    const f = b.dataset.f;
-    if (e.altKey || e.metaKey) lst.fams = new Set([f]); else lst.fams.has(f) ? lst.fams.delete(f) : lst.fams.add(f);
-    if (!lst.fams.size) lst.fams = new Set(famsPresent());
-    renderList(); renderMap();
-  });
+  const all = famsPresent(), n = f => designs.filter(x => x.fam === f && !(lst.noArc && arcs(x))).length;
+  $("#fams").innerHTML = all.map(f => `<button type="button" data-f="${f}" aria-pressed="${lst.fams.has(f)}"><span class="dot" style="background:${famCol(f)}"></span>${FAMNAME[f] || f}<span class="n">${n(f)}</span></button>`).join("") +
+    (lst.fams.size < all.length ? `<button type="button" data-f="*" aria-pressed="false">all</button>` : "");
 }
+// hovering a row rings its dot on the map
+$("#list").onmouseover = e => { const id = e.target.closest(".item")?.dataset.id ?? null; if (id !== lst.hoverId) { lst.hoverId = id; if (lst.mode === "map") renderMap(); } };
+$("#list").onmouseleave = () => { lst.hoverId = null; if (lst.mode === "map") renderMap(); };
+// family chips: click toggles, double-click keeps only that family, hover lights its designs on the map
+// (the chips are re-rendered on every click, so the browser's dblclick never fires: a second click on the same
+// chip within 400 ms counts as the double-click)
+let famClick = { f: null, t: 0 };
+$("#fams").onclick = e => {
+  const f = e.target.closest("button")?.dataset.f; if (!f) return;
+  const dbl = f === famClick.f && e.timeStamp - famClick.t < 400;
+  famClick = { f, t: dbl ? 0 : e.timeStamp };
+  if (f === "*") lst.fams = new Set(famsPresent());
+  else if (dbl || e.altKey || e.metaKey) lst.fams = new Set([f]); else lst.fams.has(f) ? lst.fams.delete(f) : lst.fams.add(f);
+  if (!lst.fams.size) lst.fams = new Set(famsPresent());
+  renderList(); renderMap();
+};
+$("#fams").onmouseover = e => { const f = e.target.closest("button")?.dataset.f ?? null; const h = f === "*" ? null : f; if (h !== lst.hoverFam) { lst.hoverFam = h; renderMap(); } };
+$("#fams").onmouseleave = () => { lst.hoverFam = null; renderMap(); };
 let mapPts = [];
 function renderMap() {
   const cv = $("#map"); if (lst.mode !== "map") { cv.hidden = true; return; }
@@ -405,19 +422,43 @@ function renderMap() {
   cv.width = w * dpr; cv.height = h * dpr; cv.style.height = h + "px";
   const g = cv.getContext("2d"); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
   const M = { l: 34, r: 8, t: 8, b: 26 }, pw = w - M.l - M.r, ph = h - M.t - M.b;
-  const pts = shown().map(x => { const b = best(x); return b && !b.stale && isFinite(b.r.m.Wh) && b.r.m.Wh > 0 ? { x, Wh: b.r.m.Wh, cap: b.r.m.cap } : null; }).filter(Boolean);
+  const base = shown(), hf = lst.hoverFam, pool = hf && !lst.fams.has(hf) ? base.concat(designs.filter(x => x.fam === hf && !(lst.noArc && arcs(x)))) : base;
+  const pts = pool.map(x => { const b = best(x); return b && !b.stale && isFinite(b.r.m.Wh) && b.r.m.Wh > 0 ? { x, Wh: b.r.m.Wh, cap: b.r.m.cap } : null; }).filter(Boolean);
   const X = v => M.l + (Math.log10(v) + 1) / 4 * pw, Y = v => M.t + ph - Math.min(1, Math.max(0, v / 0.7)) * ph;   // 0.1 .. 1000 Wh/L, 0 .. 70%
   g.strokeStyle = "#2a2a30"; g.fillStyle = "#55555e"; g.font = "10px " + getComputedStyle(document.body).getPropertyValue("--f-mono");
   for (const v of [0.1, 1, 10, 100, 1000]) { g.beginPath(); g.moveTo(X(v), M.t); g.lineTo(X(v), M.t + ph); g.stroke(); g.fillText(v >= 1 ? v : "0.1", X(v) - 6, h - 12); }
   for (const v of [0, 0.2, 0.4, 0.6]) { g.beginPath(); g.moveTo(M.l, Y(v)); g.lineTo(M.l + pw, Y(v)); g.stroke(); g.fillText((100 * v).toFixed(0) + "%", 2, Y(v) + 3); }
   g.fillText("Wh/L →", M.l + pw - 34, h - 2); g.save(); g.translate(10, M.t + 46); g.rotate(-PI / 2); g.fillText("captured →", 0, 0); g.restore();
   mapPts = [];
-  for (const p of pts) { const px = X(p.Wh), py = Y(p.cap); mapPts.push({ px, py, x: p.x }); g.globalAlpha = p.x === sel ? 1 : 0.6; g.fillStyle = famCol(p.x.fam); g.beginPath(); g.arc(px, py, p.x === sel ? 5 : 2.6, 0, 7); g.fill(); }
+  const lit = x => !hf || x.fam === hf;
+  pts.sort((a, b) => lit(a.x) - lit(b.x));   // the lit family on top
+  for (const p of pts) {
+    const px = X(p.Wh), py = Y(p.cap), on = lit(p.x); mapPts.push({ px, py, x: p.x });
+    g.globalAlpha = p.x === sel ? 1 : hf ? (on ? 0.95 : 0.08) : 0.6; g.fillStyle = famCol(p.x.fam);
+    g.beginPath(); g.arc(px, py, p.x === sel ? 5 : hf && on ? 3.4 : 2.6, 0, 7); g.fill();
+  }
   g.globalAlpha = 1;
+  const ring = x => { const q = mapPts.find(p => p.x === x); if (!q) return; g.strokeStyle = "#e8e8ec"; g.lineWidth = 1.5; g.beginPath(); g.arc(q.px, q.py, 7, 0, 7); g.stroke(); };
+  const hx = lst.hoverId && designs.find(x => x.id === lst.hoverId); if (hx) ring(hx);
+  if (mapHover) ring(mapHover);
 }
+let mapHover = null;
+$("#map").onmousemove = e => {
+  const r = e.target.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top; let b = null, bd = 100;
+  for (const p of mapPts) { const d = (p.px - mx) ** 2 + (p.py - my) ** 2; if (d < bd) { bd = d; b = p; } }
+  const tip = $("#maptip");
+  if (b?.x !== mapHover) { mapHover = b?.x || null; renderMap(); }
+  e.target.style.cursor = b ? "pointer" : "";
+  if (!b) { tip.hidden = true; return; }
+  const m = best(b.x).r.m;
+  tip.innerHTML = `<b>${esc(b.x.name)}</b><span>${fmt.cap(m)} · ${fmt.Wh(m)} · ${fmt.dp(m)}</span>`;
+  tip.hidden = false; tip.style.left = Math.min(r.width - 180, b.px + 10) + "px"; tip.style.top = (b.py + 10) + "px";
+};
+$("#map").onmouseleave = () => { $("#maptip").hidden = true; if (mapHover) { mapHover = null; renderMap(); } };
 $("#map").onclick = e => { const r = e.target.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top; let b = null, bd = 144; for (const p of mapPts) { const d = (p.px - mx) ** 2 + (p.py - my) ** 2; if (d < bd) { bd = d; b = p; } } if (b) select(b.x); };
 $("#q").oninput = e => { lst.q = e.target.value; renderList(); renderMap(); };
 $("#sort").onchange = e => { lst.sort = e.target.value; renderList(); };
+$("#noarc").onclick = e => { lst.noArc = !lst.noArc; e.currentTarget.setAttribute("aria-pressed", lst.noArc); renderList(); renderMap(); };
 $("#lmode").querySelectorAll("button").forEach(b => b.onclick = () => { lst.mode = b.dataset.m; $("#lmode").querySelectorAll("button").forEach(q => q.setAttribute("aria-pressed", q === b)); renderMap(); });
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 
@@ -616,7 +657,8 @@ $("#condbtn").onclick = () => { const p = $("#condpop"); p.hidden = !p.hidden; i
 
 /* ======================= start ======================= */
 (async () => {
-  lst.fams = new Set(famsPresent());
+  lst.fams = new Set(START_FAMS.filter(f => famsPresent().includes(f)));
+  if (!lst.fams.size) lst.fams = new Set(famsPresent());
   $("#condtxt").textContent = condText();
   const st = await storeLoad();
   for (const x of st.designs || []) designs.unshift({ ...x, src: "team", measured: x.fam === "tabbed_ring" ? 1 - 3.73 / 10.63 : undefined });
@@ -625,7 +667,9 @@ $("#condbtn").onclick = () => { const p = $("#condpop"); p.hidden = !p.hidden; i
   engine = await makeEngine();
   await fastAll();
   let first = null; try { first = designs.find(x => x.id === localStorage.getItem("wc.sel")); } catch (e) { /* convenience */ }
-  select(first || designs.find(x => x.id === "tabbed-ring") || designs[0]);
+  first = first || designs.find(x => x.id === "tabbed-ring") || designs[0];
+  if (!lst.fams.has(first.fam)) lst.fams.add(first.fam);
+  select(first);
 })().catch(e => toast("could not start: " + e.message, 10000));
 
 /* ---- panes: drag the dividers, x a pane closed (the rest take its room), reopen it from the header.
@@ -675,3 +719,15 @@ $("#condbtn").onclick = () => { const p = $("#condpop"); p.hidden = !p.hidden; i
   new ResizeObserver(() => { if (lst.mode === "map") renderMap(); }).observe(pane("designs"));
   apply();
 })();
+
+// keys: up / down step through the list, Esc closes the conditions popover
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") { $("#condpop").hidden = true; return; }
+  if ((e.key !== "ArrowDown" && e.key !== "ArrowUp") || e.target.closest("input, select, textarea") || e.altKey || e.metaKey || e.ctrlKey) return;
+  const items = [...$("#list").querySelectorAll(".item")]; if (!items.length) return;
+  const i = items.findIndex(el => el.getAttribute("aria-selected") === "true"), j = Math.max(0, Math.min(items.length - 1, i < 0 ? 0 : i + (e.key === "ArrowDown" ? 1 : -1)));
+  if (j === i) return;
+  e.preventDefault();
+  select(designs.find(x => x.id === items[j].dataset.id));
+  $("#list").querySelector(`.item[data-id="${CSS.escape(items[j].dataset.id)}"]`)?.scrollIntoView({ block: "nearest" });
+});
