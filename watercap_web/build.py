@@ -85,6 +85,10 @@ def stage_site(dst):
         shutil.copyfile(f, dst / "vendor" / f.name)
     for f in sorted(src.iterdir()):
         shutil.copyfile(f, dst / "pyodide" / f.name)
+    (dst / "cinema").mkdir(exist_ok=True)                 # the reel (reel.html + cinema/, incl. the baked 3D asset)
+    for f in sorted((H / "cinema").iterdir()):
+        shutil.copyfile(f, dst / "cinema" / f.name)
+    shutil.copyfile(H / "reel.html", dst / "reel.html")
     print("site:", dst, sum(f.stat().st_size for f in dst.rglob("*") if f.is_file()) / 1e6, "MB")
 
 
