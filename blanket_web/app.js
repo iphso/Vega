@@ -99,6 +99,7 @@ function select(it) {
   cur = { id: it.id, name: it.name, base: structuredClone(it.design ?? {}), design: fullDesign(it.design), reference: it.reference ?? null, saved: it.family === "Your designs" || saved.some((s) => s.id === it.id) };
   $("dname").value = cur.name;
   $("ddel").hidden = !cur.saved;
+  if (sweep) closeSweep();
   renderParams(); renderList(); redraw(); schedule();
 }
 
@@ -130,15 +131,25 @@ function renderParams() {
         input.onchange = () => { const x = Number(input.value); if (Number.isFinite(x)) update(p.key, Math.min(p.max, Math.max(p.min, x))); };
       }
       row.innerHTML = `<span>${p.label}${p.unit ? ` <span class="u">${p.unit}</span>` : ""}</span>`;
-      row.append(input); grp.append(row);
+      row.append(input);
+      if (p.step || p.key === "li6Pct") {
+        const sw = document.createElement("button");
+        sw.type = "button"; sw.className = "swb"; sw.textContent = "⇆";
+        sw.title = sw.ariaLabel = `Sweep ${p.label.toLowerCase()} across its range`;
+        sw.setAttribute("aria-pressed", String(sweep?.p.key === p.key));
+        sw.onclick = (e) => { e.preventDefault(); startSweep(p); renderParams(); };
+        row.append(sw);
+      } else row.append(document.createElement("span"));
+      grp.append(row);
     }
     box.append(grp);
   }
 }
 
 function update(key, v) {
+  if (sweep && key !== sweep.p.key) closeSweep();
   set(cur.design, key, v);
-  renderParams(); redraw(); schedule();
+  renderParams(); redraw(); schedule(); drawSweep();
 }
 
 // ---- runs: Fast auto-runs on every change; Resolved on request
@@ -408,8 +419,113 @@ async function show3d(on) {
   if (view3d && m) view3d.setLive(m, cur.design);
 }
 
+// ---- sweep: one parameter across its range at the Fast tier, the coupled outputs side by side
+const SWEEP_OUT = [
+  { k: "Tritium breeding ratio", v: (m) => m.tbr, e: (m) => m.tbrErr, n: 3, guide: [1.1, "target 1.1"] },
+  { k: "Peak inner vessel, K", v: (m) => m.thermal2d?.peaks.inconelInner.K ?? m.thermal.vvMax, n: 0, guide: [973, "973 K"] },
+  { k: "Tritium in the salt, mg", v: (m) => m.tritium?.inventoryMg ?? NaN, n: 0 },
+  { k: "Vessel helium limit, years", v: (m) => (m.damage ? 500 / m.damage.vvInPeakHeAppmPerFpy : NaN), n: 2 },
+];
+const SWEEP_N = 9;
+let sweep = null, sweepToken = 0;
+const snapTo = (x, step) => Number((Math.round(x / step) * step).toFixed(6));
+
+async function startSweep(p) {
+  const token = ++sweepToken;
+  const now = get(cur.design, p.key);
+  const grid = p.key === "li6Pct" ? engine.enrichments() : Array.from({ length: SWEEP_N }, (_, i) => snapTo(p.min + ((p.max - p.min) * i) / (SWEEP_N - 1), p.step));
+  const xs = [...new Set([...grid, now])].sort((a, b) => a - b);
+  sweep = { p, xs, ms: xs.map(() => null), base: structuredClone(cur.design), hover: -1 };
+  if (!$("v3").hidden) { show3d(false); $("layers").querySelector('[data-f="3d"]').setAttribute("aria-pressed", "false"); }
+  $("sw").hidden = false; $("view").classList.add("insweep");
+  drawSweep();
+  for (let i = 0; i < xs.length; i++) {
+    const d = structuredClone(sweep.base); set(d, p.key, xs[i]);
+    const k = keyOf(d);
+    let m = results.get(k)?.fast;
+    if (!m) {
+      try { m = await engine.evaluate(d, FAST, undefined, 1); } catch (e) { console.warn("sweep", xs[i], e); }
+      if (m) results.set(k, { ...(results.get(k) ?? {}), fast: m });
+    }
+    if (token !== sweepToken) return;
+    sweep.ms[i] = m ?? null; drawSweep();
+  }
+}
+
+function closeSweep() {
+  sweepToken++; sweep = null;
+  $("sw").hidden = true; $("view").classList.remove("insweep");
+}
+
+function drawSweep() {
+  if (!sweep) return;
+  const { p, xs, ms } = sweep;
+  const done = ms.filter(Boolean).length, now = get(cur.design, p.key);
+  const unit = p.unit ? ` ${p.unit}` : "";
+  $("sw-head").innerHTML = `<span><b>${p.label}</b>${p.unit ? ` <span class="u">${p.unit}</span>` : ""} · ${xs.length} designs, Fast tier (${sig(FAST, 2)} histories each, same random numbers)${done < xs.length ? ` · <b>${done}/${xs.length}</b>` : ""}</span>${sweep.hover >= 0 ? `<span class="hxv">${p.label} = ${sig(xs[sweep.hover], 4)}${unit}</span>` : `<span class="u">hover to compare · click a point to apply it</span>`}`;
+  const host = $("sw-charts");
+  if (host.childElementCount !== SWEEP_OUT.length) host.innerHTML = SWEEP_OUT.map(() => `<div class="swc"><div class="swt"></div><svg></svg></div>`).join("");
+  const x0 = xs[0], x1 = xs[xs.length - 1];
+  SWEEP_OUT.forEach((o, ci) => {
+    const cell = host.children[ci], svg = cell.querySelector("svg");
+    const W = Math.max(160, cell.clientWidth - 18), H = Math.max(100, cell.clientHeight - cell.querySelector(".swt").offsetHeight - 10);
+    const L = 46, R = 12, T = 10, B = 24;
+    const pts = xs.map((x, j) => (ms[j] ? { j, x, y: o.v(ms[j]), e: o.e?.(ms[j]) ?? 0 } : null)).filter((q) => q && Number.isFinite(q.y));
+    const hv = sweep.hover >= 0 && ms[sweep.hover] ? o.v(ms[sweep.hover]) : null;
+    cell.querySelector(".swt").innerHTML = `${o.k}${hv !== null && Number.isFinite(hv) ? ` <b>${f(hv, o.n)}</b>` : ""}`;
+    if (!pts.length) { svg.innerHTML = ""; svg.setAttribute("viewBox", `0 0 ${W} ${H}`); return; }
+    let lo = Math.min(...pts.map((q) => q.y - q.e)), hi = Math.max(...pts.map((q) => q.y + q.e));
+    // show the guide line when it is near the data, without letting it flatten the curve
+    if (o.guide) { const [g] = o.guide, span = Math.max(hi - lo, Math.abs(hi) * 0.02); if (g > lo - 0.6 * span && g < hi + 0.6 * span) { lo = Math.min(lo, g); hi = Math.max(hi, g); } }
+    // at least 5% of the value: Fast-tier noise must not be stretched to full height
+    { const c = (hi + lo) / 2, d = Math.max(Math.abs(c) * 0.025, 1e-3); if (hi - lo < 2 * d) { lo = c - d; hi = c + d; } }
+    const padY = (hi - lo) * 0.08; lo -= padY; hi += padY;
+    const X = (x) => L + ((x - x0) / (x1 - x0 || 1)) * (W - L - R), Y = (y) => T + (1 - (y - lo) / (hi - lo)) * (H - T - B);
+    const ticks = (a, b, n) => { const st = 10 ** Math.floor(Math.log10((b - a) / n || 1)); const s = [1, 2, 5, 10].map((k) => k * st).find((k) => (b - a) / k <= n) ?? st * 10; const out = []; for (let v = Math.ceil(a / s) * s; v <= b + 1e-9; v += s) out.push(Number(v.toPrecision(6))); return out; };
+    const yt = ticks(lo, hi, 3), xt = p.key === "li6Pct" ? xs : ticks(x0, x1, 4);
+    let s = "";
+    for (const v of yt) s += `<line class="g" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 6}" y="${Y(v) + 3.5}" text-anchor="end">${sig(v, 3)}</text>`;
+    for (const v of xt) s += `<text class="ax" x="${X(v)}" y="${H - 6}" text-anchor="middle">${sig(v, 3)}</text>`;
+    if (o.guide && o.guide[0] >= lo && o.guide[0] <= hi) s += `<line class="gd" x1="${L}" x2="${W - R}" y1="${Y(o.guide[0])}" y2="${Y(o.guide[0])}"/><text class="gl" x="${W - R}" y="${Y(o.guide[0]) - 4}" text-anchor="end">${o.guide[1]}</text>`;
+    s += `<line class="cur" x1="${X(now)}" x2="${X(now)}" y1="${T}" y2="${H - B}"/>`;
+    if (sweep.hover >= 0) s += `<line class="hx" x1="${X(xs[sweep.hover])}" x2="${X(xs[sweep.hover])}" y1="${T}" y2="${H - B}"/>`;
+    s += `<polyline class="ln" points="${pts.map((q) => `${X(q.x)},${Y(q.y)}`).join(" ")}"/>`;
+    for (const q of pts) {
+      if (q.e > 0 && Y(q.y - q.e) - Y(q.y + q.e) > 3) s += `<line class="eb" x1="${X(q.x)}" x2="${X(q.x)}" y1="${Y(q.y - q.e)}" y2="${Y(q.y + q.e)}"/>`;
+      s += `<circle class="pt${q.x === now ? " on" : ""}${q.j === sweep.hover ? " hv" : ""}" cx="${X(q.x)}" cy="${Y(q.y)}" r="${q.j === sweep.hover ? 5 : 4}"/>`;
+    }
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
+    svg.innerHTML = s;
+    svg.dataset.l = L; svg.dataset.r = W - R;
+  });
+}
+
+// hover: nearest swept value across every chart; click applies it
+const sweepIndexAt = (svg, clientX) => {
+  const rect = svg.getBoundingClientRect(), L = Number(svg.dataset.l), Rr = Number(svg.dataset.r);
+  const t = (clientX - rect.left - L) / (Rr - L), x = sweep.xs[0] + t * (sweep.xs[sweep.xs.length - 1] - sweep.xs[0]);
+  let best = -1, bd = Infinity;
+  sweep.xs.forEach((v, j) => { if (sweep.ms[j] && Math.abs(v - x) < bd) { bd = Math.abs(v - x); best = j; } });
+  return best;
+};
+$("sw-charts").addEventListener("pointermove", (e) => {
+  const svg = e.target.closest("svg"); if (!sweep || !svg) return;
+  const j = sweepIndexAt(svg, e.clientX);
+  if (j === sweep.hover) return;
+  sweep.hover = j; drawSweep();
+});
+$("sw-charts").addEventListener("pointerleave", () => { if (!sweep) return; sweep.hover = -1; drawSweep(); });
+$("sw-charts").addEventListener("click", (e) => {
+  const svg = e.target.closest("svg"); if (!sweep || !svg) return;
+  const j = sweepIndexAt(svg, e.clientX);
+  if (j >= 0) update(sweep.p.key, sweep.xs[j]);
+});
+$("sw-close").onclick = () => { closeSweep(); };
+new ResizeObserver(() => drawSweep()).observe($("sw"));
+
 $("layers").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
+  if (sweep) closeSweep();
   if (b.dataset.f === "3d") {
     const on = b.getAttribute("aria-pressed") !== "true";
     b.setAttribute("aria-pressed", String(on));
@@ -425,7 +541,7 @@ new ResizeObserver(() => show()).observe($("view"));
 
 // ---- design actions
 $("dname").onchange = () => { cur.name = $("dname").value; if (cur.saved) { const s = saved.find((x) => x.id === cur.id); if (s) { s.name = cur.name; persist(s); renderList(); } } };
-$("dreset").onclick = () => { cur.design = fullDesign(cur.base); renderParams(); redraw(); schedule(); };
+$("dreset").onclick = () => { if (sweep) closeSweep(); cur.design = fullDesign(cur.base); renderParams(); redraw(); schedule(); };
 $("dsave").onclick = () => {
   const it = { id: `my-${Date.now()}`, name: `${cur.name}${cur.saved ? "" : " (edited)"}`, family: "Your designs", design: structuredClone(cur.design), reference: null };
   saved.unshift(it); persist(it); select(it);

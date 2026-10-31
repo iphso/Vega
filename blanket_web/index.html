@@ -48,6 +48,7 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
   .work > .pn[aria-label="Metrics"] { order: 3; } .params { order: 4; overflow: visible; }
   .work > .pn[aria-label="Designs"] { order: 5; } .work > .pn[aria-label="Designs"] .pb { max-height: 50vh; flex: none; }
   #keys { display: none !important; }
+  .legend { left: auto; right: 10px; }
 }
 
 /* designs */
@@ -82,10 +83,35 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 .tip b { color: var(--ink); font-weight: 500; }
 .params { padding: 6px 16px 24px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); overflow: auto; flex: 1 1 40%; min-height: 0; }
 .pgroup { display: grid; gap: 6px; align-content: start; }
-.prow { display: grid; grid-template-columns: minmax(0, 1fr) 86px; gap: 8px; align-items: center; font-size: 12px; color: var(--ink-2); }
+.prow { display: grid; grid-template-columns: minmax(0, 1fr) 86px 22px; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-2); }
 .prow .u { font-size: 10.5px; color: var(--ink-3); }
 .prow.changed { color: var(--ink); }
 .prow.changed input, .prow.changed select { border-color: var(--flibe-dim); }
+.swb { width: 22px; height: 22px; padding: 0; border-radius: 6px; border: 1px solid var(--rule); background: transparent; color: var(--ink-3); cursor: pointer; font-size: 12px; line-height: 1; }
+.swb:hover { color: var(--ink); border-color: var(--ink-3); }
+.swb[aria-pressed="true"] { color: var(--ink); background: var(--flibe-dim); border-color: var(--flibe-dim); }
+
+/* sweep: small multiples over the view */
+.sweep { position: absolute; inset: 0; z-index: 6; background: #0f0f12; display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 6px; padding: 10px 12px 8px; }
+.sweep .sh { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); padding-right: 30px; }
+.sweep .sh b { color: var(--ink); font-weight: 600; }
+.sweep .u { color: var(--ink-3); font-size: 11px; }
+.sweep .x { position: absolute; right: 10px; top: 8px; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--rule); background: var(--card-2); cursor: pointer; line-height: 1; }
+.sweep .hxv { font: 400 11px var(--f-mono); color: var(--ink); }
+.swg { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; gap: 8px; min-height: 0; overflow: hidden; }
+@media (max-width: 700px) { .swg { grid-template-columns: 1fr; grid-template-rows: none; grid-auto-rows: 150px; overflow: auto; } }
+.swc { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; overflow: hidden; background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 8px 2px; }
+.swt { font-size: 11.5px; color: var(--ink-2); }
+.swt b { color: var(--ink); font: 500 11.5px var(--f-mono); margin-left: 4px; }
+.swc svg { display: block; cursor: crosshair; overflow: visible; }
+.swc .g { stroke: #24242a; } .swc .ax { font: 400 10px var(--f-mono); fill: #8a8a94; }
+.swc .gd { stroke: var(--ink-3); stroke-dasharray: 4 3; } .swc .gl { font: 400 10px var(--f-body); fill: var(--ink-2); }
+.swc .cur { stroke: var(--ink-2); stroke-dasharray: 2 3; } .swc .hx { stroke: var(--ink-3); }
+.swc .ln { fill: none; stroke: var(--flibe); stroke-width: 2; stroke-linejoin: round; }
+.swc .eb { stroke: var(--flibe); stroke-width: 1.5; opacity: 0.6; }
+.swc .pt { fill: var(--flibe); stroke: #0f0f12; stroke-width: 2; }
+.swc .pt.on { fill: var(--ink); } .swc .pt.hv { stroke: var(--ink); stroke-width: 1.5; }
+.view.insweep .vtop { display: none; }
 
 /* metrics + fidelity */
 .side { padding: 14px; display: grid; gap: 16px; align-content: start; }
@@ -136,6 +162,7 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
         <canvas id="cv" aria-label="Poloidal cross-section"></canvas>
         <div class="vtop" id="layers"><button type="button" data-f="heat" aria-pressed="true">Heating</button><button type="button" data-f="trit" aria-pressed="false">Tritium production</button><button type="button" data-f="conc" aria-pressed="false">Tritium in salt</button><button type="button" data-f="temp" aria-pressed="false">Vessel temperature</button><button type="button" data-f="none" aria-pressed="false">Materials</button><button type="button" data-f="3d" aria-pressed="false">3D</button></div>
         <div id="v3" hidden style="position:absolute;inset:0"></div>
+        <div class="sweep" id="sw" hidden><div class="sh" id="sw-head"></div><button type="button" class="x" id="sw-close" aria-label="Close the sweep">✕</button><div class="swg" id="sw-charts"></div></div>
         <div class="keys" id="keys"></div>
         <div class="legend" id="legend" hidden></div>
         <div class="tip" id="tip" hidden></div>
