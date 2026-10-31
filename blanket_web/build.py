@@ -41,6 +41,16 @@ for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
     print(f"pack {dst.name}: fw={fw} li6={li6} {len(gz)/1e6:.2f} MB gz")
 json.dump({"groups": GS, "packs": packs}, open(out / "packs" / "packs.json", "w"), indent=1)
 
+# LIBRA experiment packs (raster + point source), for the validation page's live runs
+for d in sorted((V / "blanket/neutpack").glob("libra_*")):
+    dst = out / "packs" / d.name
+    dst.mkdir(exist_ok=True)
+    shutil.copy(d / "manifest.json", dst / "manifest.json")
+    (dst / "data.bin.gz").write_bytes(gzip.compress((d / "data.bin").read_bytes(), 9))
+    (dst / "raster.u8.gz").write_bytes(gzip.compress((d / "raster.u8").read_bytes(), 9))
+    print(f"pack {d.name}")
+
+
 # ---- design library with OpenMC references
 sweep = json.load(open(V / "blanket/runs/fig30_sweep.json"))
 base = json.load(open(V / "blanket/runs/arc_baseline/result.json"))
@@ -66,7 +76,22 @@ LIB = [
 lib = [{"id": f"lib-{i}", "name": n, "family": f, "design": d, "reference": r} for i, (n, f, d, r) in enumerate(LIB)]
 json.dump(lib, open(out / "designs.json", "w"), indent=1)
 
+# ---- validation data: measured, published, OpenMC (ours) and browser numbers in one file
+R = V / "blanket/runs"
+val = {
+    "benchmarks": json.load(open(V / "blanket/benchmarks.json")),
+    "browser": json.load(open(R / "validation_browser.json")),
+    "fig30_openmc": sweep,
+    "arc_openmc": base,
+    "libra_openmc_full": {
+        "BABY-1L": json.load(open(R / "baby1l/tbr.json")),
+        "FLiBe-1L": json.load(open(R / "flibe1l/tbr.json")),
+    },
+    "baby_no_vault": json.load(open(R / "baby1l_novault/tbr.json")),
+}
+json.dump(val, open(out / "validation.json", "w"), indent=1)
+
 shutil.copy(ENGINE, out / "blanket-engine.js")
-for f in ["index.html", "app.js"]:
+for f in ["index.html", "app.js", "validation.html", "validation.js"]:
     shutil.copy(H / f, out / f)
 print(f"staged {out}")
