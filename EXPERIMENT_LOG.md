@@ -2276,3 +2276,62 @@ Ours vs theirs differs by 1.3σ combined (most likely data-library version; not 
   - ARC baseline: peak inner Inconel **1240 K** at R 4.45, Z −0.31 (outboard, below the midplane); W face 1273 K; Be 945 K; outer Inconel 1069 K; energy closure 1e-14; 68 ms. The 1-D estimate is 1207 K.
   - Flag: peak channel velocity 2.46 m/s > Sorbom's 2 m/s corrosion limit (equal-dp branch split).
 - Harness Chrome (port 9333) lost WebGPU ("Failed to create WebGPU Context Provider", GPU process disabled) late in the session. Restarting it would kill another session's Loom tab (5213), so it was left for the user.
+
+### Blanket, 2026-10-31: vessel dpa and He
+
+**Goal.** Report what limits vacuum-vessel life, dpa/FPY and appm He/FPY in the inner VV (Inconel 718), peak and location, live with the design. Until now the simulator reported only fast flux.
+
+**CE reference** (`blanket/damage/arc_damage.py`; imports arc_model.py unchanged; neutron-only, 4M histories baseline local, 4M per variant on AICR; results in `blanket/damage/runs/VITAMIN-J-175*/result.json`):
+- Tallies per cell x VITAMIN-J-175: flux, `damage-energy` (MT 444, NJOY HEATR Lindhard damage energy), `(n,Xa)` (MT 207). The inner VV is split into 4 radial sublayers of 0.25 cm (offsets of the FW polygon). A 1 cm cylindrical (R, Z) mesh x sublayer tally is summed into 10-degree poloidal sectors about (R0, 0). Element volumes are subsampled, then rescaled to the exact sublayer volume.
+- NRT: dpa = 0.8 T_dam / (2 E_d), with **E_d = 40 eV** (Inconel 718: Ni/Fe/Cr, ASTM E693 practice), applied to the summed damage energy. Volumes come from shoelace solids of revolution of the mitred offset polygons, exact for OpenMC's geometry.
+- Inconel 718 as arc_model.py: wt% Ni 52.5, Cr 19.0, Fe 18.5, Nb 5.1, Mo 3.05, Ti 0.9, Al 0.5, Co 0.47, Mn 0.18, Si 0.18, C 0.04; 8.19 g/cm3 = 8.527e22 atoms/cm3. 525 MW, 1.864e20 n/s, FPY = 3.15576e7 s. Neutron wall loading on our 213 m2 FW: **1.97 MW/m2**.
+- **ARC baseline (W 1 cm, 90% Li-6), per FPY, layer averages:**
+
+| | dpa (NRT) | He appm | Sorbom 2015 Tab. 9 (MCNP) | Kuang 2018 (avg) |
+|---|---|---|---|---|
+| inner VV (1 cm Inconel) | **15.5** | **233** | 44 / 280 | 27.7 / 208 |
+| outer VV (3 cm) | 9.3 | 125 | 26 / 140 | 16.4 / 104 |
+| tank wall | 0.051 | 0.62 | 0.14 / 0.58 | |
+| W first wall (E_d 90 eV) | 3.3 | 3.2 | | |
+
+- **Inner-VV peak: outboard midplane (theta 350-10 deg, theta = atan2(Z, R-R0)).** Sector average 18.8 dpa / 297 appm; plasma-facing 0.25 cm of that sector 19.6 dpa / 313 appm (sd 0.2%). Peak/average 1.216 (dpa), 1.274 (He). Poloidal minimum near the top/bottom (theta 100 and 250 deg: 12.2 dpa); the inboard midplane is 17.1. Radial drop across the 1 cm: 16.2 to 14.8 dpa (−9%).
+- **Peak/average is design-stable**: 1.208-1.227 (dpa) and 1.249-1.296 (He) over all 9 designs (W/Be/CFC/Inconel walls, Li-6 7.5-90%, FW 2 cm, inner VV 2 cm). The peak is always the outboard midplane sector.
+- Design trends (inner VV dpa / He): FW 2 cm 13.8/185; inner VV 2 cm 14.6/211; Be wall 16.8/278; CFC 16.3/279; Inconel wall 15.2/245; Li-6 7.5% 16.0/234. Enrichment barely matters (+3%); a non-W wall raises He 20% (W's (n,2n) softens the spectrum below the (n,alpha) thresholds).
+- **Sanity**: Fe-56 MT 444 at 14.1 MeV is 2.58e5 eV·b, i.e. 2580 b NRT dpa. The inner VV's spectrum-averaged sigma_dpa is 700 b (total flux 7.0e14, 66% > 0.1 MeV), so ~1.1e21 n/cm2 per dpa. That is the textbook fusion-FW scale (~10 dpa/FPY per MW/m2 in steel; we get 7.9 per MW/m2 behind 1 cm W). **He agrees with both MCNP studies (−17% vs Sorbom, +12% vs Kuang), and the tank He matches Sorbom (0.62 vs 0.58). dpa is 1.8x below Kuang and 2.8x below Sorbom.** Our He/dpa is 15 appm/dpa (Kuang 7.5, Sorbom 6.4). For a Ni-rich alloy (Ni-58 (n,alpha) is large) a higher He/dpa than steel's ~10 is expected. Neither paper states its dpa method or E_d. Our MT 444 scale is checked directly and the flux-to-dpa ratio is standard, so we attribute the gap to their dpa definition (e.g. a damage cross-section set or E_d) and treat it as open, to be shown. Not chased further.
+- Ni-58 (n,gamma) Ni-59 (n,alpha) two-step He: thermal flux in the inner VV is ~0 at 90% Li-6 (< 1e11 even at 7.5%), so only the epithermal 203 eV Ni-59 resonance remains. 9% of the inner-VV flux is in 1 eV-10 keV. A crude 1/E estimate gives ~1 appm in the first FPY, growing ~t², a few % of direct He over a 5 FPY life. Not computed: Ni-59 isn't in the local data library.
+
+**Browser tier** (StoneLab branch `blanket-damage`, worktree ~/Projects/StoneLab-blanket-damage, c4f0129 + 5fa47a6; src/neutron/damage.ts, scripts/neutron-damage.ts, test/neutron/damage.test.ts):
+- Sidecar `blanket/damage/runs/<VITAMIN-J-175{TAG}>/coeffs_damage.npz` (+ `.json` manifest; `damage_sidecar.json` for TS). Per cell, in coeffs.npz's order (fw, vv_in, channel, be, vv_out, blanket, tank, shield, coil), [9, 175], group 0 highest:
+  - `sig_damage` = CE damage-energy/flux, eV/cm
+  - `sig_he` = CE (n,Xa)/flux, 1/cm
+  - plus `atom_density` (atoms/cm3), `Ed_eV` (0 = no dpa), `ce_flux`, `group_edges`
+  - TAGs match mgxs_gen/export_neutpack: `_fw_material-Be` etc.
+- Region rate = sum_g track[r,g] x R_g. The validation folds the CPU reference's flux[r*G+g]. On the GPU the same sum accumulates per tentative collision, like kerma: `f * xs[oDmg + cg]`, `f * xs[oHe + cg]` (owner session wires it). `damageFromRates(dmgEV, heAtoms, sidecar, geom, S, fill)` converts it. Inner-VV peak = live layer average x the sidecar's CE peak/average ratio.
+- **Browser (CPU reference, 400k histories, 4 seeds, 53 s) vs CE, inner/outer VV:**
+  - baseline: dpa +0.31% / +0.16%, He +0.56% / +0.11% (SE ~0.35%)
+  - Be/CFC/Inconel walls: within 0.25%
+  - Li-6 30/60/7.5%: dpa within 0.2%, He +0.4-0.5%
+  - Geometry variants with the baseline pack and baseline responses (as the browser runs them): FW 2 cm −0.1% / +0.5%, inner VV 2 cm +0.4% / +0.5%. Peak: FW 2 cm 16.70 vs CE 16.86 (−1.0%), inner VV 2 cm 17.86 vs 17.81 (+0.3%).
+  - Baseline Inconel responses on the Be/CFC/Inconel-wall packs: VV layers still within 0.4%. **The VV responses are design-insensitive.** Only the fw cell needs its own material's responses.
+- Tank wall reads 1-8% low in every design (1-2 sigma each, consistent sign): the known MG deep-penetration deficit. Irrelevant to VV life; matters only if the tank's 1 appm reweld criterion is shown (0.62 appm/FPY, so 1.6 FPY to 1 appm vs Sorbom's ~2 years).
+
+**Limitations:**
+- NRT dpa, not arc-dpa: for Fe/Ni at these PKA energies arc-dpa is ~0.3-0.4x NRT.
+- E_d is a convention.
+- No transmutation burn-up, no Ni-59 two-step.
+- No divertor or support columns (the 8 cm W divertor shields 17% of the lower VV, so the outboard-midplane peak is unaffected).
+- 175-group responses are weighted on each design's own CE spectrum in each cell.
+- Peak/average is a CE constant (stable to ±1.5% across 9 designs), not a live tally.
+- "Lifetime" needs a criterion, which is not a code allowable for Inconel 718 under fusion neutrons. Sorbom cites ferritic steel at 150-200 dpa and martensitic steel at 500 appm He. At the 313 appm/FPY peak, 500 appm is reached in **1.6 FPY**; 150 dpa takes ~8 FPY. So He, not dpa, is the binding number for a Ni alloy.
+
+### Blanket, 2026-10-31 late: open items closed, damage + 3-D view wired in
+
+- **LIBRA +1.5% explained.** A 0.025 cm raster changed nothing (BABY +1.43 → +1.35%, FLiBe +1.23 → +1.31%). With 20M-history OpenMC references (10x) the gap is **+0.49% (BABY) / +0.45% (FLiBe)**, about 1.7 sigma. The 2M-history references had ±1% noise, correlated between the two experiments (same seed, near-identical geometry). The libra_* packs and runs are now the 20M-history ones (simplified CE 1.7310e-3 / 2.9493e-3; browser 1.7415 / 2.9726 e-3).
+- **Per-variant photon factors** (AICR arc_model photon runs per variant). The fw factor ranges 0.81 (Inconel wall) to 1.14 (Be wall) against the baseline's 1.07 used before. Inconel-wall fw heating had been ~30% high. All 6 variant packs re-exported with their own factors.
+- **Mixed packs checked** (scripts/neutron-combos.ts vs AICR CE runs combo_*): Be wall + 30% Li-6 browser 1.1410 vs CE 1.1424 ± 0.0017 (−0.13%); CFC + 60% 1.0377 vs 1.0397 ± 0.0015 (−0.19%). Inconel + 7.5% and Be + 7.5% were still running at writing. (Be + 30% equalling Be + 90% (1.142) is physics: Be multiplication offsets the lower enrichment.)
+- **Vessel dpa / He** (session sl8rv-41's StoneLab `blanket-damage`, merged; sidecars in blanket/damage, committed here at their request). Two more per-region kernel accumulators (damage energy, He atoms), folded like kerma. The engine loads each pack's damage.json and composes the fw cell like the cross sections.
+  - GPU, 8M histories: inner VV **15.47 dpa / 233.7 appm He per FPY vs CE 15.47 / 233.1**; outer VV 9.28 / 125.5 vs 9.27 / 125.5. Peak (× CE ratio) 18.8 dpa / 298 appm.
+  - New page KPI: **"Vessel helium limit" 1.7 FPY** to 500 appm at the peak.
+  - Our dpa is 2-3x below Sorbom (44) and Kuang (27.7); He agrees within ~15%. Open.
+- **3-D cutaway** (sl8rv-41's apps/blanket-view, "bare" chrome) is the "3D" toggle in the simulator's view pane, lazily loaded, sharing engine.device, fed every result. Checked on the real GPU in the harness Chrome.
+- The harness Chrome was restarted (user OK) to recover WebGPU. Check scripts now close their tabs on failure.

@@ -1,0 +1,136 @@
+[
+ {
+  "run": "VITAMIN-J-175_fw_cm-2.0",
+  "responses": "baseline",
+  "histories": 400000,
+  "seconds": 54.5,
+  "TBR": 1.1648,
+  "fw_He": {
+   "mg": 2.867,
+   "se": 0.007,
+   "ce": 2.863,
+   "rel": 0.15
+  },
+  "fw_dpa": {
+   "mg": 3.278,
+   "se": 0.0048,
+   "ce": 3.276,
+   "rel": 0.04
+  },
+  "fw_vol_rel": 0,
+  "vv_in_He": {
+   "mg": 185.1,
+   "se": 0.37,
+   "ce": 185,
+   "rel": 0.03
+  },
+  "vv_in_dpa": {
+   "mg": 13.73,
+   "se": 0.018,
+   "ce": 13.75,
+   "rel": -0.12
+  },
+  "vv_in_vol_rel": 0,
+  "vv_out_He": {
+   "mg": 100.5,
+   "se": 0.33,
+   "ce": 100.2,
+   "rel": 0.31
+  },
+  "vv_out_dpa": {
+   "mg": 8.014,
+   "se": 0.026,
+   "ce": 7.977,
+   "rel": 0.46
+  },
+  "vv_out_vol_rel": 0,
+  "tank_He": {
+   "mg": 0.4638,
+   "se": 0.01,
+   "ce": 0.5037,
+   "rel": -7.92
+  },
+  "tank_dpa": {
+   "mg": 0.03954,
+   "se": 0.0011,
+   "ce": 0.0418,
+   "rel": -5.39
+  },
+  "tank_vol_rel": 0,
+  "vv_in_peak": {
+   "dpa": 16.7,
+   "He": 235.8,
+   "sector": [
+    350,
+    360
+   ]
+  }
+ },
+ {
+  "run": "VITAMIN-J-175_vv_in_cm-2.0",
+  "responses": "baseline",
+  "histories": 400000,
+  "seconds": 47.6,
+  "TBR": 1.0972,
+  "fw_He": {
+   "mg": 3.205,
+   "se": 0.0086,
+   "ce": 3.211,
+   "rel": -0.2
+  },
+  "fw_dpa": {
+   "mg": 3.359,
+   "se": 0.0033,
+   "ce": 3.366,
+   "rel": -0.23
+  },
+  "fw_vol_rel": 0,
+  "vv_in_He": {
+   "mg": 211.6,
+   "se": 0.46,
+   "ce": 211.3,
+   "rel": 0.15
+  },
+  "vv_in_dpa": {
+   "mg": 14.69,
+   "se": 0.022,
+   "ce": 14.63,
+   "rel": 0.42
+  },
+  "vv_in_vol_rel": 0,
+  "vv_out_He": {
+   "mg": 105.2,
+   "se": 0.35,
+   "ce": 104.8,
+   "rel": 0.42
+  },
+  "vv_out_dpa": {
+   "mg": 8.161,
+   "se": 0.019,
+   "ce": 8.122,
+   "rel": 0.49
+  },
+  "vv_out_vol_rel": 0,
+  "tank_He": {
+   "mg": 0.4979,
+   "se": 0.0078,
+   "ce": 0.519,
+   "rel": -4.06
+  },
+  "tank_dpa": {
+   "mg": 0.04199,
+   "se": 0.00054,
+   "ce": 0.04332,
+   "rel": -3.08
+  },
+  "tank_vol_rel": 0,
+  "vv_in_peak": {
+   "dpa": 17.86,
+   "He": 269.7,
+   "sector": [
+    350,
+    360
+   ]
+  }
+ }
+]

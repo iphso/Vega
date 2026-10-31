@@ -1,0 +1,197 @@
+[
+ {
+  "run": "VITAMIN-J-175_fw_material-Be",
+  "responses": "baseline",
+  "histories": 400000,
+  "seconds": 54.5,
+  "TBR": 1.1434,
+  "fw_He": {
+   "mg": 3.348,
+   "se": 0.014,
+   "ce": 5981,
+   "rel": -99.94
+  },
+  "fw_dpa": {
+   "mg": 3.297,
+   "se": 0.0094,
+   "ce": 6.693,
+   "rel": -50.74
+  },
+  "fw_vol_rel": 0,
+  "vv_in_He": {
+   "mg": 277.9,
+   "se": 1,
+   "ce": 278,
+   "rel": -0.03
+  },
+  "vv_in_dpa": {
+   "mg": 16.82,
+   "se": 0.055,
+   "ce": 16.81,
+   "rel": 0.08
+  },
+  "vv_in_vol_rel": 0,
+  "vv_out_He": {
+   "mg": 143.5,
+   "se": 0.24,
+   "ce": 143.6,
+   "rel": -0.09
+  },
+  "vv_out_dpa": {
+   "mg": 10.13,
+   "se": 0.0098,
+   "ce": 10.12,
+   "rel": 0.08
+  },
+  "vv_out_vol_rel": 0,
+  "tank_He": {
+   "mg": 0.6349,
+   "se": 0.019,
+   "ce": 0.6822,
+   "rel": -6.94
+  },
+  "tank_dpa": {
+   "mg": 0.05442,
+   "se": 0.00091,
+   "ce": 0.05712,
+   "rel": -4.73
+  },
+  "tank_vol_rel": 0,
+  "vv_in_peak": {
+   "dpa": 20.45,
+   "He": 354.2,
+   "sector": [
+    350,
+    360
+   ]
+  }
+ },
+ {
+  "run": "VITAMIN-J-175_fw_material-CFC",
+  "responses": "baseline",
+  "histories": 400000,
+  "seconds": 46.3,
+  "TBR": 1.0298,
+  "fw_He": {
+   "mg": 3.419,
+   "se": 0.017,
+   "ce": 2945,
+   "rel": -99.88
+  },
+  "fw_vol_rel": 0,
+  "vv_in_He": {
+   "mg": 278.7,
+   "se": 0.71,
+   "ce": 279.4,
+   "rel": -0.25
+  },
+  "vv_in_dpa": {
+   "mg": 16.28,
+   "se": 0.041,
+   "ce": 16.31,
+   "rel": -0.17
+  },
+  "vv_in_vol_rel": 0,
+  "vv_out_He": {
+   "mg": 146,
+   "se": 0.35,
+   "ce": 146,
+   "rel": -0.05
+  },
+  "vv_out_dpa": {
+   "mg": 10.03,
+   "se": 0.012,
+   "ce": 10.03,
+   "rel": 0.05
+  },
+  "vv_out_vol_rel": 0,
+  "tank_He": {
+   "mg": 0.6564,
+   "se": 0.032,
+   "ce": 0.6985,
+   "rel": -6.03
+  },
+  "tank_dpa": {
+   "mg": 0.05541,
+   "se": 0.0014,
+   "ce": 0.05788,
+   "rel": -4.26
+  },
+  "tank_vol_rel": 0,
+  "vv_in_peak": {
+   "dpa": 19.79,
+   "He": 355.2,
+   "sector": [
+    350,
+    360
+   ]
+  }
+ },
+ {
+  "run": "VITAMIN-J-175_fw_material-Inconel",
+  "responses": "baseline",
+  "histories": 400000,
+  "seconds": 45,
+  "TBR": 1.0209,
+  "fw_He": {
+   "mg": 3.27,
+   "se": 0.016,
+   "ce": 291.6,
+   "rel": -98.88
+  },
+  "fw_dpa": {
+   "mg": 3.117,
+   "se": 0.013,
+   "ce": 17.25,
+   "rel": -81.93
+  },
+  "fw_vol_rel": 0,
+  "vv_in_He": {
+   "mg": 245.5,
+   "se": 0.55,
+   "ce": 245.4,
+   "rel": 0.03
+  },
+  "vv_in_dpa": {
+   "mg": 15.31,
+   "se": 0.033,
+   "ce": 15.24,
+   "rel": 0.42
+  },
+  "vv_in_vol_rel": 0,
+  "vv_out_He": {
+   "mg": 131.5,
+   "se": 0.23,
+   "ce": 131.6,
+   "rel": -0.06
+  },
+  "vv_out_dpa": {
+   "mg": 9.389,
+   "se": 0.0081,
+   "ce": 9.389,
+   "rel": 0
+  },
+  "vv_out_vol_rel": 0,
+  "tank_He": {
+   "mg": 0.6063,
+   "se": 0.024,
+   "ce": 0.6416,
+   "rel": -5.5
+  },
+  "tank_dpa": {
+   "mg": 0.05169,
+   "se": 0.0011,
+   "ce": 0.05325,
+   "rel": -2.93
+  },
+  "tank_vol_rel": 0,
+  "vv_in_peak": {
+   "dpa": 18.61,
+   "He": 312.9,
+   "sector": [
+    350,
+    360
+   ]
+  }
+ }
+]

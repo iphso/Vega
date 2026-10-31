@@ -59,7 +59,8 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 .dhead .acts { margin-left: auto; display: flex; gap: 6px; }
 .view { position: relative; margin: 10px 12px; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: #0f0f12; flex: 1 1 52%; min-height: 280px; }
 .view canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.vtop { position: absolute; left: 10px; top: 10px; display: flex; gap: 4px; }
+.vtop { position: absolute; left: 10px; top: 10px; display: flex; gap: 4px; z-index: 5; flex-wrap: wrap; }
+.view.in3d .vtop { top: auto; bottom: 10px; }
 .vtop button { font: 500 11px/1 var(--f-body); padding: 6px 10px; border-radius: 14px; border: 1px solid var(--rule); background: rgba(22,22,26,0.85); color: var(--ink-2); cursor: pointer; }
 .vtop button[aria-pressed="true"] { color: var(--ink); border-color: var(--flibe-dim); background: rgba(31,74,92,0.9); }
 .legend { position: absolute; left: 10px; bottom: 10px; display: grid; gap: 4px; font: 400 11px/1.2 var(--f-mono); color: var(--ink-2); background: rgba(22,22,26,0.8); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 8px; pointer-events: none; }
@@ -123,7 +124,8 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
       </div>
       <div class="view" id="view">
         <canvas id="cv" aria-label="Poloidal cross-section"></canvas>
-        <div class="vtop" id="layers"><button type="button" data-f="heat" aria-pressed="true">Heating</button><button type="button" data-f="trit" aria-pressed="false">Tritium production</button><button type="button" data-f="conc" aria-pressed="false">Tritium in salt</button><button type="button" data-f="temp" aria-pressed="false">Vessel temperature</button><button type="button" data-f="none" aria-pressed="false">Materials</button></div>
+        <div class="vtop" id="layers"><button type="button" data-f="heat" aria-pressed="true">Heating</button><button type="button" data-f="trit" aria-pressed="false">Tritium production</button><button type="button" data-f="conc" aria-pressed="false">Tritium in salt</button><button type="button" data-f="temp" aria-pressed="false">Vessel temperature</button><button type="button" data-f="none" aria-pressed="false">Materials</button><button type="button" data-f="3d" aria-pressed="false">3D</button></div>
+        <div id="v3" hidden style="position:absolute;inset:0"></div>
         <div class="keys" id="keys"></div>
         <div class="legend" id="legend" hidden></div>
         <div class="tip" id="tip" hidden></div>

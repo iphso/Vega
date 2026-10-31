@@ -50,7 +50,7 @@ const f = (x, n = 2) => Number.isFinite(x) ? x.toFixed(n) : "—";
 const sig = (x, n = 3) => !Number.isFinite(x) ? "—" : Math.abs(x) >= 1e6 || (Math.abs(x) < 1e-3 && x !== 0) ? x.toExponential(n - 1).replace(/e\+?(-?)(\d+)/, (_, s, e) => `×10${sup(s + e)}`) : Number(x.toPrecision(n)).toLocaleString();
 const sup = (t) => [...t].map((c) => "⁰¹²³⁴⁵⁶⁷⁸⁹"["0123456789".indexOf(c)] ?? (c === "-" ? "⁻" : c)).join("");
 /** TF life is a deep-penetration tally: only show it when its standard error is under 30%. */
-const tfOk = (m) => Number.isFinite(m.tfLifetimeFpy) && Number.isFinite(m.tfRelErr) && m.tfRelErr < 0.3;
+const tfOk = (m) => Number.isFinite(m.tfLifetimeFpy) && Number.isFinite(m.tfRelErr) && m.tfRelErr < 0.3 && m.histories >= 1e6;
 
 // ---- designs list
 function renderList() {
@@ -181,6 +181,9 @@ function show() {
       m.tritium
         ? kpi("Tritium in the salt", `${f(m.tritium.inventoryMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · limits ${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg · wall loss ${permBand(m)}`)
         : kpi("Tritium in the salt", `${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · ${f(m.residenceS / 60, 1)} min turnover`),
+      m.damage
+        ? kpi("Vessel helium limit", `${f(500 / m.damage.vvInPeakHeAppmPerFpy, 1)} y`, cls(500 / m.damage.vvInPeakHeAppmPerFpy, 5, 1.5), `to 500 appm He at the inner vessel's peak (${f(m.damage.vvInPeakHeAppmPerFpy, 0)} appm/y) · ${f(m.damage.vvInPeakDpaPerFpy, 1)} dpa/y`)
+        : "",
       kpi("Energy multiplication", f(m.energyMultiplication, 3), "", `${f(m.nuclearMW, 0)} MW nuclear heat`),
       kpi("Tank outlet", `${f(m.thermal.bulkOutlet, 0)} K`, cls(m.thermal.bulkOutlet, 1000, 1100, false), `inlet ${f(cur.design.inletK, 0)} K · FLiBe freezes at 732 K`),
     ].join("");
@@ -208,6 +211,7 @@ function show() {
   }
   $("notes").innerHTML = notes(m);
   drawMap(m);
+  if (view3d && m && !$("v3").hidden) view3d.setLive(m, cur.design);
 }
 
 /** Tank-wall permeation across the four FLiBe solubility sources, % of bred tritium. */
@@ -226,6 +230,7 @@ function notes(m) {
   const fw = cur.design.fwMaterial;
   const parts = [`Cross sections: OpenMC ENDF/B-VIII.0, 175 groups, weighted on a ${FW_NAME[fw] ?? fw}-wall design at ${engine.enrichments().reduce((a, b) => Math.abs(b - cur.design.li6Pct) < Math.abs(a - cur.design.li6Pct) ? b : a)}% Li-6.`];
   parts.push("Vessel temperature: 2-D (R, Z) conduction through the tile, vessel walls and multiplier with the cooling channel's film coefficient, driven by this run's heating map (the 1-D Sorbom eqs. 30–33 estimate is shown beside it).");
+  if (m?.damage) parts.push("Vessel damage: NRT dpa and He production from OpenMC group responses (ENDF/B-VIII MT444, MT207); the peak is the average times OpenMC's peak-sector ratio. He, not dpa, sets the limit here (Sorbom's 500 appm criterion). Our dpa is 2–3× below the ARC papers' (which do not state their dpa method); our He agrees with them within ~15%.");
   if (m?.thermal2d?.warnings?.length) parts.push(`<span style="color:var(--warn)">${m.thermal2d.warnings.join("<br>")}</span>`);
   parts.push("Tritium in the salt: steady transport through the tank (potential flow, mixing-length turbulence) from the bred-tritium map, clean salt at the inlet, Sieverts permeation through the Inconel tank wall. The FLiBe solubility data disagree by ~3 decades, hence the band.");
   if (m) parts.push(`${sig(m.histories, 2)} histories · ${engine.device ? "WebGPU" : ""}`);
@@ -337,8 +342,8 @@ function drawStations(ctx, t, x0, y0, w, h, dpr) {
     ctx.strokeStyle = c; ctx.lineWidth = 2 * dpr; ctx.beginPath();
     for (let k = 0; k < n; k++) (k ? ctx.lineTo : ctx.moveTo).call(ctx, X(k), Y(a[k]));
     ctx.stroke();
-    ctx.fillStyle = c; ctx.fillRect(x0 + 34 * dpr + si * 92 * dpr, y0 + h + 2 * dpr, 8 * dpr, 8 * dpr);
-    ctx.fillStyle = "#a3a3ad"; ctx.fillText(lbl, x0 + 46 * dpr + si * 92 * dpr, y0 + h + 10 * dpr);
+    ctx.fillStyle = c; ctx.fillRect(x0 + 34 * dpr + si * 118 * dpr, y0 + h + 2 * dpr, 8 * dpr, 8 * dpr);
+    ctx.fillStyle = "#a3a3ad"; ctx.fillText(lbl, x0 + 46 * dpr + si * 118 * dpr, y0 + h + 10 * dpr);
   });
   ctx.restore();
 }
@@ -365,10 +370,36 @@ $("cv").addEventListener("mousemove", (e) => {
   tip.style.left = `${e.clientX - rect.left + 12}px`; tip.style.top = `${e.clientY - rect.top + 12}px`;
 });
 $("cv").addEventListener("mouseleave", () => { $("tip").hidden = true; });
+// 3-D cutaway (StoneLab apps/blanket-view), loaded on first use and fed every result
+let view3d = null, view3dLoading = null;
+async function show3d(on) {
+  $("v3").hidden = !on;
+  $("view").classList.toggle("in3d", on);
+  for (const id of ["cv", "keys", "legend"]) $(id).style.visibility = on ? "hidden" : "";
+  if (!on) return;
+  if (!view3d && !view3dLoading) {
+    view3dLoading = (async () => {
+      const { createBlanketView } = await import("./blanket-view.js");
+      const reference = await (await fetch("./arc_result.json")).json();
+      view3d = await createBlanketView($("v3"), { device: engine.device, reference, chrome: "bare", field: "mapHeat" });
+    })().catch((e) => { $("v3").innerHTML = `<div class="err">3-D view failed: ${e.message}</div>`; });
+  }
+  await view3dLoading;
+  const { m } = current();
+  if (view3d && m) view3d.setLive(m, cur.design);
+}
+
 $("layers").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.f === "3d") {
+    const on = b.getAttribute("aria-pressed") !== "true";
+    b.setAttribute("aria-pressed", String(on));
+    show3d(on);
+    return;
+  }
+  if ($("v3").hidden === false) { show3d(false); $("layers").querySelector('[data-f="3d"]').setAttribute("aria-pressed", "false"); }
   field = b.dataset.f;
-  for (const x of $("layers").querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
+  for (const x of $("layers").querySelectorAll("button")) if (x.dataset.f !== "3d") x.setAttribute("aria-pressed", String(x === b));
   show();
 });
 new ResizeObserver(() => show()).observe($("view"));

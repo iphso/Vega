@@ -39,3 +39,6 @@ blanket_web/dist/
 # third-party papers and extracted text stay local; lit_review.md is ours
 blanket/refs/*
 !blanket/refs/lit_review.md
+blanket/damage/runs/**/*.h5
+blanket/damage/runs/**/*.npz
+blanket/damage/runs/**/model.xml

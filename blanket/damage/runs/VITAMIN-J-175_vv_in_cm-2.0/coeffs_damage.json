@@ -1,0 +1,39 @@
+{
+ "groups": "VITAMIN-J-175",
+ "group_order": "group 0 = highest energy (edges ascend, as coeffs.npz)",
+ "design": {
+  "vv_in_cm": 2.0
+ },
+ "cells": [
+  "fw",
+  "vv_in",
+  "channel",
+  "be",
+  "vv_out",
+  "blanket",
+  "tank",
+  "shield",
+  "coil"
+ ],
+ "arrays": {
+  "sig_damage": "[cell, G] damage energy (MT 444) per unit flux, eV/cm; sum_g track_g * sig_damage_g = eV of damage energy per source neutron in the cell",
+  "sig_he": "[cell, G] He-4 production (MT 207, (n,Xa)) per unit flux, 1/cm; sum_g track_g * sig_he_g = He atoms per source neutron",
+  "atom_density": "[cell] atoms/cm3",
+  "Ed_eV": "[cell] NRT displacement energy, 0 = no dpa for this cell"
+ },
+ "convert": {
+  "dpa_per_FPY": "0.8 / (2 Ed) * D * S * FPY / (N V)",
+  "He_appm_per_FPY": "1e6 * H * S * FPY / (N V)",
+  "S": "neutrons/s = P_fus / 17.59 MeV",
+  "FPY_s": 31557600.0,
+  "V": "cell volume, cm3"
+ },
+ "vv_in_peak_over_avg": 1.2173982463599384,
+ "vv_in_peak_over_avg_He": 1.2822388185937326,
+ "vv_in_peak_sector_deg": [
+  350.0,
+  360.0
+ ],
+ "vv_in_plasma_side_over_avg": 1.100349448409693,
+ "histories": 4000000
+}

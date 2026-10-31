@@ -33,7 +33,9 @@ from libra_toolbox.neutronics import materials as LM
 GS = "VITAMIN-J-175"
 NMU = 64
 THREADS = int(os.environ.get("OMP_NUM_THREADS", "24"))
-d = os.path.join(HERE, "runs", "libra", REPO)
+# LIBRA_RASTER_H (cm) and LIBRA_TAG let a resolution study write beside the default
+H = float(os.environ.get("LIBRA_RASTER_H", "0.05"))
+d = os.path.join(HERE, "runs", "libra", REPO + os.environ.get("LIBRA_TAG", ""))
 os.makedirs(d, exist_ok=True)
 groups = openmc.mgxs.EnergyGroups(GS)
 
@@ -109,7 +111,6 @@ np.savez(os.path.join(d, "coeffs.npz"), sig_tritium=sig_t, kerma=np.zeros_like(s
          ce_flux=flux, cells=np.array(mat_names), group_edges=groups.group_edges)
 
 # ---- (R, Z) raster of material ids about the crucible axis
-H = 0.05
 Rmax, Zlo, Zhi = 50.0, z_c - 50.0, z_c + 50.0
 nr, nz = int(Rmax / H), int((Zhi - Zlo) / H)
 # one slice through the axis (C++ id_map: 2M points in one call); the stack is

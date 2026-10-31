@@ -37,7 +37,11 @@ for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
     raw = (d / "data.bin").read_bytes()
     gz = gzip.compress(raw, 9)
     (dst / "data.bin.gz").write_bytes(gz)
-    packs.append({"dir": dst.name, "fw": fw, "li6": li6, "bytes": len(gz)})
+    # vessel dpa / He responses for this pack (blanket/damage, session sl8rv-41's sidecar)
+    side = V / "blanket/damage/runs" / f"VITAMIN-J-175{tag}" / "damage_sidecar.json"
+    if side.exists():
+        shutil.copy(side, dst / "damage.json")
+    packs.append({"dir": dst.name, "fw": fw, "li6": li6, "bytes": len(gz), "damage": side.exists()})
     print(f"pack {dst.name}: fw={fw} li6={li6} {len(gz)/1e6:.2f} MB gz")
 json.dump({"groups": GS, "packs": packs}, open(out / "packs" / "packs.json", "w"), indent=1)
 
@@ -112,6 +116,11 @@ for rd in sorted((V / "blanket/ext").glob("*-1L-run-*")):
 json.dump(val, open(out / "validation.json", "w"), indent=1)
 
 shutil.copy(ENGINE, out / "blanket-engine.js")
+# the 3-D cutaway view (StoneLab apps/blanket-view, bare chrome) and the OpenMC result it shows as reference
+VIEW = Path(os.environ.get("BLANKET_VIEW", Path.home() / "Projects/StoneLab-blanket-app/apps/blanket-view/dist/blanket-view.js"))
+if VIEW.exists():
+    shutil.copy(VIEW, out / "blanket-view.js")
+    shutil.copy(V / "blanket/runs/arc_baseline/result.json", out / "arc_result.json")
 for f in ["index.html", "app.js", "validation.html", "validation.js"]:
     shutil.copy(H / f, out / f)
 print(f"staged {out}")

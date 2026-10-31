@@ -35,7 +35,7 @@ LIBRA = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--libra" else None
 if LIBRA:
     GS, FMT, TAG = "VITAMIN-J-175", "hist64", ""
     src = os.path.join(HERE, "runs", "libra", LIBRA)
-    out = os.path.join(HERE, "neutpack", f"libra_{LIBRA}")
+    out = os.path.join(HERE, "neutpack", f"libra_{LIBRA}")  # LIBRA may carry a study suffix, e.g. BABY-1L-run-4_h025
 else:
     GS = sys.argv[1] if len(sys.argv) > 1 else "VITAMIN-J-175"
     FMT = sys.argv[2] if len(sys.argv) > 2 else "hist64"
