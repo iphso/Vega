@@ -234,7 +234,7 @@ function show() {
         : kpi("Peak inner vessel", `${f(m.thermal.vvMax, 0)} K`, cls(m.thermal.vvMax, 973, 1073, false), `Inconel 718, 1-D estimate · channel out ${f(m.thermal.channelOutlet, 0)} K`),
       tfOk(m)
         ? kpi("TF magnet life", `${f(m.tfLifetimeFpy, 1)} y`, cls(m.tfLifetimeFpy, 10, 3), `${Number.isFinite(m.tfRelErr) ? `± ${Math.round(m.tfRelErr * 100)}% · ` : ""}full-power years to 3×10¹⁸ n/cm² on the inboard face`)
-        : kpi("TF magnet life", "—", "", `too few neutrons reach the coil face in ${sig(m.histories, 2)} histories: run Resolved`),
+        : kpi("TF magnet life", "—", "", `too few neutrons reach the coil face in ${sig(m.histories, 2)} histories · <button type="button" class="lnk" data-run="resolved">run Resolved</button>`),
       m.tritium
         ? kpi("Tritium in the salt", `${f(m.tritium.inventoryMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · limits ${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg · wall loss ${permBand(m)}`)
         : kpi("Tritium in the salt", `${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · ${f(m.residenceS / 60, 1)} min turnover`),
@@ -255,6 +255,7 @@ function show() {
     rung("reference", "Reference", "continuous-energy OpenMC: library designs only", ref ? `TBR ${f(ref.TBR, 4)} ± ${f(ref.TBR_sd, 4)}` : null, ref ? "" : "na"),
   ].join("");
   L.querySelector('[data-t="resolved"]').onclick = () => run("resolved");
+  for (const b of K.querySelectorAll("[data-run]")) b.onclick = () => run(b.dataset.run);
   // heating bars
   const H = $("heat");
   if (m) {
