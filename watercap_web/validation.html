@@ -53,7 +53,7 @@ h2 { font: 600 11px/1.2 var(--f-body); text-transform: uppercase; letter-spacing
 .case svg { width: 100%; height: auto; display: block; }
 .badge { font: 500 11px/1 var(--f-mono); padding: 4px 8px; border-radius: 10px; white-space: nowrap; }
 .mono { font-family: var(--f-mono); font-size: 11px; color: var(--ink-3); }
-.next { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.next { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .next .n { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 12px; font-size: 12.5px; }
 .next .n b { display: block; font-size: 13px; margin-bottom: 4px; }
 .next .n .k { font: 500 10px/1 var(--f-mono); color: var(--ink-3); margin-bottom: 6px; display: block; }
@@ -75,7 +75,7 @@ h2 { font: 600 11px/1.2 var(--f-body); text-transform: uppercase; letter-spacing
 <div class="app">
   <header class="top">
     <div class="brand"><h1>Water capture tube</h1><span>simulation validation</span></div>
-    <a href="./">← Design explorer</a>
+    <span style="display:flex;gap:16px"><a href="reel.html">Demo reel</a><a href="./">← Simulator</a></span>
   </header>
 
   <section class="panel film" aria-label="Animated explainer of the simulation">
@@ -84,7 +84,7 @@ h2 { font: 600 11px/1.2 var(--f-body); text-transform: uppercase; letter-spacing
   </section>
 
   <section class="panel">
-    <p class="lead">The simulator <b>ranks designs reliably</b>, but its absolute outlet-water numbers are <b>not yet validated</b> against experiment. The corona physics checks out against measurement. The spray stage, which sets outlet water, is still the open question.</p>
+    <p class="lead">The simulator <b>ranks designs reliably</b>, but its absolute outlet-water numbers are <b>not yet validated</b> against experiment. The corona physics checks out against measurement, and the 3D solver against DNS and exact solutions. On the tabbed-ring bench the 3D model <b>removes less mist than measured</b> (at most 44% vs 65%), and the spray stage is still the open question.</p>
     <div class="legend" style="margin-top:12px" id="legend"></div>
   </section>
 
@@ -108,7 +108,7 @@ h2 { font: 600 11px/1.2 var(--f-body); text-transform: uppercase; letter-spacing
     <h2>Next</h2>
     <div class="next" id="next"></div>
   </section>
-  <div class="mono">Updated 2026-10-24 · case files in StoneLab/validation/</div>
+  <div class="mono">Updated 2026-10-31 · case files in StoneLab/validation/ (3D: solver3d_phase1–3, docs/solver3d.md)</div>
 </div>
 
 <script type="module">
@@ -215,19 +215,19 @@ function xyChart(ch) {
   return s;
 }
 function barChart(ch) {
-  const W = 520, rowH = 26, L = 70, R = 56, T = 16, H = T + ch.items.length * rowH + 22;
+  const W = 520, rowH = 26, L = 70, R = 56, T = 16, H = T + ch.items.length * rowH + 22, max = ch.max || 100;
   const s = el("svg", { viewBox: `0 0 ${W} ${H}` });
-  const xs = (v) => L + v / 100 * (W - L - R);
+  const xs = (v) => L + v / max * (W - L - R);
   ch.items.forEach(([n, v], i) => {
     const y = T + i * rowH;
     s.append(el("text", { x: L - 8, y: y + 14, fill: "var(--ink-2)", "font-size": 11, "text-anchor": "end" }, n));
-    s.append(el("rect", { x: L, y: y + 3, width: xs(100) - L, height: 16, rx: 3, fill: "var(--card-2)" }));
-    s.append(el("rect", { x: L, y: y + 3, width: xs(v) - L, height: 16, rx: 3, fill: "var(--s-fail)" }));
+    s.append(el("rect", { x: L, y: y + 3, width: xs(max) - L, height: 16, rx: 3, fill: "var(--card-2)" }));
+    s.append(el("rect", { x: L, y: y + 3, width: xs(v) - L, height: 16, rx: 3, fill: ch.col }));
     s.append(el("text", { x: xs(v) + 6, y: y + 15, fill: "var(--ink)", "font-size": 11 }, v + "%"));
   });
-  s.append(el("line", { x1: xs(100), x2: xs(100), y1: T - 4, y2: H - 18, stroke: "var(--s-pass)", "stroke-dasharray": "3 3" }));
-  s.append(el("text", { x: xs(100), y: H - 5, fill: "var(--s-pass)", "font-size": 10, "text-anchor": "end" }, "measured = 100%"));
-  s.append(el("text", { x: L, y: T - 5, fill: "var(--ink-3)", "font-size": 10 }, "share of measured air cooling reproduced"));
+  s.append(el("line", { x1: xs(ch.ref), x2: xs(ch.ref), y1: T - 4, y2: H - 18, stroke: "var(--ink-2)", "stroke-dasharray": "3 3" }));
+  s.append(el("text", { x: xs(ch.ref), y: H - 5, fill: "var(--ink-2)", "font-size": 10, "text-anchor": "end" }, ch.refLabel));
+  s.append(el("text", { x: L, y: T - 5, fill: "var(--ink-3)", "font-size": 10 }, ch.cap));
   return s;
 }
 function drawCases() {
@@ -254,7 +254,7 @@ drawTube(); drawCover(); drawCases(); select("drops");
   gl?.getExtension("WEBGL_lose_context")?.loseContext();   // release the probe so it doesn't hold a context slot
   if (!gl) { host.innerHTML = `<div class="nogl">The animated explainer needs WebGL 2, which this browser doesn't provide. Everything below is the same content.</div>`; return; }
   try {
-    const [{ createCinema }, { default: script }] = await Promise.all([import("./cinema/cinema.js"), import("./cinema/watercap_script.js")]);
+    const [{ createCinema }, { default: script }] = await Promise.all([import("./cinema/cinema.js"), import("./cinema/watercap_reel.js")]);
     window.cinema = await createCinema(host, script);
   } catch (e) {
     console.error(e);

@@ -89,6 +89,8 @@ def stage_site(dst):
     for f in sorted((H / "cinema").iterdir()):
         shutil.copyfile(f, dst / "cinema" / f.name)
     shutil.copyfile(H / "reel.html", dst / "reel.html")
+    for f in ("validation.html", "validation_data.js"):    # the validation page (also feeds the film's callouts)
+        shutil.copyfile(H / f, dst / f)
     print("site:", dst, sum(f.stat().st_size for f in dst.rglob("*") if f.is_file()) / 1e6, "MB")
 
 
