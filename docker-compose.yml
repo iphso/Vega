@@ -256,6 +256,17 @@ services:
     ports:
       - "4321:4321"
 
+  openmc:
+    # Blanket neutronics reference tier (OpenMC, CPU). Nuclear data lives in
+    # blanket/xs (fetched on first use, not in the image).
+    build:
+      context: .
+      dockerfile: Dockerfile.openmc
+    volumes:
+      - ./blanket:/work/blanket
+      - ./scripts:/work/scripts
+    working_dir: /work
+
 volumes:
   hf-cache:
   viewer-node-modules:

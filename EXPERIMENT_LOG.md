@@ -2123,3 +2123,112 @@ Brad sent 38 DOIs (Cremaschi/Auburn, Reznikov, modified Kelvin-Thomson, corona c
 - **Partner's "asymptotic curve" quantified:** single-ion clusters hold ~9-100 H2O, 260-2950x latent heat at 12 kV; a 1 mA corona of such clusters is ~1e-3 g/min vs 6.9 g/min removed in his rig.
 - **"Corona intensifies what's already happening" is what the literature shows:** cold walls (+16-57%, vanishing as cooling rises), nozzle expansion (ions reach but never exceed equilibrium wetness), steam-jet mixing. Ion nucleation needs S ~4 (Wilson 1897).
 - **Steam-vent test bed** sits at S ~3-11, the ion-nucleation regime; cooling-tower plumes at ~1.0-1.4, so vent results will overstate tower performance. Model would need an ion-nucleus class (S >~3), steam-jet mixing with corona suppression, and an EHD multiplier at sub-dew-point walls.
+
+---
+
+## Blanket (CFS partnership pitch): gate 0, reproducing the BABY 1L TBR (2026-10-31)
+
+**Goal.** A newwater-style simulator for a FLiBe immersion blanket in the ARC/CFS style, aimed at a partnership pitch to CFS's chief scientist. Blanket only; the TORAX plasma work stays separate. Same strategy as newwater: build on what we have, validate on public experiments, make fast evaluation in the browser the priority, run OpenMC reference jobs on AICR.
+
+**Experimental anchor.** LIBRA BABY 1L (MIT/CFS): ~1 L of ClLiF salt (a FLiBe surrogate) irradiated by a 14 MeV A325 DT generator in the MIT vault. Open repos LIBRA-project/BABY-1L-run-{1..4} plus libra-toolbox, cloned to blanket/ext/ (gitignored, not ours). Each run has a measured TBR, the neutron rate, the irradiation schedule, cumulative tritium release in the bubbler (IV/OV, soluble/insoluble), and fitted k_top/k_wall mass-transfer coefficients. That supports a chain validation (neutron source → TBR → tritium release over time), not just one number.
+
+**Setup.** `Dockerfile.openmc` (micromamba, conda-forge openmc>=0.15, libra-toolbox, openmc_data_downloader) and compose service `openmc`. ENDF/B-VIII.0 (NNDC) neutron data for all elements goes in blanket/xs/ (2.9 GB, 290 files, gitignored).
+
+**Result** (`blanket/baby1l_tbr.py`, their model verbatim, 100 batches x 1e4, 24 threads, 113 s wall):
+
+| | TBR |
+|---|---|
+| ours (their model, our data install) | 2.137e-3 ± 0.034e-3 |
+| LIBRA's published modelled value | 2.080e-3 ± 0.027e-3 |
+| measured run 1 / 2 / 3 / 4 | 2.53 / 2.15 / 4.03 / 2.58 e-3 |
+
+Ours vs theirs differs by 1.3σ combined (most likely data-library version; not chased). Model vs measured: runs 1, 2 and 4 come out 0-17% above our model; run 3 is 1.9x and is LIBRA's own outlier. Leakage fraction from the 50 cm sphere is 0.005. **Gate passed: our OpenMC install and data reproduce their model.**
+
+**Next.** (a) Measure how much of the TBR comes from neutrons returning off the vault walls (BABY with the vault removed), because a browser tier can't carry the vault. (b) Generate multigroup cross sections from OpenMC for the browser tiers. (c) A parametric ARC-class blanket reference model (first wall / VV / Be / FLiBe tank) to sweep on AICR.
+
+### Blanket, 2026-10-31 later: ARC reference model, geometry parity, FLiBe-1L found
+
+- **Room return in BABY 1L** (`blanket/baby1l_novault.py`): with the vault removed (vacuum at the 50 cm sphere) TBR is 1.969e-3 ± 0.029e-3, vs 2.137e-3 with it, so the room adds about 8.5%. A browser tier models BABY in free space and multiplies by 1.085.
+- **ARC reference model** (`blanket/arc_model.py`, parametric OpenMC CSG, axisymmetric). Built from Sorbom 2015: the Fig. 2 inboard build, the §5.4.3 VV layers (1 cm W, 1 cm Inconel 718, 2 cm FLiBe, 1 cm Be, 3 cm Inconel), 90% Li-6, and a squared tank/TiH2/coil box as in the Fig. 27 MCNP model.
+  - Assumptions the paper doesn't fix: first wall Miller R0=333, a=113, kappa=1.84, delta=0.1. Divertor and support columns omitted. Tank and shield extents read off Fig. 27.
+  - Baseline (1M histories, photons on): **TBR 1.136 ± 0.001** vs the paper's 1.10 at 1 cm W.
+  - Heating (MW): fw 54.8, vv_in 29.9, channel 74.5, be 18.4, vv_out 63.9, blanket 239, tank 1.7, shield 3.8, coil 0.010; total 486, i.e. M = 1.16 on 420 MW of neutrons.
+  - Table 6 matches for inner VV (26), shield (2.8) and TF (0.014). It doesn't for channel, multiplier or outer VV (33/81/18). An 81 MW deposit in 1 cm of Be is implausible, so the table labels are suspected. Open.
+- **Benchmarks file** `blanket/benchmarks.json`: BABY 1L, FLiBe-1L, ARC Fig. 30 digitised (+/-0.005), Table 6, ARC thermal figures, FESTIM ARC (Dark 2026: 243 mg inventory, ~30 min to steady state, D0=6.75e-6 m2/s, ED=0.615 eV, Sc_t 0.5).
+- **Fig. 30 sweep (in progress)**: W first wall, ours/paper: 0.2 cm 1.077/1.065, 0.6 1.112/1.087, 1.0 1.136/1.099, 1.4 1.153/1.108. Our TBR rises about twice as steeply with W thickness. The leading hypothesis is a stronger W (n,2n) in ENDF/B-VIII than in their 2015 library; to check with the other materials.
+- **Browser transport started**: StoneLab branch `blanket` (worktree ~/Projects/StoneLab-blanket), `packages/physics/src/neutron`. It holds BlanketGeometry (SDF grid + boxes) and a CPU reference multigroup delta-tracking Monte Carlo (implicit capture with multiplicity, P3 to tabular cosines, PCG32, collision estimator).
+  - **Geometry parity passed**: 20,000 random (R, Z) points against OpenMC's `geometry.find` on the identical model, 0 mismatches (test/neutron/geometry.test.ts, data from `blanket/geom_points.py`).
+- **Lit review** (agent; `blanket/refs/lit_review.md`). Biggest find: **LIBRA FLiBe-1L runs 1-2**, real natural-Li FLiBe, MIT license, repo data with no paper yet. Measured TBR 3.33e-3 ± 0.25e-3 (run 1, 2.6e8 n/s) and 2.48e-3 ± 0.21e-3 (run 2, 1.9e9 n/s), vs their OpenMC 3.23e-3. The two runs differ by ~2.6 sigma.
+  - Other leads: MSRE tritium balance (ORNL-CF-71-7-8), OKTAVIAN LiF sphere plus LLNL pulsed spheres, HTM property sets, Ambrosek 2009 FLiNaK heat transfer.
+- **Compute**: 8 vega-train containers (another workstream, ~14 h old) hold all 32 cores, so OpenMC runs here crawl. Plan is to move OpenMC to AICR.
+- **Gate 1 attempt 1 VOID**: run with `VITAMIN-J-42`, which is the VITAMIN-J *photon* group structure (1 keV-50 MeV), not a neutron one. Neutrons below 1 keV fell outside every tally, so the CE TBR read 1.068 instead of 1.136 and MG-vs-CE read +17%. Neither number means anything. Rerunning with VITAMIN-J-175 (1e-5 eV to 19.6 MeV) and ECCO-33. Check a group structure's range before using it.
+- **FLiBe-1L reproduced** (`blanket/baby1l_tbr.py - FLiBe-1L-run-1`, LIBRA's model verbatim): ours **3.2305e-3 ± 0.063e-3** vs their 3.2286e-3. Measured run 1 is 3.33e-3 ± 0.25e-3 (+3%, inside 1 sigma); run 2 is 2.48e-3 ± 0.21e-3 (−23%, 3.6 sigma). Run 2's deficit is LIBRA's open question (it used a different generator, see data/neutron_generator). Show both runs.
+- **Gate 1 with VITAMIN-J-175, P3 Legendre, no transport correction**: CE TBR 1.1352 (matches the baseline). OpenMC MG on the same geometry gives **1.2475 (+9.9%)**. Heating is high near the plasma (fw +11%, channel +13%) and low deeper in (vv_out −12%, blanket −9%, shield −39%, coil −73%): MG neutrons don't penetrate. Suspect: P3 plus clipping can't carry the forward-peaked 14 MeV elastic scattering, so too much large-angle scattering. Next: a 64-bin cosine histogram (mgxs_gen.py FMT=hist64), which is also simpler to sample on the GPU.
+- vega-train containers (8, ConStellaration grounded-walk SOAP runs, started ~01:00 UTC 10-31) **paused** with `docker pause`, not killed. The user wasn't sure they're needed. `docker unpause $(docker ps -q --filter name=vega-train-run)` resumes them.
+- AICR: OpenMC image as apptainer sif at /scratch/slater_victoroff_aihub/blanket/img/openmc.sif; data in blanket/xs; `sbatch -c N -J name run.sbatch blanket/<script>.py args` (sources in ~/runs/blanket/aicr/).
+- **Fig. 30 sweep done** (`blanket/fig30_sweep.py`, 40 runs x 300k histories, TBR sd ~0.002; results in runs/fig30_sweep.json). Ours minus paper, 0.2 to 2.0 cm:
+  - Inconel +0.001 to +0.010, CFC +0.001 to +0.010.
+  - W +0.012 to +0.060, Be +0.009 to +0.074.
+  - Linear slopes (TBR/cm), ours/paper: Inconel −0.033/−0.037, CFC −0.023/−0.028, W 0.052/0.025, Be 0.092/0.055.
+  - **Non-multiplying first walls match to <=0.01 everywhere**, so the base model (source, geometry, FLiBe breeding) agrees with the paper's MCNP. **Multiplying walls gain about 1.7-2x the paper's TBR per cm.** Be shows it too, so it's not W data alone.
+  - Candidates, untested: extra neutrons are worth more in our model (no 8 cm W divertor over 17% of the lower VV, no support columns, guessed outboard tank depth), and ENDF/B-VIII vs their 2015 library.
+  - Open, logged; to be shown as such.
+- **Fast thermal tier** (StoneLab `src/neutron/thermal.ts`, test/neutron/thermal.test.ts): Sorbom eqs. 30-33 on the paper's own inputs give channel outlet 826 K (paper 823), peak Inconel 1036 K (1030), bulk outlet 887 K (900, using our 239 MW bulk heating; the paper has no bulk figure). Re 25.9k, Pr 14.4, Nu 227, film dT 57 K, inner-VV conduction 154 K.
+- **Browser transport verified** (StoneLab `blanket`, src/neutron/gpu.ts):
+  - **Exporter bug fixed first**: OpenMC's XSdata.scatter_matrix already holds nu-scatter. Multiplying by multiplicity_matrix counted (n,2n) twice and gave TBR 1.87.
+  - **CPU reference on the 175-group P3 pack** (converted to a 64-bin histogram, negatives clipped): TBR 1.148 ± 0.002. That is +1.1% vs CE (1.135), vs OpenMC's own MG mode at 1.248 on the same moments. The OpenMC MG gap is likely in how each code turns P3 into a sampling table; the hist64 library settles it, since both codes then sample identical bins.
+  - Heating vs CE: fw +13%, vv_in +11%, channel +8%, be +6%, vv_out +1%, blanket −7%, shield −23%. That is still the penetration deficit, expected to shrink with hist64.
+  - **WGSL kernel vs CPU reference**, same seed and histories (test/neutron/gpu/transport.test.ts, Dawn in Node, 40k histories): TBR 1.147517 vs 1.147508; every layer's heating within 0.03%. Histories track nearly identically despite f32. Speed is **203k histories/s on the RTX 5000 Ada** (4096-history dispatches) vs 7.5k/s for the CPU reference, so 1M histories take ~5 s.
+- **Gate 1 PASSED with 64-bin cosine histograms** (VITAMIN-J-175, `mgxs_gen.py VITAMIN-J-175 hist64`, pack `neutpack/VITAMIN-J-175_hist64`, 72.8 MB). GPU transport, 1M histories in **0.38 s (2.65M histories/s**, 65k-history dispatches, RTX 5000 Ada via Dawn), vs OpenMC CE on the same ARC baseline:
+  - TBR **1.1340 ± 0.0005** vs 1.1352 (−0.1%).
+  - Heating (MW, GPU / CE): fw 51.31/51.07, vv_in 40.54/40.41, channel 73.05/73.06, be 15.59/15.61, vv_out 74.72/74.55, blanket 224.20/224.27, tank 1.084/1.090, shield 4.06/4.01. Every layer within 1.3%; the coil has too few counts.
+  - **P3 was the problem**: the clipped Legendre pdf can't hold the forward-peaked 14 MeV elastic scattering, so P3 under-penetrated (shield −23%) and over-heated the layers near the plasma.
+  - Caveat to measure next: cross sections weighted on the baseline's spectrum. Accuracy for other designs (first-wall material and thickness, enrichment) must be checked against CE.
+- **Tritium fast-tier sanity check vs FESTIM ARC (Dark 2026)**:
+  - Their outlet flux is 1.0 mg/s at 0.90 mg/m3, so Q ≈ 1.1 m3/s. That matches Sorbom's 18 x 0.3 m2 x 0.2 m/s = 1.08 m3/s.
+  - Our production from TBR 1.135 at 525 MW is 1.06 mg/s.
+  - Our FLiBe volume is 300 m3 (blanket 295 + channel 4.4; plasma region 153 m3 vs Table 1's 141), so tau = V/Q ≈ 270 s.
+  - Inventory limits: plug flow P tau/2 = 143 mg, well mixed P tau = 286 mg. Their 243 mg sits between, near the mixed end, consistent with the turbulence-dominated transport they report.
+- **OpenMC's own MG mode is the outlier, not our transport.** On the identical hist64 library: OpenMC MG TBR 1.233 (+8.6% vs CE), heating vv_out −12%, shield −20%. Our GPU transport on the same data: 1.1340, every layer within 1.3% of CE.
+  - Most likely our MG-mode setup gets an absorption/multiplicity convention wrong (OpenMC MG samples scatter, then weights by multiplicity_matrix; how it pairs with our 'absorption' and 'total' tallies is the suspect). Not chased: nothing downstream uses OpenMC MG mode.
+  - The "match OpenMC MG within noise" gate is replaced by "match OpenMC CE", which is the physics reference anyway.
+- **Generalisation, W first-wall thickness, baseline cross sections** (scripts/neutron-fw-sweep.ts, 1M histories each vs the Fig. 30 CE sweep at sd ~0.0023): diff −0.002 to −0.003 for 0.2-1.4 cm; −0.006, −0.010, −0.008 at 1.6, 1.8, 2.0 cm (thicker W self-shields beyond what the 1 cm spectrum weighting carries).
+- AICR library jobs submitted (VITAMIN-J-175 hist64; fw_material Be/CFC/Inconel; li6_pct 7.5/30/60), waiting on the sif build. In apptainer, call /opt/conda/bin/python: the micromamba image only puts python on PATH through its docker entrypoint.
+- **Sparse neutpack v2**: only 17% of (g, g') pairs transfer, so rows are stored sparse (row_ptr, tr_g, tr_cdf, a cosine CDF per transfer). 73 MB → **12.45 MB raw, 3.2 MB gzip -9**. Results unchanged (GPU TBR 1.13405 both ways). GPU vs CPU test still passes (1.13398 vs 1.13377, within errors). **4.26M histories/s** (1M in 0.23 s).
+- **Design evaluation in the browser stack** (StoneLab src/neutron/design.ts: transport, then fast thermal, then residence-time tritium; plus an (R, Z) heating/tritium map at 2 cm and fast flux on the TF face and first wall). ARC baseline, 2M histories, **0.86 s**:
+  - TBR 1.1341 ± 0.0003, M 1.158, nuclear 486 MW.
+  - Heating (MW): fw 55.1, vv_in 30.0, channel 74.5, be 18.4, vv_out 63.9, blanket 238.5. That matches the OpenMC photon-coupled baseline after the per-cell **photon redistribution factors** (coupled n-gamma heating / local kerma heating, baseline run): fw 1.07, vv_in 0.74, channel 1.02, be 1.18, vv_out 0.86, blanket 1.07, tank 1.53, shield 0.95. Without them, local deposition overstates vv_in by 35%.
+  - Our vv_in (30 MW) is close to Sorbom's Table 6 "Inner VV" (26 MW). So Table 6 most likely leaves out the 1 cm W tile's own ~55 MW (consistent with the earlier suspicion about its rows).
+  - Thermal: channel outlet 837 K, bulk outlet 904 K (paper 900). **Peak inner-VV 1207 K vs paper 1030 K**: we also send the W tile's 55 MW through the inner VV, so q is 0.60 MW/m2 vs their 0.32. On the paper's own inputs the same model gives 1036 K. This is a stated modelling difference, not a bug.
+  - Tritium 1.06 mg/s; inventory 147-293 mg (plug to mixed), tau 277 s.
+  - **Peak TF fast fluence** (inboard face, 5 cm, |Z|<1 m): 5.3e17 n/cm2/FPY, so 5.7 FPY to 3e18, vs Sorbom's 9 FPY. Same order; the coil/shield geometry is ours.
+  - FW fast flux 5.4e14 n/cm2/s.
+- Sparse pack + map: 3.55M histories/s.
+
+### Blanket, 2026-10-31: reduced thermal-hydraulics model (StoneLab branch `blanket-thermal`, 69633f0)
+
+- Worktree ~/Projects/StoneLab-blanket-thermal. Generic core in `packages/physics/src/thermal/` (exact 1-D multilayer slab conduction with T-dependent k, Dittus-Boelter/Gnielinski, FLiBe/Inconel 718/W/Be property sets, duct energy balance). Thin ARC layer in `src/blanket-thermal/`. 1.8 ms per evaluation, 164/164 tests pass. Validation note: docs/blanket-thermal.md.
+- Verification: closed-form slabs to 1e-16; T-dependent k matches an independent finite-volume solver at second order; energy balance residual ≤ 5e-16.
+- **Given Sorbom's own inputs it reproduces his numbers**: peak Inconel 1032 K vs 1030/1034, outlet 826 K vs 823/826. Sorbom took FLiBe viscosity at 950 K (6 mPa·s), but the channel runs at 800-835 K (11-12 mPa·s), so the film drop is ~23% larger than he assumed.
+- **With our OpenMC baseline heating: peak Inconel 1202 K, peak W 1232 K**, i.e. 279 K over a 923 K long-term Inconel limit. The cause is the inner wall: OpenMC puts W 54.8 + inner VV 29.9 MW there, vs Sorbom's 26 MW with no W row. **Open item for neutronics**: W photon heating, and whether Sorbom's "inner VV" includes the tile.
+- Sensitivities on peak Inconel: inner Inconel 0.5 cm -138 K, W 0.5 cm -83 K, flow x2 only -61 K, film-coefficient ±15% gives +21/-15 K.
+- Assumed: exponential-in-depth heating shape (OpenMC gives region totals only), planar slabs, no ribs/columns/divertor, unirradiated k. Romatoski/Inconel/W/Be property values were taken from recall, not re-read from the sources; the ORNL-4658 values were checked against the local copy.
+- **Library packs vs their own CE runs** (scripts/neutron-variants.ts, 2M histories, local-deposition heating; runs/variant_check.json). TBR GPU/CE (rel):
+  - base 1.1340/1.1352 (−0.11%)
+  - Be wall 1.1424/1.1429 (−0.04%)
+  - CFC wall 1.0298/1.0292 (+0.06%)
+  - 30% Li-6 1.0815/1.0849 (−0.31%)
+  - 60% Li-6 1.1223/1.1247 (−0.21%)
+  - Worst layer heating per pack: ≤1.1% (fw).
+  - Mixed combinations (e.g. a Be wall at 30% Li-6 = enrichment pack + Be-wall fw cell) are not yet checked against CE.
+  - Variants use the baseline's photon factors (no per-variant photon run yet).
+- **Simulator page v1** (Vega blanket_web/: index.html, app.js, build.py; engine = StoneLab apps/blanket, 60 KB; packs ~3.2 MB gz each). Served locally on :5195 and checked in the Loom harness Chrome.
+  - ARC baseline Fast tier (1e5 histories) 0.32 s incl. geometry: TBR 1.132 ± 0.003, peak VV 1207 K, 146-293 mg, M 1.155, tank outlet 904 K.
+  - The engine refuses designs whose first-wall material or Li-6 enrichment has no pack (it used to snap to the nearest one silently).
+- **All 7 library packs vs their own CE** (Inconel wall 1.0209/1.0201 +0.08%; natural Li 0.9594/0.9647 −0.55%, the worst; others as above). Every pack is within 0.55% on TBR and 1.2% on any layer's heating.
+- **TF peak-fluence tally needed variance reduction**: 4M-history runs scattered 46% (heavy tail). The roulette floor alone did nothing.
+  - **Geometric splitting** inboard of the tank wall (one level per 10 cm, up to 2^6, 12-deep per-thread stack): first version **BIASED +140%** (1.21e-4 vs a 400M-history unsplit 5.09e-5 ± 0.25e-5 track/source). It split at a tentative-collision point before the collision was decided, so the copies skipped it and over-penetrated.
+  - Fixed by splitting at the start of each step, from the fully processed state: 5.27e-5 ± 0.23e-5 with 40M (agrees, 0.5 sigma), about 10x cheaper. GPU and CPU still agree to 7 digits; TBR unchanged.
+  - Converged ARC TF-face life ≈ 8 FPY vs Sorbom's 9. A single 4M browser run read 10.8 ± 12%: batch errors understate this heavy tail, so Resolved is now 8M.
+- **Converged TF-face life** (10 x 8M histories, split): 3.41e17 n/cm2/FPY, rel sd 8% per run, so **8.8 ± 0.2 FPY vs Sorbom's 9 FPY**. The browser's single 8M runs read 10.1-10.8, slightly high draws of the same estimator.
+- Page with all 7 packs: ARC baseline Fast 0.19 s, Resolved (8M) 4.5 s in the harness Chrome; Resolved TBR 1.1343 ± 0.0002 vs OpenMC 1.1360 ± 0.0012.

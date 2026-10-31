@@ -31,3 +31,11 @@ logs_p1_latent_optimize*.log
 # watercap workbench build outputs (python watercap_web/build.py)
 watercap_web/workbench.html
 watercap_web/test.html
+blanket/xs/
+blanket/runs/
+blanket/ext/
+blanket/neutpack/
+blanket_web/dist/
+# third-party papers and extracted text stay local; lit_review.md is ours
+blanket/refs/*
+!blanket/refs/lit_review.md

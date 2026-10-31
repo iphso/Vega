@@ -1,0 +1,15 @@
+# OpenMC neutronics reference tier for the blanket simulator (blanket/).
+# conda-forge is the supported OpenMC distribution (DAGMC-free build is
+# enough: every geometry here is CSG). Nuclear data is NOT baked in: ENDF/B-VIII.0
+# per-nuclide HDF5 files are fetched by openmc_data_downloader into the
+# mounted blanket/xs volume, the same library the LIBRA BABY models use.
+FROM mambaorg/micromamba:1.5.10
+USER root
+RUN micromamba install -y -n base -c conda-forge python=3.12 "openmc>=0.15" \
+      numpy scipy pandas h5py pint pint-pandas matplotlib pip && \
+    micromamba clean -a -y
+ARG MAMBA_DOCKERFILE_ACTIVATE=1
+RUN pip install --no-cache-dir openmc_data_downloader "libra-toolbox>=0.9.3" h-transport-materials
+ENV OPENMC_CROSS_SECTIONS=/work/blanket/xs/cross_sections.xml
+WORKDIR /work
+ENTRYPOINT ["/usr/local/bin/_entrypoint.sh", "python"]

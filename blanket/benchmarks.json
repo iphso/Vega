@@ -1,0 +1,205 @@
+{
+  "_note": "Validation targets for the blanket simulator. 'measured' = experiment; 'reference_sim' = published high-fidelity simulation (not ground truth).",
+  "baby_1l": {
+    "kind": "measured",
+    "source": "LIBRA BABY-1L-run-{1..4} data/processed_data.json (github.com/LIBRA-project); ClLiF surrogate salt, A325 DT generator, MIT vault",
+    "measured_TBR": {
+      "run-1": 0.002527,
+      "run-2": 0.002147,
+      "run-3": 0.004026,
+      "run-4": 0.002576
+    },
+    "libra_openmc_TBR": 0.00208,
+    "our_openmc_TBR_with_vault": [
+      0.002137,
+      3.4e-05
+    ],
+    "our_openmc_TBR_no_vault": [
+      0.001969,
+      2.9e-05
+    ],
+    "room_return_factor": 1.085
+  },
+  "arc_sorbom2015": {
+    "kind": "reference_sim",
+    "source": "Sorbom et al., Fusion Eng. Des. 100 (2015), arXiv 1409.3540; MCNP, 2-D axisymmetric",
+    "fusion_power_MW": 525,
+    "wall_loading_MW_m2": 2.5,
+    "li6_pct": 90,
+    "radial_build_inboard_cm": {
+      "tf_coil": [
+        70,
+        134
+      ],
+      "shield_TiH2": [
+        135,
+        186
+      ],
+      "thermal_shield": [
+        186,
+        189
+      ],
+      "tank": [
+        189,
+        192
+      ],
+      "bulk_flibe": [
+        192,
+        212
+      ],
+      "vv": [
+        212,
+        220
+      ],
+      "sol": [
+        220,
+        223
+      ]
+    },
+    "vv_layers_cm": {
+      "W_first_wall": 1,
+      "inconel_inner_vv": 1,
+      "flibe_channel": 2,
+      "be_multiplier": 1,
+      "inconel_outer_vv": 3
+    },
+    "TBR_design": 1.1,
+    "fig30_TBR_vs_first_wall_cm": {
+      "_digitized": "read off Fig. 30 pixels, +/-0.005; divertor excluded",
+      "thickness_cm": [
+        0.2,
+        0.4,
+        0.6,
+        0.8,
+        1.0,
+        1.2,
+        1.4,
+        1.6,
+        1.8,
+        2.0
+      ],
+      "Be": [
+        1.065,
+        1.076,
+        1.087,
+        1.097,
+        1.109,
+        1.12,
+        1.131,
+        1.143,
+        1.154,
+        1.164
+      ],
+      "W": [
+        1.065,
+        1.076,
+        1.087,
+        1.094,
+        1.099,
+        1.104,
+        1.108,
+        1.11,
+        1.11,
+        1.111
+      ],
+      "CFC": [
+        1.048,
+        1.042,
+        1.036,
+        1.03,
+        1.026,
+        1.02,
+        1.015,
+        1.011,
+        1.003,
+        0.997
+      ],
+      "Inconel": [
+        1.047,
+        1.04,
+        1.032,
+        1.024,
+        1.017,
+        1.011,
+        1.002,
+        0.995,
+        0.989,
+        0.981
+      ]
+    },
+    "table6_nuclear_heating_MW": {
+      "inner_vv": 26,
+      "coolant_channel": 33,
+      "neutron_multiplier": 81,
+      "outer_vv": 18,
+      "neutron_shield": 2.8,
+      "tf_coil": 0.014
+    },
+    "thermal": {
+      "bulk_inlet_K": 800,
+      "bulk_outlet_K": 900,
+      "bulk_peak_K_max": 1000,
+      "bulk_inlet_velocity_m_s": 0.2,
+      "bulk_inlets": 18,
+      "bulk_inlet_area_m2": 0.3,
+      "channel_velocity_m_s": 2.0,
+      "channel_outlet_K": 823,
+      "vv_max_inconel_K": 1030,
+      "plasma_radiative_flux_MW_m2": 0.2
+    },
+    "tf_fluence_lifetime_FPY": 9
+  },
+  "arc_festim_dark2026": {
+    "kind": "reference_sim",
+    "source": "Dark, Sircar, Bae, Dokken, Delaporte-Mathurin, arXiv 2608.05398 (2026); OpenMC -> OpenFOAM (k-omega SST, 5 deg sector) -> FESTIM",
+    "flibe": {
+      "rho": 1940,
+      "cp": 2400,
+      "mu": 0.006,
+      "Pr": 14.4,
+      "Pr_t": 0.85
+    },
+    "bc": {
+      "U_in_m_s": 2,
+      "T_in_K": 800,
+      "T_wall_inconel_K": 900,
+      "T_wall_be_K": 850,
+      "T_wall_vv_K": 1000
+    },
+    "tritium_inventory_mg": 243,
+    "time_to_steady_min": 30,
+    "inlet_concentration": 0,
+    "tritium": {
+      "D0_m2_s": 6.75e-06,
+      "ED_eV": 0.615,
+      "Sc_t": 0.5,
+      "supg_delta": 0.1,
+      "note": "D = D0 exp(-ED/kT); D_eff = D + nu_t/Sc_t; trapping and Soret not modelled; zero inlet concentration = perfect extraction"
+    }
+  },
+  "flibe_1l": {
+    "kind": "measured",
+    "source": "LIBRA-project/FLiBe-1L-run-{1,2} data/processed_data.json (MIT license, repo commits 2026-05-20 / 2026-05-30; README still a template, no paper yet: preliminary)",
+    "salt": "FLiBe, natural Li (Li6 2.17 at%), 1.94 g/cc, ~1 L",
+    "measured_TBR": {
+      "run-1": [
+        0.003328,
+        0.000254
+      ],
+      "run-2": [
+        0.002479,
+        0.000205
+      ]
+    },
+    "neutron_rate_n_s": {
+      "run-1": 262800000.0,
+      "run-2": 1900000000.0
+    },
+    "libra_openmc_TBR": 0.003229,
+    "note": "runs disagree by ~2.6 sigma; run-2 used a different generator setup (data/neutron_generator)",
+    "our_openmc_TBR": [
+      0.0032305,
+      6.35e-05
+    ]
+  }
+}
