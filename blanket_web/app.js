@@ -43,7 +43,25 @@ let engine = null, lib = [], saved = [], cur = null, field = "heat", raster = nu
 const results = new Map(); // design json -> {fast, resolved}
 const keyOf = (d) => JSON.stringify(d, Object.keys(d).sort()) + JSON.stringify(d.geometry, Object.keys(d.geometry).sort());
 try { saved = JSON.parse(localStorage.getItem("blanket.designs") ?? "[]"); } catch { saved = []; }
-const persist = () => { try { localStorage.setItem("blanket.designs", JSON.stringify(saved)); } catch { /* private mode */ } };
+// Saved designs: the team store (./api, Cloudflare KV behind Access) when the server has one,
+// this browser's storage otherwise. `team` flips on when GET ./api/store answers.
+let team = false;
+const persist = (changed, removed) => {
+  try { localStorage.setItem("blanket.designs", JSON.stringify(saved)); } catch { /* private mode */ }
+  if (!team) return;
+  if (changed) fetch(`./api/designs/${encodeURIComponent(changed.id)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(changed) }).catch(() => {});
+  if (removed) fetch(`./api/designs/${encodeURIComponent(removed)}`, { method: "DELETE" }).catch(() => {});
+};
+async function loadTeamStore() {
+  try {
+    const r = await fetch("./api/store", { cache: "no-store" });
+    if (!r.ok) return;
+    const j = await r.json();
+    team = true;
+    saved = (j.designs ?? []).map((d) => ({ ...d, family: "Your designs" })).sort((a, b) => (b.updated ?? 0) - (a.updated ?? 0));
+    $("store").textContent = `team store · ${saved.length} saved`;
+  } catch { /* no server store: keep this browser's */ }
+}
 
 // ---- formatting
 const f = (x, n = 2) => Number.isFinite(x) ? x.toFixed(n) : "—";
@@ -405,13 +423,13 @@ $("layers").addEventListener("click", (e) => {
 new ResizeObserver(() => show()).observe($("view"));
 
 // ---- design actions
-$("dname").onchange = () => { cur.name = $("dname").value; if (cur.saved) { const s = saved.find((x) => x.id === cur.id); if (s) { s.name = cur.name; persist(); renderList(); } } };
+$("dname").onchange = () => { cur.name = $("dname").value; if (cur.saved) { const s = saved.find((x) => x.id === cur.id); if (s) { s.name = cur.name; persist(s); renderList(); } } };
 $("dreset").onclick = () => { cur.design = fullDesign(cur.base); renderParams(); redraw(); schedule(); };
 $("dsave").onclick = () => {
   const it = { id: `my-${Date.now()}`, name: `${cur.name}${cur.saved ? "" : " (edited)"}`, family: "Your designs", design: structuredClone(cur.design), reference: null };
-  saved.unshift(it); persist(); select(it);
+  saved.unshift(it); persist(it); select(it);
 };
-$("ddel").onclick = () => { saved = saved.filter((s) => s.id !== cur.id); persist(); select(lib[0]); };
+$("ddel").onclick = () => { const id = cur.id; saved = saved.filter((s) => s.id !== id); persist(null, id); select(lib[0]); };
 
 // ---- boot
 (async () => {
@@ -422,6 +440,7 @@ $("ddel").onclick = () => { saved = saved.filter((s) => s.id !== cur.id); persis
     return;
   }
   $("gpu").textContent = "WebGPU";
+  await loadTeamStore();
   lib = await (await fetch("./designs.json")).json();
   select(lib[0]);
   // fill in the list's numbers in the background, one design at a time
