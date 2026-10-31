@@ -93,6 +93,7 @@ val = {
     },
     "baby_no_vault": json.load(open(R / "baby1l_novault/tbr.json")),
     "libra_release": {},
+    "combos": json.load(open(R / "combo_check.json")) if (R / "combo_check.json").exists() else [],
 }
 # LIBRA's counted tritium (IV + OV bubblers, cumulative Bq) per run, with the run's own
 # neutron rate, irradiation schedule and fitted transfer coefficients

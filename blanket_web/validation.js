@@ -178,7 +178,8 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
   + B.packs.map((p) => {
     const worst = Object.entries(p.heating_MW).filter(([k]) => !["tank", "shield"].includes(k)).map(([k, [b, o]]) => [k, b / o - 1]).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
     return `<tr><td>${PACK_LABEL(p)}</td><td class="n">${f(p.browser[0], 4)} <span class="d">± ${f(p.browser[1], 4)}</span></td><td class="n">${f(p.openmc, 4)}</td><td class="n">${pct(p.browser[0] / p.openmc - 1)}</td><td class="n">${worst[0]} ${pct(worst[1], 1)}</td></tr>`;
-  }).join("");
+  }).join("")
+  + (V.combos ?? []).map((c) => `<tr><td>combined: ${c.fw} wall + ${c.li6}% Li-6 <span class="d">(two sets)</span></td><td class="n">${f(c.browser[0], 4)} <span class="d">± ${f(c.browser[1], 4)}</span></td><td class="n">${f(c.openmc[0], 4)} <span class="d">± ${f(c.openmc[1], 4)}</span></td><td class="n">${pct(c.rel)}</td><td class="n">—</td></tr>`).join("");
 
 // ---------- Fig. 30 small multiples
 {
@@ -272,7 +273,7 @@ $("gaplist").innerHTML = [
   "<b>Neutron-multiplying first walls</b> gain about twice the published TBR per cm (above). The divertor and support columns are not modelled.",
   "<b>BABY run 3 and FLiBe-1L run 2</b> differ from the other runs well beyond their errors. That is LIBRA's open question, not ours; every run is shown.",
   "<b>FLiBe-1L is repository data</b> without a paper yet.",
-  "<b>Design combinations</b> mixing a non-tungsten wall with a non-90% enrichment are assembled from two cross-section sets; four were checked against OpenMC (within 0.2%), not every pairing.",
+  "<b>Design combinations</b> mixing a non-tungsten wall with a non-90% enrichment are assembled from two cross-section sets; four pairings were checked against OpenMC (all within 0.4%), not every one.",
   "<b>Tritium flow field</b> is potential flow: no recirculation, so the tank inventory sits ~30% under FESTIM's RANS result. Permeation covers the tank wall only (not the inner vessel into the plasma chamber), and assumes the Inconel controls it, not the salt film.",
   "<b>Vessel dpa</b> is 2–3× below the ARC papers' while He agrees; their dpa method is unstated.",
   "<b>FLiBe hydrogen solubility</b> varies by ~3 decades between published measurements. The simulator lets you pick the source and shows the band.",
