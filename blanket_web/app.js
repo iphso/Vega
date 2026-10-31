@@ -132,7 +132,7 @@ function renderParams() {
       }
       row.innerHTML = `<span>${p.label}${p.unit ? ` <span class="u">${p.unit}</span>` : ""}</span>`;
       row.append(input);
-      if (p.step || p.key === "li6Pct") {
+      if (p.step || p.key === "li6Pct" || p.key === "fwMaterial") {
         const sw = document.createElement("button");
         sw.type = "button"; sw.className = "swb"; sw.textContent = "⇆";
         sw.title = sw.ariaLabel = `Sweep ${p.label.toLowerCase()} across its range`;
@@ -433,9 +433,11 @@ const snapTo = (x, step) => Number((Math.round(x / step) * step).toFixed(6));
 async function startSweep(p) {
   const token = ++sweepToken;
   const now = get(cur.design, p.key);
-  const grid = p.key === "li6Pct" ? engine.enrichments() : Array.from({ length: SWEEP_N }, (_, i) => snapTo(p.min + ((p.max - p.min) * i) / (SWEEP_N - 1), p.step));
-  const xs = [...new Set([...grid, now])].sort((a, b) => a - b);
-  sweep = { p, xs, ms: xs.map(() => null), base: structuredClone(cur.design), hover: -1 };
+  // wall material is categorical: one point per material, no line between them
+  const cat = p.key === "fwMaterial";
+  const grid = cat ? engine.fwMaterials() : p.key === "li6Pct" ? engine.enrichments() : Array.from({ length: SWEEP_N }, (_, i) => snapTo(p.min + ((p.max - p.min) * i) / (SWEEP_N - 1), p.step));
+  const xs = cat ? grid : [...new Set([...grid, now])].sort((a, b) => a - b);
+  sweep = { p, xs, pos: cat ? xs.map((_, j) => j) : xs, cat, ms: xs.map(() => null), base: structuredClone(cur.design), hover: -1 };
   if (!$("v3").hidden) { show3d(false); $("layers").querySelector('[data-f="3d"]').setAttribute("aria-pressed", "false"); }
   $("sw").hidden = false; $("view").classList.add("insweep");
   drawSweep();
@@ -459,18 +461,20 @@ function closeSweep() {
 
 function drawSweep() {
   if (!sweep) return;
-  const { p, xs, ms } = sweep;
+  const { p, xs, ms, pos, cat } = sweep;
+  const lab = (x) => (cat ? FW_NAME[x] ?? x : sig(x, 4));
   const done = ms.filter(Boolean).length, now = get(cur.design, p.key);
   const unit = p.unit ? ` ${p.unit}` : "";
-  $("sw-head").innerHTML = `<span><b>${p.label}</b>${p.unit ? ` <span class="u">${p.unit}</span>` : ""} · ${xs.length} designs, Fast tier (${sig(FAST, 2)} histories each, same random numbers)${done < xs.length ? ` · <b>${done}/${xs.length}</b>` : ""}</span>${sweep.hover >= 0 ? `<span class="hxv">${p.label} = ${sig(xs[sweep.hover], 4)}${unit}</span>` : `<span class="u">hover to compare · click a point to apply it</span>`}`;
+  $("sw-head").innerHTML = `<span><b>${p.label}</b>${p.unit ? ` <span class="u">${p.unit}</span>` : ""} · ${xs.length} designs, Fast tier (${sig(FAST, 2)} histories each, same random numbers)${done < xs.length ? ` · <b>${done}/${xs.length}</b>` : ""}</span>${sweep.hover >= 0 ? `<span class="hxv">${p.label} = ${lab(xs[sweep.hover])}${unit}</span>` : `<span class="u">hover to compare · click a point to apply it</span>`}`;
   const host = $("sw-charts");
   if (host.childElementCount !== SWEEP_OUT.length) host.innerHTML = SWEEP_OUT.map(() => `<div class="swc"><div class="swt"></div><svg></svg></div>`).join("");
-  const x0 = xs[0], x1 = xs[xs.length - 1];
+  const x0 = cat ? -0.5 : pos[0], x1 = cat ? pos.length - 0.5 : pos[pos.length - 1];
+  const nowPos = cat ? xs.indexOf(now) : now;
   SWEEP_OUT.forEach((o, ci) => {
     const cell = host.children[ci], svg = cell.querySelector("svg");
     const W = Math.max(160, cell.clientWidth - 18), H = Math.max(100, cell.clientHeight - cell.querySelector(".swt").offsetHeight - 10);
     const L = 46, R = 12, T = 10, B = 24;
-    const pts = xs.map((x, j) => (ms[j] ? { j, x, y: o.v(ms[j]), e: o.e?.(ms[j]) ?? 0 } : null)).filter((q) => q && Number.isFinite(q.y));
+    const pts = xs.map((x, j) => (ms[j] ? { j, x: pos[j], y: o.v(ms[j]), e: o.e?.(ms[j]) ?? 0 } : null)).filter((q) => q && Number.isFinite(q.y));
     const hv = sweep.hover >= 0 && ms[sweep.hover] ? o.v(ms[sweep.hover]) : null;
     cell.querySelector(".swt").innerHTML = `${o.k}${hv !== null && Number.isFinite(hv) ? ` <b>${f(hv, o.n)}</b>` : ""}`;
     if (!pts.length) { svg.innerHTML = ""; svg.setAttribute("viewBox", `0 0 ${W} ${H}`); return; }
@@ -482,17 +486,17 @@ function drawSweep() {
     const padY = (hi - lo) * 0.08; lo -= padY; hi += padY;
     const X = (x) => L + ((x - x0) / (x1 - x0 || 1)) * (W - L - R), Y = (y) => T + (1 - (y - lo) / (hi - lo)) * (H - T - B);
     const ticks = (a, b, n) => { const st = 10 ** Math.floor(Math.log10((b - a) / n || 1)); const s = [1, 2, 5, 10].map((k) => k * st).find((k) => (b - a) / k <= n) ?? st * 10; const out = []; for (let v = Math.ceil(a / s) * s; v <= b + 1e-9; v += s) out.push(Number(v.toPrecision(6))); return out; };
-    const yt = ticks(lo, hi, 3), xt = p.key === "li6Pct" ? xs : ticks(x0, x1, 4);
+    const yt = ticks(lo, hi, 3), xt = cat || p.key === "li6Pct" ? pos : ticks(x0, x1, 4);
     let s = "";
     for (const v of yt) s += `<line class="g" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text class="ax" x="${L - 6}" y="${Y(v) + 3.5}" text-anchor="end">${sig(v, 3)}</text>`;
-    for (const v of xt) s += `<text class="ax" x="${X(v)}" y="${H - 6}" text-anchor="middle">${sig(v, 3)}</text>`;
+    for (const v of xt) s += `<text class="ax" x="${X(v)}" y="${H - 6}" text-anchor="middle">${cat ? FW_NAME[xs[v]] ?? xs[v] : sig(v, 3)}</text>`;
     if (o.guide && o.guide[0] >= lo && o.guide[0] <= hi) s += `<line class="gd" x1="${L}" x2="${W - R}" y1="${Y(o.guide[0])}" y2="${Y(o.guide[0])}"/><text class="gl" x="${W - R}" y="${Y(o.guide[0]) - 4}" text-anchor="end">${o.guide[1]}</text>`;
-    s += `<line class="cur" x1="${X(now)}" x2="${X(now)}" y1="${T}" y2="${H - B}"/>`;
-    if (sweep.hover >= 0) s += `<line class="hx" x1="${X(xs[sweep.hover])}" x2="${X(xs[sweep.hover])}" y1="${T}" y2="${H - B}"/>`;
-    s += `<polyline class="ln" points="${pts.map((q) => `${X(q.x)},${Y(q.y)}`).join(" ")}"/>`;
+    if (nowPos >= x0) s += `<line class="cur" x1="${X(nowPos)}" x2="${X(nowPos)}" y1="${T}" y2="${H - B}"/>`;
+    if (sweep.hover >= 0) s += `<line class="hx" x1="${X(pos[sweep.hover])}" x2="${X(pos[sweep.hover])}" y1="${T}" y2="${H - B}"/>`;
+    if (!cat) s += `<polyline class="ln" points="${pts.map((q) => `${X(q.x)},${Y(q.y)}`).join(" ")}"/>`;
     for (const q of pts) {
       if (q.e > 0 && Y(q.y - q.e) - Y(q.y + q.e) > 3) s += `<line class="eb" x1="${X(q.x)}" x2="${X(q.x)}" y1="${Y(q.y - q.e)}" y2="${Y(q.y + q.e)}"/>`;
-      s += `<circle class="pt${q.x === now ? " on" : ""}${q.j === sweep.hover ? " hv" : ""}" cx="${X(q.x)}" cy="${Y(q.y)}" r="${q.j === sweep.hover ? 5 : 4}"/>`;
+      s += `<circle class="pt${xs[q.j] === now ? " on" : ""}${q.j === sweep.hover ? " hv" : ""}" cx="${X(q.x)}" cy="${Y(q.y)}" r="${q.j === sweep.hover ? 5 : 4}"/>`;
     }
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.setAttribute("width", W); svg.setAttribute("height", H);
     svg.innerHTML = s;
@@ -503,9 +507,9 @@ function drawSweep() {
 // hover: nearest swept value across every chart; click applies it
 const sweepIndexAt = (svg, clientX) => {
   const rect = svg.getBoundingClientRect(), L = Number(svg.dataset.l), Rr = Number(svg.dataset.r);
-  const t = (clientX - rect.left - L) / (Rr - L), x = sweep.xs[0] + t * (sweep.xs[sweep.xs.length - 1] - sweep.xs[0]);
+  const t = (clientX - rect.left - L) / (Rr - L), P = sweep.pos, a = sweep.cat ? -0.5 : P[0], b = sweep.cat ? P.length - 0.5 : P[P.length - 1], x = a + t * (b - a);
   let best = -1, bd = Infinity;
-  sweep.xs.forEach((v, j) => { if (sweep.ms[j] && Math.abs(v - x) < bd) { bd = Math.abs(v - x); best = j; } });
+  P.forEach((v, j) => { if (sweep.ms[j] && Math.abs(v - x) < bd) { bd = Math.abs(v - x); best = j; } });
   return best;
 };
 $("sw-charts").addEventListener("pointermove", (e) => {
