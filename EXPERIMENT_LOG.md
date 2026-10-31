@@ -2342,3 +2342,11 @@ Ours vs theirs differs by 1.3σ combined (most likely data-library version; not 
 - **Phone layout**: one column (view, metrics, parameters, designs); validation header wraps; no horizontal scroll at 390 px.
 - evaluate2D (blanket-thermal) is singular with a 0 cm layer ("No Be multiplier"). design.ts skips the 2-D solve below 1 mm and uses 1-D; sl8rv-41 is fixing it.
 - Not done: tank recirculation (RANS) for tritium; the potential-flow model is the stated gap (133 vs FESTIM 243 mg).
+
+### Blanket, 2026-10-31 night: deployed; QA sweep; parameter sweep, design links
+- **Deployed** to iph.so/blanket/ behind Cloudflare Access (site `production` at 7056db5). blanket ended up as its own Access application, so the middleware now takes `BLANKET_ACCESS_AUD` (falls back to newwater's `ACCESS_AUD`). pages.dev serves nothing under /blanket.
+- **QA fuzz** (`~/runs/blanket/fuzz.mjs`): every library design, every numeric input at min and max, every select option, every view. No NaN/undefined, no console errors, all settles < 0.8 s. Resolved 8.8 s; validation page and phone layout pass.
+- **Bug: 3-D view said "Live MC map from a different design"** for any non-baseline design. The bare view kept its own design store at the ARC defaults; `setLive` now syncs it (StoneLab-blanket-app 683a992). Also only "3D" shows pressed in 3-D mode.
+- **Parameter sweep (⇆ on each input)**: Fast tier at 9 points across the input's range plus the current value, common random numbers (seed 1), ~5 s for a full numeric sweep; wall material as a categorical sweep. Small multiples: TBR (±1σ bars, 1.1 target), inner-vessel 2-D peak (973 K guide), tank tritium, He limit; y-span floored at 5% of the value so Fast-tier noise isn't stretched. Hover is shared across charts; click applies. First-wall sweep reproduces the Fig. 30 shape (TBR peaks ~1.5 cm W) while VV temperature and He life rise monotonically. Tritium inventory carries ~±5 mg Fast-tier noise (no error bar on it).
+- **Design links**: `#d=<id>&<param>=<value>`, validated on read; Copy link button. The Access login redirect drops the fragment for a not-yet-signed-in visitor.
+- TF KPI offers one-click Resolved; build gzip deterministic (mtime=0).
