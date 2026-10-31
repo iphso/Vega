@@ -2335,3 +2335,10 @@ Ours vs theirs differs by 1.3σ combined (most likely data-library version; not 
   - Our dpa is 2-3x below Sorbom (44) and Kuang (27.7); He agrees within ~15%. Open.
 - **3-D cutaway** (sl8rv-41's apps/blanket-view, "bare" chrome) is the "3D" toggle in the simulator's view pane, lazily loaded, sharing engine.device, fed every result. Checked on the real GPU in the harness Chrome.
 - The harness Chrome was restarted (user OK) to recover WebGPU. Check scripts now close their tabs on failure.
+- **All 4 mixed-pack combinations vs CE**: Be + 30% −0.13%, Be + 7.5% −0.12%, CFC + 60% −0.19%, Inconel + 7.5% −0.37% (runs/combo_check.json; on the validation page).
+- **Deploy prep**: site worktree ~/Projects/site-blanket, branch `blanket` (local commits c702e07, 9a4a620; NOT pushed). public/blanket = blanket_web/dist (26 MB); functions/blanket/_middleware.js (newwater's Access check, fails closed); functions/blanket/api (KV store on BLANKET_KV). The page uses ./api/store when it answers, else localStorage.
+  - Needs the user: add iph.so/blanket* to the Access app, bind BLANKET_KV.
+  - The engine now accepts .gz served with or without Content-Encoding.
+- **Phone layout**: one column (view, metrics, parameters, designs); validation header wraps; no horizontal scroll at 390 px.
+- evaluate2D (blanket-thermal) is singular with a 0 cm layer ("No Be multiplier"). design.ts skips the 2-D solve below 1 mm and uses 1-D; sl8rv-41 is fixing it.
+- Not done: tank recirculation (RANS) for tritium; the potential-flow model is the stated gap (133 vs FESTIM 243 mg).
