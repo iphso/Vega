@@ -41,6 +41,9 @@ const fullDesign = (partial) => ({ ...structuredClone(ARC_DESIGN), ...structured
 // ---- state
 let engine = null, lib = [], saved = [], cur = null, field = "heat", raster = null, runToken = 0;
 const results = new Map(); // design json -> {fast, resolved}
+// the tank flow per tier: Fast uses potential flow (0.15 s), Resolved the k-epsilon RANS
+// (seconds per new tank shape); the results map stays keyed by the design itself
+const withTier = (d, tier) => ({ ...d, tankFlow: tier === "resolved" ? "rans" : "potential" });
 const keyOf = (d) => JSON.stringify(d, Object.keys(d).sort()) + JSON.stringify(d.geometry, Object.keys(d.geometry).sort());
 try { saved = JSON.parse(localStorage.getItem("blanket.designs") ?? "[]"); } catch { saved = []; }
 // Saved designs: the team store (./api, Cloudflare KV behind Access) when the server has one,
@@ -193,7 +196,7 @@ async function run(tier) {
   setRung(tier, 0, "running…");
   const t0 = performance.now();
   try {
-    const m = await engine.evaluate(d, N, (mm) => {
+    const m = await engine.evaluate(withTier(d, tier), N, (mm) => {
       if (token !== runToken) return false;
       setRung(tier, mm.histories / N, `${sig(mm.histories, 2)} histories`);
       if (tier === "resolved") { r.live = mm; results.set(k, r); show(mm); }
@@ -236,7 +239,7 @@ function show() {
         ? kpi("TF magnet life", `${f(m.tfLifetimeFpy, 1)} y`, cls(m.tfLifetimeFpy, 10, 3), `${Number.isFinite(m.tfRelErr) ? `± ${Math.round(m.tfRelErr * 100)}% · ` : ""}full-power years to 3×10¹⁸ n/cm² on the inboard face`)
         : kpi("TF magnet life", "—", "", `too few neutrons reach the coil face in ${sig(m.histories, 2)} histories · <button type="button" class="lnk" data-run="resolved">run Resolved</button>`),
       m.tritium
-        ? kpi("Tritium in the salt", `${f(m.tritium.inventoryMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · limits ${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg · wall loss ${permBand(m)}`)
+        ? kpi("Tritium in the salt", `${f(m.tritium.inventoryMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · ${m.tritium.flowModel === "rans" ? "recirculating tank flow" : "potential flow, no recirculation"} · wall loss ${permBand(m)}`)
         : kpi("Tritium in the salt", `${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · ${f(m.residenceS / 60, 1)} min turnover`),
       m.damage
         ? kpi("Vessel helium limit", `${f(500 / m.damage.vvInPeakHeAppmPerFpy, 1)} y`, cls(500 / m.damage.vvInPeakHeAppmPerFpy, 5, 1.5), `to 500 appm He at the inner vessel's peak (${f(m.damage.vvInPeakHeAppmPerFpy, 0)} appm/y) · ${f(m.damage.vvInPeakDpaPerFpy, 1)} dpa/y`)
@@ -291,7 +294,7 @@ function notes(m) {
   if (m?.damage) parts.push("Vessel damage: NRT dpa and He production from OpenMC group responses (ENDF/B-VIII MT444, MT207); the peak is the average times OpenMC's peak-sector ratio. He, not dpa, sets the limit here (Sorbom's 500 appm criterion). Our dpa is 2–3× below the ARC papers' (which do not state their dpa method); our He agrees with them within ~15%.");
   if (m?.thermal2d) parts.push(`Outer vessel peak ${f(m.thermal2d.peaks.inconelOuter.K, 0)} K: set by the assumed film coefficient to the bulk tank (500 W/m²K, an order-of-magnitude estimate), not a margin result. The inner-vessel peak barely depends on it.`);
   if (m?.thermal2d?.warnings?.length) parts.push(`<span style="color:var(--warn)">${m.thermal2d.warnings.join("<br>")}</span>`);
-  parts.push("Tritium in the salt: steady transport through the tank (potential flow, mixing-length turbulence) from the bred-tritium map, clean salt at the inlet, Sieverts permeation through the Inconel tank wall. The FLiBe solubility data disagree by ~3 decades, hence the band.");
+  parts.push(`Tritium in the salt: steady transport through the tank from the bred-tritium map, with the cooling channel's tritium exhausting into the tank, clean salt at the inlet, and Sieverts permeation through the Inconel tank wall. ${m?.tritium?.flowModel === "rans" ? "Resolved: k-epsilon RANS tank flow, the channel entering as a jet at the vessel's lower inboard corner (FESTIM's layout); about ±20% from the 4 cm grid." : "Fast: potential flow (no recirculation); Resolved runs the recirculating k-epsilon flow."} The FLiBe solubility data disagree by ~3 decades, hence the wall-loss band.${m?.tritium?.warnings?.length ? `<br><span style="color:var(--warn)">${m.tritium.warnings.join("<br>")}</span>` : ""}`);
   if (m) parts.push(`${sig(m.histories, 2)} histories · ${engine.device ? "WebGPU" : ""}`);
   return parts.join("<br>");
 }
@@ -475,7 +478,7 @@ async function startSweep(p) {
     const k = keyOf(d);
     let m = results.get(k)?.fast;
     if (!m) {
-      try { m = await engine.evaluate(d, FAST, undefined, 1); } catch (e) { console.warn("sweep", xs[i], e); }
+      try { m = await engine.evaluate(withTier(d, "fast"), FAST, undefined, 1); } catch (e) { console.warn("sweep", xs[i], e); }
       if (m) results.set(k, { ...(results.get(k) ?? {}), fast: m });
     }
     if (token !== sweepToken) return;
@@ -604,6 +607,6 @@ $("ddel").onclick = () => { const id = cur.id; saved = saved.filter((s) => s.id 
   for (const it of lib.slice(1)) {
     const d = fullDesign(it.design), k = keyOf(d);
     if (results.get(k)?.fast) continue;
-    try { const m = await engine.evaluate(d, FAST, undefined, 1); results.set(k, { ...(results.get(k) ?? {}), fast: m }); renderList(); } catch (e) { console.warn(it.name, e); }
+    try { const m = await engine.evaluate(withTier(d, "fast"), FAST, undefined, 1); results.set(k, { ...(results.get(k) ?? {}), fast: m }); renderList(); } catch (e) { console.warn(it.name, e); }
   }
 })();

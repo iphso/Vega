@@ -2350,3 +2350,96 @@ Ours vs theirs differs by 1.3σ combined (most likely data-library version; not 
 - **Parameter sweep (⇆ on each input)**: Fast tier at 9 points across the input's range plus the current value, common random numbers (seed 1), ~5 s for a full numeric sweep; wall material as a categorical sweep. Small multiples: TBR (±1σ bars, 1.1 target), inner-vessel 2-D peak (973 K guide), tank tritium, He limit; y-span floored at 5% of the value so Fast-tier noise isn't stretched. Hover is shared across charts; click applies. First-wall sweep reproduces the Fig. 30 shape (TBR peaks ~1.5 cm W) while VV temperature and He life rise monotonically. Tritium inventory carries ~±5 mg Fast-tier noise (no error bar on it).
 - **Design links**: `#d=<id>&<param>=<value>`, validated on read; Copy link button. The Access login redirect drops the fragment for a not-yet-signed-in visitor.
 - TF KPI offers one-click Resolved; build gzip deterministic (mtime=0).
+
+### Blanket, 2026-11-01: tank recirculation
+
+StoneLab worktree ~/Projects/StoneLab-blanket-tank, branch `blanket-tank` (from `blanket` 5cfd756): ee7e27a (flow core), 9f7b7cb (tritium on RANS), f665169 (engine wasm kernels), 9223779 (validation-collect OUT=). Not pushed.
+
+**Flow model.** New generic core `packages/physics/src/flow/rans.ts`: steady incompressible axisymmetric RANS on the transport's masked (R, Z) grid.
+- MAC velocities. Continuity holds exactly by construction: velocity = potential flow through the openings + the discrete curl of a corner stream function, with one free constant per hole (the VV), which sets the inboard/outboard split.
+  - Pressure drops out, so each Picard step is one sparse solve (C^T A C) on the EHD GridSolver.
+  - The coupled u-w-p saddle point failed: the frontal LU can't pivot a leaf box's pressure level, so it fell back to slow Gilbert-Peierls.
+- Full stress divergence with the hoop term. Hybrid momentum convection.
+- Standard k-epsilon with log-law wall functions, P_k ≤ 10 eps, upwind convection of k and eps.
+- Justification for k-epsilon over mixing length: FESTIM's flow is k-omega SST (same two-equation, transported-turbulence class), and the recirculation zones get their turbulence by transport from the jet. A mixing length gives nu_t → 0 at eddy centres and needs a length cap (a knob).
+- Fixes made on the way:
+  - Solution under-relaxation instead of diagonal relaxation. Diagonal relaxation stalls smooth modes under a direct solve: laminar pipe 0.96/step → 0.2/step.
+  - Exact LU for k/eps. A GMRES tolerance relative to the jet left the quiet cells' eps at noise level, sometimes negative, and that fed a period-2 cycle through the limiter.
+  - Upwind k/eps. The hybrid switch made two-cycles in the jet; be_cm=0 never converged with it.
+- Tests (test/flow, test/neutron/tritium.test.ts), all passing:
+  - Hagen-Poiseuille profile 0.49% → 0.12% (second order); wall shear 1.0% → 0.25%.
+  - Turbulent pipe, Re 1e5: f = 0.0170 vs Colebrook 0.0180 (−5%).
+  - Obstacle box: per-cell divergence < 1e-12, flow on both sides.
+  - 2x flow → 2x velocity (high-Re similarity).
+  - Tritium balance 1e-13.
+  - Well-mixed limit (Sc_t → 0): stay = (1 − permeated) V/Q to 2e-3.
+  - Full physics suite 198/198; GPU neutron tests pass.
+
+**Tank layout.** I first read FESTIM's Fig. 2b/4 off the PDF (refs/festim_arc_2608.05398.pdf). Their flow is in series: inlet → VV channel (12 m/s) → interconnect at the VV's lower inboard corner → jet (2 m/s) into the bulk → outlet at the top inboard. Sorbom 5.4.2 also has the channels "exhaust to the bulk blanket".
+- Our old model was not this. It spread the inflow over the whole floor and counted the channel's tritium (29% of production) straight into the outlet. The old comment "exhausts near the tank outlet" misread the figure.
+- New `layout: "series"` (default): Q = bulkFlow enters as a 4 cm downward slot jet on the VV underside at 235° (1.9 m/s at R ≈ 2.4 m), carrying the channel's tritium. It leaves through a 20 cm roof slot at the inboard wall. `"distributed"` is the old layout. `flowModel: "potential"` is the old path, bit for bit (132.9 mg on the same map).
+
+**ARC baseline, inventory in the salt (FESTIM 243 mg; outlet 0.979 mg/m³ in every case).**
+- The outlet concentration is production/Q at steady state, so matching it validates nothing about the transport.
+- 8M-history map; scratchpad validation_browser.json.
+
+| model, 4 cm grid (page) / 2 cm | inventory, mg | mean stay, s (V/Q = 274) |
+|---|---|---|
+| potential, distributed, channel T → outlet (the original) | 133 / 136 | 125 |
+| potential, distributed, channel T into the tank | 216 / 214 | 203 |
+| RANS, distributed, channel T → outlet | 187 / 196 | 176 |
+| RANS, distributed, channel T into the tank | 270 / 274 | 254 |
+| RANS, series, channel T → outlet | 180 / 137 | 170 |
+| **RANS, series (new default)** | **263 / 216** | 248 / 203 |
+
+- **Recirculation alone does not close the gap.** Same layout: 133 → 187 mg (+40%, 4 cm), 136 → 196 (2 cm).
+- **The bigger missing piece was where the channel's tritium goes:** +80 mg on either flow. Both FESTIM and Sorbom send it through the tank. The two together give 263 (4 cm) and 216 (2 cm) in the FESTIM-like layout, i.e. +8% and −11% of 243.
+- RANS fields resemble FESTIM's: D_eff 1e-3 to 1e-2 m²/s (their nu_t ~1e-3, 5e-3 in the jet zone). Peak c ~2.5 mg/m³ (theirs ~2.5) at the VV's upper inboard shoulder and in the slow inboard gap; the jet is low-concentration.
+
+**Convergence and sensitivity (series, 4 cm unless noted):**
+- **Grid:**
+  - upwind k-eps: 230 / 263 / 216 mg (8 / 4 / 2 cm)
+  - hybrid k-eps: 264 / 221 / 227
+  - Not monotone. At 2 cm the two schemes agree to 5%, at 4 cm they differ by 16%. **The page's 4 cm number carries ~±20% numerical uncertainty, reading +22% vs 2 cm.**
+  - At 8 cm the 2.5-cell inboard gap stagnates (hotspot 8 mg/m³): 8 cm is too coarse.
+  - An early version issued the jet normal to the staircase face. On the 4 cm grid that face points into the inboard wall, which short-circuits the flow up the inboard gap (489 mg). Hence the fixed downward jet.
+- **Closure:**
+  - Sc_t 0.3 / 0.5 / 1.3: 251 / 263 / 294 at 4 cm, 209 / 216 / 230 at 2 cm. FESTIM's Fig. 9 had −1.2% / +3%.
+  - C_mu 0.075 / 0.11: 270 / 253.
+  - Inlet intensity 0.05–0.2, inlet length ×0.5–2, P_k limiter off: < 0.5%.
+  - Tritium upwind vs hybrid: −1%.
+- **Layout (geometry we don't share with FESTIM: no divertor legs, box tank):**
+  - jet at 220 / 235 / 250 / 270°: 258 / 263 / 414 / 357 (2 cm: 231 / 216 / 335)
+  - outlet inboard / mid-roof / outboard: 263 / 272 / 313 (2 cm outboard 288)
+  - jet 8 cm wide: 262; outlet 40 cm: 263
+  - **Placement moves the inventory more than anything in the closure.** Every case keeps the same order of magnitude as FESTIM.
+- **Mass balance:**
+  - |div u| per cell ≤ 3e-12 of the inflow.
+  - Tritium balance ≤ 1e-12. At low flow it was 1e-6 until the Sieverts relinearisation was run to convergence.
+- **Similarity:** inventory × Q is constant to 0.1% from 0.5 to 3 m³/s.
+
+**Speed** (Node + Dawn, wasm-compute-kit kernels as the engine now installs them; the box was loaded with other jobs, load ~12):
+- First evaluation (cold RANS, 60 Picard steps): 3.6–7.7 s.
+- Same tank again (cache): tritium tier 0.06–0.08 s.
+- Power / temperature / enrichment change (warm start on the same tank): 0.5–0.9 s.
+- Tank-flow change: 0.7–1.0 s.
+- Tank geometry change (warm start resampled from the last tank): 1.3–6 s, ~2–2.5 s typical; it scales with tank size (outboard 250 cm, top 200 cm: ~6 s).
+- Potential path: 0.15 s.
+- The TS kernels (no wasm) are ~2x slower per step.
+
+**Edge cases** (fuzz over every page range, all converged):
+- blanket_in_cm 0–5 makes dead-end slots where k collapses; the inventory would sit on molecular diffusion (36 g at 5 cm).
+  - Gaps ≤ 2 cells are now peeled (their tritium goes to the nearest resolved salt).
+  - `stagnantFraction` and `warnings` flag what remains: 50–88% of 447 mg / 2.4 g at 0 / 5 cm. Buoyancy, not modelled here or by FESTIM, would stir a heated gap.
+- kappa = 1 and blanket_vert = 10 hold more than the "well-mixed" P·V/Q (303 vs 215, 209 vs 191). That bound is not an upper limit for a recirculating tank.
+
+**Open / for the page (Vega, not done):**
+- app.js text (l.294) and validation.js (l.252) still say potential flow / mixing length.
+- The KPI "limits plug–mixed" is no longer a bracket.
+- New result fields to show: warnings, flowModel/layout, meanStayS, ur/uz for streamlines.
+- Rebuild the engine bundle. It now imports wasm-compute-kit, +30 kB.
+- A geometry parameter sweep costs ~2 s per point.
+- validation_browser.json: run `validation-collect.ts` (no OUT) to refresh. Section 6 now has `grid`, `gridHybridKe`, `turbulence`, `layoutSensitivity`, `decomposition`, `potentialGrid`.
+- **Flow-rate inconsistency.** Series means the channel flow IS the tank flow (FESTIM: 1.1 m³/s through both). Our thermal tier runs the channel at 2·v·2πR0·gap = 1.67 m³/s beside a separate 1.08 m³/s bulk, and Sorbom's channels exhaust into the tank on top of the bulk inlets. By similarity, 2.75 m³/s through the tank would give ~100 mg. Which total flow the tank sees is a design question to settle on the page.
+- Mishap: two validation-collect runs overwrote Vega/blanket/runs/validation_browser.json (gitignored) before OUT= existed. I restored it from blanket_web/dist/validation.json's `browser` block. That is the content of the last page build, re-serialised by Python.
+- **Tank RANS integrated (StoneLab blanket 2a23437, merge of blanket-tank)**: Fast tier = potential flow with the channel's tritium into the tank (216 mg, page stays ~0.8 s); Resolved = k-epsilon RANS, series layout (263 mg at 4 cm; 216 at 2 cm; FESTIM 243), Resolved now 12.5 s (was 8.8). `design.tankChannelTritium` default "inflow". validation-collect rerun: neutronics/LIBRA/TF/damage bit-identical to the previous run; validation page shows the one-change-at-a-time decomposition. Wall-loss band now 0.19-8% (Fast) / 0.25-11% (Resolved). Open: which flow the tank sees (channel 1.67 + bulk 1.08 m3/s in the thermal tier vs FESTIM's 1.1 through both in series).
