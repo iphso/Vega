@@ -1,7 +1,7 @@
 // Blanket Simulator page. Engine: StoneLab apps/blanket (bundled as blanket-engine.js);
 // data: packs/ (OpenMC-derived cross sections) and designs.json (library + OpenMC
 // references), both staged by build.py.
-import { BlanketEngine, ARC_DESIGN, ARC_DEFAULTS, REGIONS, regionRaster } from "./blanket-engine.js";
+import { BlanketEngine, ARC_DESIGN, ARC_DEFAULTS, REGIONS, regionRaster, FLIBE_SOLUBILITY } from "./blanket-engine.js";
 
 const $ = (id) => document.getElementById(id);
 const FAST = 100_000, RESOLVED = 8_000_000;
@@ -20,6 +20,7 @@ const PARAMS = [
   P("Vessel", "g.be_cm", "Be multiplier", "cm", 0.5, 0, 6),
   P("Vessel", "g.vv_out_cm", "Outer vessel", "cm", 0.5, 0.5, 8),
   P("Breeder", "li6Pct", "Li-6 enrichment", "%", null),
+  P("Breeder", "solubility", "H solubility data", "", null),
   P("Breeder", "g.blanket_in_cm", "Tank, inboard", "cm", 5, 0, 60),
   P("Breeder", "g.blanket_out_cm", "Tank, outboard", "cm", 5, 10, 250),
   P("Breeder", "g.blanket_vert_cm", "Tank, top/bottom", "cm", 5, 10, 200),
@@ -98,6 +99,10 @@ function renderParams() {
         input = document.createElement("select");
         for (const m of engine.fwMaterials()) input.add(new Option(FW_NAME[m] ?? m, m, false, m === v));
         input.onchange = () => update(p.key, input.value);
+      } else if (p.key === "solubility") {
+        input = document.createElement("select");
+        for (const [k, a] of Object.entries(FLIBE_SOLUBILITY)) input.add(new Option(a.source.split(",")[0], k, false, k === v));
+        input.onchange = () => update(p.key, input.value);
       } else if (p.key === "li6Pct") {
         input = document.createElement("select");
         for (const e of engine.enrichments()) input.add(new Option(`${e}%`, String(e), false, e === v));
@@ -167,11 +172,15 @@ function show() {
     const kpi = (k, v, c, s) => `<div class="kpi"><span class="k">${k}</span><span class="v ${c}">${v}</span><span class="s">${s}</span></div>`;
     K.innerHTML = [
       kpi("Tritium breeding ratio", f(m.tbr, m.tbrErr < 0.001 ? 4 : 3), cls(m.tbr, 1.1, 1.0), `± ${f(m.tbrErr, m.tbrErr < 0.001 ? 4 : 3)} · target ≥ 1.1`),
-      kpi("Peak inner vessel", `${f(m.thermal.vvMax, 0)} K`, cls(m.thermal.vvMax, 973, 1073, false), `Inconel 718 · channel out ${f(m.thermal.channelOutlet, 0)} K`),
+      m.thermal2d
+        ? kpi("Peak inner vessel", `${f(m.thermal2d.peaks.inconelInner.K, 0)} K`, cls(m.thermal2d.peaks.inconelInner.K, 973, 1073, false), `Inconel 718, 2-D field · at R ${f(m.thermal2d.peaks.inconelInner.R, 2)} m, Z ${f(m.thermal2d.peaks.inconelInner.Z, 2)} m · tungsten face ${f(m.thermal2d.peaks.w.K, 0)} K · 1-D ${f(m.thermal.vvMax, 0)} K`)
+        : kpi("Peak inner vessel", `${f(m.thermal.vvMax, 0)} K`, cls(m.thermal.vvMax, 973, 1073, false), `Inconel 718, 1-D estimate · channel out ${f(m.thermal.channelOutlet, 0)} K`),
       tfOk(m)
         ? kpi("TF magnet life", `${f(m.tfLifetimeFpy, 1)} y`, cls(m.tfLifetimeFpy, 10, 3), `${Number.isFinite(m.tfRelErr) ? `± ${Math.round(m.tfRelErr * 100)}% · ` : ""}full-power years to 3×10¹⁸ n/cm² on the inboard face`)
         : kpi("TF magnet life", "—", "", `too few neutrons reach the coil face in ${sig(m.histories, 2)} histories: run Resolved`),
-      kpi("Tritium in the salt", `${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · ${f(m.residenceS / 60, 1)} min turnover`),
+      m.tritium
+        ? kpi("Tritium in the salt", `${f(m.tritium.inventoryMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · limits ${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg · wall loss ${permBand(m)}`)
+        : kpi("Tritium in the salt", `${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · ${f(m.residenceS / 60, 1)} min turnover`),
       kpi("Energy multiplication", f(m.energyMultiplication, 3), "", `${f(m.nuclearMW, 0)} MW nuclear heat`),
       kpi("Tank outlet", `${f(m.thermal.bulkOutlet, 0)} K`, cls(m.thermal.bulkOutlet, 1000, 1100, false), `inlet ${f(cur.design.inletK, 0)} K · FLiBe freezes at 732 K`),
     ].join("");
@@ -182,7 +191,7 @@ function show() {
   const rung = (t, name, desc, res, extra) => `<button type="button" class="rung ${extra ?? ""}" data-t="${t}" aria-current="${tier === t}"><span class="tn">${name}</span><span class="ts">${res ?? desc}</span><span class="tr">${t === "reference" ? "OpenMC" : "browser"}</span><span class="bar"><span style="width:${res ? 100 : 0}%"></span></span></button>`;
   L.innerHTML = [
     rung("fast", "Fast", `${sig(FAST, 2)} histories`, r?.fast ? `TBR ${f(r.fast.tbr, 3)} ± ${f(r.fast.tbrErr, 3)} · ${f(r.fast.seconds, 2)} s` : null),
-    rung("resolved", "Resolved", `${sig(RESOLVED, 2)} histories · click to run`, r?.resolved ? `TBR ${f(r.resolved.tbr, 4)} ± ${f(r.resolved.tbrErr, 4)} · ${f(r.resolved.seconds, 1)} s` : null),
+    rung("resolved", "Resolved", `${RESOLVED / 1e6}M histories · click to run`, r?.resolved ? `TBR ${f(r.resolved.tbr, 4)} ± ${f(r.resolved.tbrErr, 4)} · ${f(r.resolved.seconds, 1)} s` : null),
     rung("reference", "Reference", "continuous-energy OpenMC: library designs only", ref ? `TBR ${f(ref.TBR, 4)} ± ${f(ref.TBR_sd, 4)}` : null, ref ? "" : "na"),
   ].join("");
   L.querySelector('[data-t="resolved"]').onclick = () => run("resolved");
@@ -201,6 +210,13 @@ function show() {
   drawMap(m);
 }
 
+/** Tank-wall permeation across the four FLiBe solubility sources, % of bred tritium. */
+function permBand(m) {
+  const v = Object.values(m.permeationBySolubility ?? {});
+  if (!v.length) return "—";
+  return `${(Math.min(...v) * 100).toPrecision(2)}–${(Math.max(...v) * 100).toPrecision(2)}%`;
+}
+
 function refFor() {
   if (!cur?.reference) return null;
   return keyOf(cur.design) === keyOf(fullDesign(cur.base)) ? cur.reference : null;
@@ -209,8 +225,9 @@ function refFor() {
 function notes(m) {
   const fw = cur.design.fwMaterial;
   const parts = [`Cross sections: OpenMC ENDF/B-VIII.0, 175 groups, weighted on a ${FW_NAME[fw] ?? fw}-wall design at ${engine.enrichments().reduce((a, b) => Math.abs(b - cur.design.li6Pct) < Math.abs(a - cur.design.li6Pct) ? b : a)}% Li-6.`];
-  parts.push("Peak vessel temperature: 1-D slab estimate (Sorbom et al. 2015, eqs. 30–33) that also carries the first-wall tile's own nuclear heat through the inner vessel.");
-  parts.push("Tritium in the salt: plug flow to well-mixed limits of a residence-time balance; perfect extraction at the inlet.");
+  parts.push("Vessel temperature: 2-D (R, Z) conduction through the tile, vessel walls and multiplier with the cooling channel's film coefficient, driven by this run's heating map (the 1-D Sorbom eqs. 30–33 estimate is shown beside it).");
+  if (m?.thermal2d?.warnings?.length) parts.push(`<span style="color:var(--warn)">${m.thermal2d.warnings.join("<br>")}</span>`);
+  parts.push("Tritium in the salt: steady transport through the tank (potential flow, mixing-length turbulence) from the bred-tritium map, clean salt at the inlet, Sieverts permeation through the Inconel tank wall. The FLiBe solubility data disagree by ~3 decades, hence the band.");
   if (m) parts.push(`${sig(m.histories, 2)} histories · ${engine.device ? "WebGPU" : ""}`);
   return parts.join("<br>");
 }
@@ -245,7 +262,22 @@ function drawMap(m) {
   const img = new ImageData(w, nz);
   // density map in W/cm3 (heat) or atoms/s/cm3 (tritium)
   let dens = null, lo = 0, hi = 1;
-  if (m?.map && m.mapGrid && field !== "none") {
+  if (field === "temp" && m?.thermal2d?.field) {
+    const F = m.thermal2d.field, G = F.grid;
+    dens = new Float32Array(F.T.length);
+    let mn = Infinity, mx = -Infinity;
+    for (let k = 0; k < dens.length; k++) { const v = F.T[k]; dens[k] = Number.isFinite(v) ? v : 0; if (Number.isFinite(v)) { mn = Math.min(mn, v); mx = Math.max(mx, v); } }
+    lo = mn; hi = mx; view.dens = dens; view.G = G; view.linear = true; view.offset = mn;
+  } else if (field === "conc" && m?.tritium) {
+    view.offset = 0;
+    const T = m.tritium, G = T.grid;
+    dens = new Float32Array(G.nr * G.nz);
+    let mx = 0;
+    const toMg = 3.01605e3 / 6.02214076e23;
+    for (let k = 0; k < dens.length; k++) { const v = Number.isFinite(T.c[k]) ? T.c[k] * toMg : 0; dens[k] = v; if (v > mx) mx = v; }
+    lo = 0; hi = mx; view.dens = dens; view.G = G; view.linear = true;
+  } else if (m?.map && m.mapGrid && field !== "none" && field !== "conc") {
+    view.linear = false;
     const G = m.mapGrid, off = field === "heat" ? 0 : 1, conv = field === "heat" ? m.sourceRate * 1.602176634e-19 : m.sourceRate;
     dens = new Float32Array(G.nr * G.nz);
     let mx = 0;
@@ -265,13 +297,14 @@ function drawMap(m) {
       const G = view.G, R = i * h + h / 2, Z = z0 + j * h + h / 2;
       const gi = Math.floor((R - G.r0) / G.h), gj = Math.floor((Z - G.z0) / G.h);
       const v = gi >= 0 && gj >= 0 && gi < G.nr && gj < G.nz ? dens[gj * G.nr + gi] : 0;
-      c = v > 0 ? cmap((Math.log10(v) - lo) / (hi - lo)) : [12, 12, 14];
+      c = view.linear ? (v > 0 ? cmap((v - (view.offset ?? 0)) / (hi - (view.offset ?? 0))) : (id === 6 && field === "conc" ? cmap(0) : COLORS[REGIONS[id]].map((x) => x * 0.45))) : v > 0 ? cmap((Math.log10(v) - lo) / (hi - lo)) : [12, 12, 14];
     } else if (dens && id >= 0) c = c.map((x) => x * 0.45);
     img.data[o] = c[0]; img.data[o + 1] = c[1]; img.data[o + 2] = c[2]; img.data[o + 3] = 255;
   }
   const tmp = new OffscreenCanvas(w, nz); tmp.getContext("2d").putImageData(img, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(tmp, ox, oy, w * s, nz * s);
+  if (field === "temp" && m?.thermal2d) drawStations(ctx, m.thermal2d, 16 * dpr, 70 * dpr, Math.max(120 * dpr, ox - 40 * dpr), Math.min(260 * dpr, cv.height * 0.45), dpr);
   // axis tick: major radius
   ctx.fillStyle = "#55555e"; ctx.font = `${11 * dpr}px ui-monospace, monospace`;
   ctx.fillText(`R = ${(g.p.R0 / 100).toFixed(2)} m`, ox + ((g.p.R0 / h) - rLo) * s - 30 * dpr, oy + nz * s + 18 * dpr);
@@ -279,8 +312,35 @@ function drawMap(m) {
   if (dens) {
     L.hidden = false;
     const grad = `linear-gradient(90deg, ${INFERNO.map((c) => `rgb(${c})`).join(",")})`;
-    L.innerHTML = `<span>${field === "heat" ? "Nuclear heating, W/cm³" : "Tritium production, atoms/s/cm³"}</span><span><i style="background:${grad}"></i></span><span style="display:flex;justify-content:space-between"><span>${sig(10 ** lo, 2)}</span><span>${sig(10 ** hi, 2)}</span></span>`;
+    const ttl = { heat: "Nuclear heating, W/cm³", trit: "Tritium production, atoms/s/cm³", conc: "Tritium in the salt, mg/m³ (steady state)", temp: "Vessel temperature, K (2-D field)" }[field];
+    const [a, b] = view.linear ? [lo, hi] : [10 ** lo, 10 ** hi];
+    L.innerHTML = `<span>${ttl}</span><span><i style="background:${grad}"></i></span><span style="display:flex;justify-content:space-between"><span>${sig(a, 2)}</span><span>${sig(b, 2)}</span></span>`;
   } else L.hidden = true;
+}
+
+/** Inset: temperatures along the first wall from the channel inlet (blanket-thermal stations). */
+function drawStations(ctx, t, x0, y0, w, h, dpr) {
+  const S = t.stations, n = S.t.length;
+  if (!n || w < 100 * dpr) return;
+  const series = [["W face", S.wFaceK, "rgb(250,193,39)"], ["inner Inconel", S.inconelPeakK, "rgb(212,72,66)"], ["coolant", S.bulkK, "rgb(79,179,217)"]];
+  let lo = Infinity, hi = -Infinity;
+  for (const [, a] of series) for (const v of a) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+  lo = Math.floor(lo / 50) * 50; hi = Math.ceil(hi / 50) * 50;
+  const X = (k) => x0 + 34 * dpr + (k / (n - 1)) * (w - 40 * dpr), Y = (v) => y0 + 14 * dpr + (1 - (v - lo) / (hi - lo)) * (h - 34 * dpr);
+  ctx.save();
+  ctx.fillStyle = "rgba(22,22,26,0.85)"; ctx.strokeStyle = "#2a2a30"; ctx.lineWidth = dpr;
+  ctx.beginPath(); ctx.roundRect(x0, y0 - 6 * dpr, w, h + 18 * dpr, 8 * dpr); ctx.fill(); ctx.stroke();
+  ctx.font = `${10.5 * dpr}px ui-monospace, monospace`; ctx.fillStyle = "#8a8a94";
+  ctx.fillText("along the first wall, from the channel inlet", x0 + 8 * dpr, y0 + 6 * dpr);
+  for (const v of [lo, (lo + hi) / 2, hi]) { ctx.fillText(`${v}`, x0 + 4 * dpr, Y(v) + 3 * dpr); ctx.strokeStyle = "#24242a"; ctx.beginPath(); ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(n - 1), Y(v)); ctx.stroke(); }
+  series.forEach(([lbl, a, c], si) => {
+    ctx.strokeStyle = c; ctx.lineWidth = 2 * dpr; ctx.beginPath();
+    for (let k = 0; k < n; k++) (k ? ctx.lineTo : ctx.moveTo).call(ctx, X(k), Y(a[k]));
+    ctx.stroke();
+    ctx.fillStyle = c; ctx.fillRect(x0 + 34 * dpr + si * 92 * dpr, y0 + h + 2 * dpr, 8 * dpr, 8 * dpr);
+    ctx.fillStyle = "#a3a3ad"; ctx.fillText(lbl, x0 + 46 * dpr + si * 92 * dpr, y0 + h + 10 * dpr);
+  });
+  ctx.restore();
 }
 
 $("cv").addEventListener("mousemove", (e) => {
@@ -297,7 +357,7 @@ $("cv").addEventListener("mousemove", (e) => {
   if (view.dens && id >= 1 && id <= 6) {
     const G = view.G, gi = Math.floor((R - G.r0) / G.h), gj = Math.floor((Z - G.z0) / G.h);
     const v = view.dens[gj * G.nr + gi];
-    if (v > 0) val = ` · <b>${sig(v, 3)}</b> ${field === "heat" ? "W/cm³" : "T/s/cm³"}`;
+    if (v > 0) val = ` · <b>${field === "temp" ? f(v, 0) : sig(v, 3)}</b> ${{ heat: "W/cm³", trit: "T/s/cm³", conc: "mg/m³", temp: "K" }[field]}`;
   }
   const mat = r === "fw" ? FW_NAME[cur.design.fwMaterial] : MATERIAL[r];
   tip.innerHTML = `<b>${LABEL[r]}</b>${mat ? ` (${mat})` : ""} · R ${(R / 100).toFixed(2)} m, Z ${(Z / 100).toFixed(2)} m${val}`;

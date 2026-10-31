@@ -88,7 +88,27 @@ val = {
         "FLiBe-1L": json.load(open(R / "flibe1l/tbr.json")),
     },
     "baby_no_vault": json.load(open(R / "baby1l_novault/tbr.json")),
+    "libra_release": {},
 }
+# LIBRA's counted tritium (IV + OV bubblers, cumulative Bq) per run, with the run's own
+# neutron rate, irradiation schedule and fitted transfer coefficients
+for rd in sorted((V / "blanket/ext").glob("*-1L-run-*")):
+    pd = json.load(open(rd / "data/processed_data.json"))
+    c = pd["cumulative_tritium_release"]
+    # IV and OV bubblers are sampled on their own schedules: put both cumulative series
+    # on the union of sampling times (linear between samples, 0 before the first)
+    import numpy as np
+    ser = {k: (np.array(c[k]["sampling_times"]["value"]), np.array(c[k]["total"]["value"])) for k in ("IV", "OV")}
+    days = sorted(set(np.concatenate([t for t, _ in ser.values()]).tolist()))
+    tot = [float(sum(np.interp(d, t, v, left=0.0) for t, v in ser.values())) for d in days]
+    val["libra_release"][rd.name] = {
+        "days": days, "measured_Bq": tot,
+        "neutron_rate": pd["neutron_rate_used_in_model"]["value"],
+        "irradiations_s": [[i["start_time"]["value"], i["stop_time"]["value"]] for i in pd["irradiations"]],
+        "k_top": pd["k_top"]["value"], "k_wall": pd["k_wall"]["value"],
+        "radius_m": pd["modelled_baby_radius"]["value"] / 100, "height_m": pd["modelled_baby_height"]["value"] * 1e3 / 1e2,
+        "measured_TBR": pd["measured_TBR"]["value"],
+    }
 json.dump(val, open(out / "validation.json", "w"), indent=1)
 
 shutil.copy(ENGINE, out / "blanket-engine.js")

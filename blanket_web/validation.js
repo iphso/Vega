@@ -232,19 +232,23 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
 
 // ---------- temperatures and tritium
 {
-  const S = BM.arc_sorbom2015.thermal, P = B.thermal_on_paper_inputs, O = B.arc.thermal;
-  $("thermal-table").innerHTML = `<tr><th></th><th class="n">Published</th><th class="n">Our model, paper's heating</th><th class="n">Our model, our heating</th></tr>`
-    + `<tr><td>Channel outlet</td><td class="n">${S.channel_outlet_K} K</td><td class="n">${f(P.channelOutlet, 0)} K</td><td class="n">${f(O.channelOutlet, 0)} K</td></tr>`
-    + `<tr><td>Peak inner vessel (Inconel)</td><td class="n">${S.vv_max_inconel_K} K</td><td class="n">${f(P.vvMax, 0)} K</td><td class="n">${f(O.vvMax, 0)} K</td></tr>`
-    + `<tr><td>Tank outlet</td><td class="n">${S.bulk_outlet_K} K</td><td class="n">${f(P.bulkOutlet, 0)} K</td><td class="n">${f(O.bulkOutlet, 0)} K</td></tr>`
-    + `<tr class="sub"><td colspan="4">Our heating sends the 1 cm tungsten tile's own ${f(B.arc.heating_MW.fw, 0)} MW through the inner vessel (heat flux ${f(O.wallHeatFlux / 1e6, 2)} vs ${f(P.wallHeatFlux / 1e6, 2)} MW/m²). The paper's heating table appears to leave the tile out: its inner-vessel 26 MW matches our ${f(B.arc.heating_MW.vv_in, 0)} MW without it.</td></tr>`;
-  const F = BM.arc_festim_dark2026, A = B.arc;
+  const S = BM.arc_sorbom2015.thermal, P = B.thermal_on_paper_inputs, O = B.arc.thermal, T2 = B.arc.thermal2d;
+  $("thermal-table").innerHTML = `<tr><th></th><th class="n">Published</th><th class="n">1-D, paper's heating</th><th class="n">1-D, our heating</th><th class="n">2-D field, our heating</th></tr>`
+    + `<tr><td>Channel outlet</td><td class="n">${S.channel_outlet_K} K</td><td class="n">${f(P.channelOutlet, 0)} K</td><td class="n">${f(O.channelOutlet, 0)} K</td><td class="n">${f(T2.coolant.outletK, 0)} K</td></tr>`
+    + `<tr><td>Peak inner vessel (Inconel)</td><td class="n">${S.vv_max_inconel_K} K</td><td class="n">${f(P.vvMax, 0)} K</td><td class="n">${f(O.vvMax, 0)} K</td><td class="n">${f(T2.peaks.inconelInner.K, 0)} K</td></tr>`
+    + `<tr><td>Tungsten face</td><td class="n">—</td><td class="n">—</td><td class="n">${f(O.fwSurface, 0)} K</td><td class="n">${f(T2.peaks.w.K, 0)} K</td></tr>`
+    + `<tr><td>Tank outlet</td><td class="n">${S.bulk_outlet_K} K</td><td class="n">${f(P.bulkOutlet, 0)} K</td><td class="n">${f(O.bulkOutlet, 0)} K</td><td class="n">—</td></tr>`
+    + `<tr class="sub"><td colspan="5">The 1-D model is Sorbom's eqs. 30–33 and reproduces his numbers on his inputs. Our heating sends the 1 cm tungsten tile's own ${f(B.arc.heating_MW.fw, 0)} MW through the inner vessel (heat flux ${f(O.wallHeatFlux / 1e6, 2)} vs ${f(P.wallHeatFlux / 1e6, 2)} MW/m²). The paper's heating table appears to leave the tile out: its inner-vessel 26 MW matches our ${f(B.arc.heating_MW.vv_in, 0)} MW without it. The 2-D field conducts through tile, walls and multiplier with the channel's film coefficient around the full poloidal loop, driven by the heating map's shape. Its peak sits at the outboard just below the midplane (R ${f(T2.peaks.inconelInner.R, 2)} m, Z ${f(T2.peaks.inconelInner.Z, 2)} m), where the map's heating is ${f(T2.mapPeaking?.smoothed ?? NaN, 2)}× the wall average. Energy closes to ${T2.energy.relResidual.toExponential(0)}; ${f(T2.ms, 0)} ms.${T2.warnings.length ? ` Flag: ${T2.warnings.join("; ")}.` : ""}</td></tr>`;
+  const F = BM.arc_festim_dark2026, A = B.arc, TR = B.tritium;
+  const pb = Object.values(TR.permeationBySolubility);
   $("trit-table").innerHTML = `<tr><th></th><th class="n">FESTIM ARC (OpenMC → OpenFOAM → FESTIM)</th><th class="n">This simulator</th></tr>`
     + `<tr><td>Tritium bred (= outlet flux at steady state)</td><td class="n">1.0 mg/s</td><td class="n">${f(A.tritiumMgPerS, 2)} mg/s</td></tr>`
     + `<tr><td>Salt flow through the tank</td><td class="n">≈ 1.1 m³/s <span class="d">(1.0 mg/s at 0.90 mg/m³)</span></td><td class="n">1.08 m³/s <span class="d">(Sorbom: 18 × 0.3 m² × 0.2 m/s)</span></td></tr>`
-    + `<tr><td>Tritium inventory in the salt</td><td class="n">${F.tritium_inventory_mg} mg</td><td class="n">${f(A.inventory[0], 0)}–${f(A.inventory[1], 0)} mg <span class="d">(plug flow to well mixed)</span></td></tr>`
-    + `<tr><td>Time scale</td><td class="n">≈ ${F.time_to_steady_min} min to steady state</td><td class="n">${f(A.residenceS / 60, 1)} min turnover <span class="d">(${f(A.flibeM3, 0)} m³ of salt)</span></td></tr>`
-    + `<tr class="sub"><td colspan="3">Both assume perfect extraction at the inlet. FESTIM resolves turbulent mixing in a 5° sector; ours is a residence-time balance, so it brackets the inventory rather than predicting it.</td></tr>`;
+    + `<tr><td>Outlet-averaged concentration</td><td class="n">0.90 mg/m³</td><td class="n">${f(TR.outletMgPerM3, 2)} mg/m³</td></tr>`
+    + `<tr><td>Tritium inventory in the salt</td><td class="n">${F.tritium_inventory_mg} mg</td><td class="n">${f(TR.inventoryMg, 0)} mg <span class="d">(limits ${f(A.inventory[0], 0)}–${f(A.inventory[1], 0)})</span></td></tr>`
+    + `<tr><td>Permeation through the tank wall</td><td class="n">not modelled</td><td class="n">${(Math.min(...pb) * 100).toPrecision(2)}–${(Math.max(...pb) * 100).toPrecision(2)}% of bred</td></tr>`
+    + `<tr><td>Solve</td><td class="n">HPC, 5° sector, k-ω SST</td><td class="n">${Object.keys(TR.grid)[1]} grid, ~0.25 s in the browser</td></tr>`
+    + `<tr class="sub"><td colspan="3">Both put clean salt at the inlet (perfect extraction). Ours carries the bred-tritium map through a potential flow (inlets across the bottom, outlets across the top) with mixing-length turbulence. It has no recirculation, and FESTIM finds its extra inventory in stagnation and recirculation zones, so ours sits near the plug-flow limit. Grid: ${Object.entries(TR.grid).map(([k, v]) => `${k} ${f(v, 0)} mg`).join(", ")}. Turbulence assumptions move it by under 2% (${Object.entries(TR.turbulence).map(([k, v]) => `${k}: ${f(v, 0)}`).join(", ")}). Permeation spans the FLiBe hydrogen-solubility data: ${Object.entries(TR.permeationBySolubility).map(([k, v]) => `${k.replace(/(\d{4})/, " $1")} ${(v * 100).toPrecision(2)}%`).join(", ")} (Inconel: Kishimoto 1985).</td></tr>`;
 }
 
 // ---------- open items
@@ -254,6 +258,8 @@ $("gaplist").innerHTML = [
   "<b>BABY run 3 and FLiBe-1L run 2</b> differ from the other runs well beyond their errors. That is LIBRA's open question, not ours; every run is shown.",
   "<b>FLiBe-1L is repository data</b> without a paper yet.",
   "<b>Design combinations</b> that mix a non-tungsten wall with a non-90% enrichment use two cross-section sets that have not been checked against OpenMC together. Variants reuse the baseline's photon-heating factors.",
-  "<b>Tritium transport</b> is a residence-time balance: no spatial transport and no permeation through the vessel yet.",
-  "<b>Temperatures</b> come from a 1-D slab model of the vessel channel, not a field.",
+  "<b>Tritium flow field</b> is potential flow: no recirculation, so the tank inventory sits ~30% under FESTIM's RANS result. Permeation covers the tank wall only (not the inner vessel into the plasma chamber), and assumes the Inconel controls it, not the salt film.",
+  "<b>FLiBe hydrogen solubility</b> varies by ~3 decades between published measurements. The simulator lets you pick the source and shows the band.",
+  "<b>Vessel temperatures</b> are a 2-D conduction field with a 1-D channel; the bulk tank's temperature field is not solved (its outlet is an energy balance). The heating map's poloidal smoothing (0–40 cm) moves the peak by about ±6 K.",
+  "<b>Tritium release dynamics are not validated.</b> LIBRA's counted release over time follows from its fitted surface-transfer coefficients, and the FLiBe runs release in two stages that one coefficient cannot describe, so we compare totals (TBR) only.",
 ].map((s) => `<li>${s}</li>`).join("");

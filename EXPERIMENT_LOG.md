@@ -2252,3 +2252,27 @@ Ours vs theirs differs by 1.3σ combined (most likely data-library version; not 
   | measured | 2.53 / 2.15 / 4.03 / 2.58 e-3 | 3.33 ± 0.25 / 2.48 ± 0.21 e-3 |
 
   The browser times the full/simplified factor gives 2.168e-3 (BABY) and 3.279e-3 (FLiBe).
+
+### Blanket, 2026-10-31: 2-D (R, Z) vessel temperature field (StoneLab `blanket-thermal` fe68674)
+
+- New core solver `packages/physics/src/thermal/axisym.ts`: steady axisymmetric finite-volume conduction on a curved periodic band, T-dependent k by Picard iteration, mixed boundary conditions. The linear solve reuses StoneLab's `GridSolver` (multifrontal LU, wasm `Multifrontal` when installed). HeatSolver (explicit, uniform grid) and the FFT Poisson kit don't fit 1 cm curved layers with k(T). Blanket wiring: `src/blanket-thermal/field2d.ts` `evaluate2D(design, {map})`. The map is a plain array plus grid (GpuTallies.map layout); gpu.ts is not imported.
+- Verification: manufactured solution converges at second order (0.063 to 0.0011 K); matches the 1-D model to 0.05 K in the flat limit; energy balance closes to ≤ 1e-14. Mesh-converged to ≤ 0.7 K. 170/170 physics tests pass.
+- **Result, on a 64M-history heating map: peak inner Inconel 1236.9 K, peak W 1269.5 K, both at the outboard just below the midplane (R 4.46 m, Z −0.31 m).** The page's uniform 1-D gives 1207 K at the bottom of the inboard outlet. Breakdown: +37 K from the map's poloidal shape (outboard-midplane heating 1.23× the mean; 1-D with the same shape gives 1241 K), −4 K from genuine 2-D effects (wall curvature, poloidal conduction). With uniform heating, 2-D is 9 K below 1-D: the 1-D peak sits on a flow-junction step that 2-D conduction smooths out.
+- Main uncertainty: poloidal smoothing width of the heating map, 0 to 40 cm, gives 1244 to 1232 K. Depth-profile assumption ≤ 3 K.
+- 30-68 ms per evaluation (Node, warm). Field export follows the MapGrid convention (`T` in K, region codes).
+
+### Blanket, 2026-10-31 night: validation page, tank tritium, 2-D vessel temperatures
+
+- **Validation page** (blanket_web/validation.html + validation.js; data assembled by build.py from benchmarks.json, OpenMC runs and runs/validation_browser.json, which StoneLab scripts/validation-collect.ts writes in ~90 s).
+  - Sections: LIBRA chain to measurement (live "run in this browser": FLiBe-1L 0.55 s, BABY 0.64 s for 20M histories incl. pack load); browser vs OpenMC on all 7 ARC sets; Fig. 30 small multiples; magnet life; temperatures; tritium vs FESTIM; open items.
+  - Palette validated for dark mode (OpenMC #3987e5, measured #d95926, browser #199e70, published #c98500), plus marker shapes.
+- **LIBRA release curves tried and dropped.** In 5 of 6 runs our port of LIBRA's 0-D release model reproduces the counted total exactly with their own TBR (measured TBR is counted tritium over fluence, so this is circular). BABY run 4 fails (31.8 vs 54.9 Bq): two generator configurations, one published neutron rate. The curve shapes come from LIBRA's fitted k_top, and the FLiBe runs release in two stages one k cannot describe. Totals only; release dynamics listed as unvalidated.
+- **Tank tritium transport** (StoneLab src/neutron/tritium.ts, on the EHD tier's sparse solver):
+  - Model: potential flow through the tank (inlet bottom, outlet top, VV an obstacle), mixing-length nu_t (I 0.1, l_max 0.07 m, Sc_t 0.5), upwind FV steady transport of the bred-tritium map, clean inlet, Sieverts permeation through the 3 cm Inconel tank wall (HTM data).
+  - ARC baseline: **133 mg** in the salt (FESTIM 243), outlet **0.98 mg/m3** (FESTIM 0.90), mass balance 1e-9, 4 cm grid converged (2 cm 166 / 4 cm 165 / 8 cm 150 mg before the channel change), turbulence knobs < 2%, 0.25 s.
+  - The cooling channel's tritium (~25% of production) goes straight to the outlet: seconds of residence; FESTIM finds the channel exhaust is a low-concentration jet. Seeding it into a few top cells made a hotspot artifact. With it in the tank the inventory was 165 mg.
+  - **Permeation 0.073-3.5% of bred**, spanning the FLiBe solubility sources (Calderoni 2008, Nakamura 2015, Field 1967, Malinauskas 1974: ~3 decades apart at 850 K). Selectable on the page.
+- **2-D vessel temperatures** from session sl8rv-41's `blanket-thermal` (merged into StoneLab `blanket` at cd9c9e8). design.ts calls evaluate2D with our per-layer heating as totals and the map's poloidal shape.
+  - ARC baseline: peak inner Inconel **1240 K** at R 4.45, Z −0.31 (outboard, below the midplane); W face 1273 K; Be 945 K; outer Inconel 1069 K; energy closure 1e-14; 68 ms. The 1-D estimate is 1207 K.
+  - Flag: peak channel velocity 2.46 m/s > Sorbom's 2 m/s corrosion limit (equal-dp branch split).
+- Harness Chrome (port 9333) lost WebGPU ("Failed to create WebGPU Context Provider", GPU process disabled) late in the session. Restarting it would kill another session's Loom tab (5213), so it was left for the user.
