@@ -2232,3 +2232,23 @@ Ours vs theirs differs by 1.3σ combined (most likely data-library version; not 
   - Converged ARC TF-face life ≈ 8 FPY vs Sorbom's 9. A single 4M browser run read 10.8 ± 12%: batch errors understate this heavy tail, so Resolved is now 8M.
 - **Converged TF-face life** (10 x 8M histories, split): 3.41e17 n/cm2/FPY, rel sd 8% per run, so **8.8 ± 0.2 FPY vs Sorbom's 9 FPY**. The browser's single 8M runs read 10.1-10.8, slightly high draws of the same estimator.
 - Page with all 7 packs: ARC baseline Fast 0.19 s, Resolved (8M) 4.5 s in the harness Chrome; Resolved TBR 1.1343 ± 0.0002 vs OpenMC 1.1360 ± 0.0012.
+
+### Blanket, 2026-10-31 evening: the LIBRA experiments in the browser tier
+
+- `blanket/libra_simple.py`: LIBRA's crucible stack only (generator tube, lead bricks, HDPE supports and table → air), free space (vacuum at the 50 cm sphere). Outputs: OpenMC CE TBR, a per-material 175-group hist64 library, an (R, Z) material raster (0.05 cm, from OpenMC's C++ id_map), and the A-325 source as 9 angle bins x group spectra. `export_neutpack.py --libra <repo>` packs it (6.7 MB + 2 MB raster).
+- StoneLab: RasterGeometry plus a point source as **mode 1** of the same kernel (geom buffer now u32: packed bytes plus bitcast floats). Breeding regions are configurable; no map, splitting or TF tally in mode 1.
+- Results (test/neutron/gpu/libra.test.ts):
+  - GPU vs CPU reference, 200k histories: 1e-4 (BABY) and 1e-8 (FLiBe) relative.
+  - GPU at 20M histories vs OpenMC CE on the identical simplified model: **BABY 1.7458e-3 ± 0.0039 vs 1.7205e-3 ± 0.017 (+1.5%)**, **FLiBe 2.9708e-3 ± 0.0052 vs 2.9265e-3 ± 0.027 (+1.5%)**. 0.13-0.18 s each.
+  - The +1.5% appears in both cases. Suspects: 0.05 cm raster at the 0.3 cm Inconel walls, and the Air domain averaged over 10 cells. Open.
+- **Chain to measurement**:
+
+  | | BABY 1L (ClLiF) | FLiBe-1L (FLiBe, nat Li) |
+  |---|---|---|
+  | browser, simplified | 1.746e-3 | 2.971e-3 |
+  | OpenMC CE, simplified | 1.721e-3 | 2.927e-3 |
+  | OpenMC CE, LIBRA full model (vault, tube, lead, table) | 2.137e-3 (x1.242) | 3.231e-3 (x1.104) |
+  | LIBRA's published model | 2.080e-3 | 3.229e-3 |
+  | measured | 2.53 / 2.15 / 4.03 / 2.58 e-3 | 3.33 ± 0.25 / 2.48 ± 0.21 e-3 |
+
+  The browser times the full/simplified factor gives 2.168e-3 (BABY) and 3.279e-3 (FLiBe).

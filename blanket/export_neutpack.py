@@ -21,18 +21,27 @@ the outgoing group (only ~17% of (g, g') pairs ever transfer):
                              the inner VV into the tile, multiplier and bulk
 Group 0 is the highest energy.
 
-Run: docker compose run --rm openmc blanket/export_neutpack.py [GROUPS]
+Run: docker compose run --rm openmc blanket/export_neutpack.py [GROUPS] [FORMAT] [TAG]
+     docker compose run --rm openmc blanket/export_neutpack.py --libra <repo>
+       (runs/libra/<repo> from libra_simple.py -> neutpack/libra_<repo>, plus its raster
+        and source in libra.json; no photon factors: TBR only)
 """
 import json, os, sys
 import numpy as np
 import openmc
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-GS = sys.argv[1] if len(sys.argv) > 1 else "VITAMIN-J-175"
-FMT = sys.argv[2] if len(sys.argv) > 2 else "hist64"
-TAG = sys.argv[3] if len(sys.argv) > 3 else ""   # e.g. "_fw_material-Be", as mgxs_gen names its run dir
-src = os.path.join(HERE, "runs", "mgxs", f"{GS}_{FMT}{TAG}")
-out = os.path.join(HERE, "neutpack", f"{GS}_{FMT}{TAG}")
+LIBRA = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--libra" else None
+if LIBRA:
+    GS, FMT, TAG = "VITAMIN-J-175", "hist64", ""
+    src = os.path.join(HERE, "runs", "libra", LIBRA)
+    out = os.path.join(HERE, "neutpack", f"libra_{LIBRA}")
+else:
+    GS = sys.argv[1] if len(sys.argv) > 1 else "VITAMIN-J-175"
+    FMT = sys.argv[2] if len(sys.argv) > 2 else "hist64"
+    TAG = sys.argv[3] if len(sys.argv) > 3 else ""   # e.g. "_fw_material-Be", as mgxs_gen names its run dir
+    src = os.path.join(HERE, "runs", "mgxs", f"{GS}_{FMT}{TAG}")
+    out = os.path.join(HERE, "neutpack", f"{GS}_{FMT}{TAG}")
 os.makedirs(out, exist_ok=True)
 
 lib = openmc.MGXSLibrary.from_hdf5(os.path.join(src, "mgxs.h5"))
@@ -94,6 +103,18 @@ for i, name in enumerate(cells):
         "tr_g": put(np.array(tr_g)), "tr_cdf": put(np.array(tr_cdf)), "mu_cdf": put(mu_sparse),
         "sigma_tritium": put(co["sig_tritium"][i]), "kerma": put(co["kerma"][i]),
     }
+
+if LIBRA:
+    import shutil
+    meta = json.load(open(os.path.join(src, "libra.json")))
+    shutil.copy(os.path.join(src, "raster.u8"), os.path.join(out, "raster.u8"))
+    manifest["libra"] = meta
+    with open(os.path.join(out, "data.bin"), "wb") as f:
+        for b in blobs:
+            f.write(b)
+    json.dump(manifest, open(os.path.join(out, "manifest.json"), "w"), indent=1)
+    print(f"wrote {out}: {G} groups, {len(cells)} cells, {offset * 4 / 1e6:.2f} MB + raster")
+    sys.exit(0)
 
 # photon redistribution factors
 gate = json.load(open(os.path.join(src, "gate1.json")))
