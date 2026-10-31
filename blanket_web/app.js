@@ -95,12 +95,40 @@ function renderList() {
   }
 }
 
+// ---- links: #d=<design id>&<param>=<value>... carries the selected design and its edits
+// (the hash never reaches the server)
+function writeHash() {
+  if (!cur) return;
+  const base = fullDesign(cur.base), q = new URLSearchParams({ d: cur.id });
+  for (const p of PARAMS) { const v = get(cur.design, p.key); if (v !== get(base, p.key)) q.set(p.key.replace(/^g\./, ""), String(v)); }
+  history.replaceState(null, "", `#${q}`);
+}
+function readHash() {
+  const q = new URLSearchParams(location.hash.slice(1));
+  const it = [...saved, ...lib].find((x) => x.id === q.get("d"));
+  if (!it) return false;
+  select(it);
+  let edited = false;
+  for (const p of PARAMS) {
+    const raw = q.get(p.key.replace(/^g\./, ""));
+    if (raw === null) continue;
+    let v = p.step ? Number(raw) : p.key === "li6Pct" ? Number(raw) : raw;
+    if (p.step) { if (!Number.isFinite(v)) continue; v = Math.min(p.max, Math.max(p.min, v)); }
+    if (p.key === "li6Pct" && !engine.enrichments().includes(v)) continue;
+    if (p.key === "fwMaterial" && !engine.fwMaterials().includes(v)) continue;
+    if (p.key === "solubility" && !(v in FLIBE_SOLUBILITY)) continue;
+    set(cur.design, p.key, v); edited = true;
+  }
+  if (edited) { renderParams(); redraw(); schedule(); writeHash(); }
+  return true;
+}
+
 function select(it) {
   cur = { id: it.id, name: it.name, base: structuredClone(it.design ?? {}), design: fullDesign(it.design), reference: it.reference ?? null, saved: it.family === "Your designs" || saved.some((s) => s.id === it.id) };
   $("dname").value = cur.name;
   $("ddel").hidden = !cur.saved;
   if (sweep) closeSweep();
-  renderParams(); renderList(); redraw(); schedule();
+  renderParams(); renderList(); redraw(); schedule(); writeHash();
 }
 
 // ---- parameters
@@ -149,7 +177,7 @@ function renderParams() {
 function update(key, v) {
   if (sweep && key !== sweep.p.key) closeSweep();
   set(cur.design, key, v);
-  renderParams(); redraw(); schedule(); drawSweep();
+  renderParams(); redraw(); schedule(); drawSweep(); writeHash();
 }
 
 // ---- runs: Fast auto-runs on every change; Resolved on request
@@ -545,7 +573,13 @@ new ResizeObserver(() => show()).observe($("view"));
 
 // ---- design actions
 $("dname").onchange = () => { cur.name = $("dname").value; if (cur.saved) { const s = saved.find((x) => x.id === cur.id); if (s) { s.name = cur.name; persist(s); renderList(); } } };
-$("dreset").onclick = () => { if (sweep) closeSweep(); cur.design = fullDesign(cur.base); renderParams(); redraw(); schedule(); };
+$("dreset").onclick = () => { if (sweep) closeSweep(); cur.design = fullDesign(cur.base); renderParams(); redraw(); schedule(); writeHash(); };
+$("dlink").onclick = async () => {
+  writeHash();
+  const b = $("dlink");
+  try { await navigator.clipboard.writeText(location.href); b.textContent = "Link copied"; } catch { b.textContent = "Copy from the address bar"; }
+  setTimeout(() => { b.textContent = "Copy link"; }, 1800);
+};
 $("dsave").onclick = () => {
   const it = { id: `my-${Date.now()}`, name: `${cur.name}${cur.saved ? "" : " (edited)"}`, family: "Your designs", design: structuredClone(cur.design), reference: null };
   saved.unshift(it); persist(it); select(it);
@@ -563,7 +597,8 @@ $("ddel").onclick = () => { const id = cur.id; saved = saved.filter((s) => s.id 
   $("gpu").textContent = "WebGPU";
   await loadTeamStore();
   lib = await (await fetch("./designs.json")).json();
-  select(lib[0]);
+  if (!readHash()) select(lib[0]);
+  addEventListener("hashchange", () => readHash());
   // fill in the list's numbers in the background, one design at a time
   for (const it of lib.slice(1)) {
     const d = fullDesign(it.design), k = keyOf(d);
