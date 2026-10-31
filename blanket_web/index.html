@@ -38,7 +38,17 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 .pn { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--rule); }
 .pn:last-child { border-right: 0; }
 .pb { flex: 1 1 0; min-height: 0; overflow: auto; }
-@media (max-width: 1100px) { .app { height: auto; } .work { display: block; } .pn { border-right: 0; border-bottom: 1px solid var(--rule); } }
+@media (max-width: 1100px) {
+  /* phone / tablet: one column -- design, its view, its metrics, then the parameters and the list */
+  .app { height: auto; }
+  .work { display: flex; flex-direction: column; }
+  .center { display: contents; }
+  .pn { border-right: 0; border-bottom: 1px solid var(--rule); }
+  .dhead { order: 1; } .view { order: 2; min-height: 340px; flex: none; height: 52vh; }
+  .work > .pn[aria-label="Metrics"] { order: 3; } .params { order: 4; overflow: visible; }
+  .work > .pn[aria-label="Designs"] { order: 5; } .work > .pn[aria-label="Designs"] .pb { max-height: 50vh; flex: none; }
+  #keys { display: none !important; }
+}
 
 /* designs */
 .lhead { position: sticky; top: 0; background: var(--bg); z-index: 2; padding: 10px 12px 8px; border-bottom: 1px solid var(--rule); display: grid; gap: 6px; }

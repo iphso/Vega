@@ -88,7 +88,7 @@ function renderList() {
       const r = results.get(keyOf(fullDesign(it.design)));
       const m = r?.resolved ?? r?.fast;
       el.innerHTML = `<span class="nm">${it.name}</span>${it.reference ? '<span class="ref" title="OpenMC continuous-energy reference available">REF</span>' : "<span></span>"}
-        <span class="mx">${m ? `<span>TBR <b>${f(m.tbr, 3)}</b></span><span>VV <b>${f(m.thermal.vvMax, 0)}</b> K</span>${tfOk(m) ? `<span>TF <b>${f(m.tfLifetimeFpy, 1)}</b> y</span>` : ""}` : ""}</span>`;
+        <span class="mx">${m ? `<span>TBR <b>${f(m.tbr, 3)}</b></span><span>VV <b>${f(m.thermal2d?.peaks.inconelInner.K ?? m.thermal.vvMax, 0)}</b> K</span>${tfOk(m) ? `<span>TF <b>${f(m.tfLifetimeFpy, 1)}</b> y</span>` : ""}` : ""}</span>`;
       el.onclick = () => select(it);
       L.append(el);
     }
@@ -192,7 +192,7 @@ function show() {
       kpi("Tritium breeding ratio", f(m.tbr, m.tbrErr < 0.001 ? 4 : 3), cls(m.tbr, 1.1, 1.0), `± ${f(m.tbrErr, m.tbrErr < 0.001 ? 4 : 3)} · target ≥ 1.1`),
       m.thermal2d
         ? kpi("Peak inner vessel", `${f(m.thermal2d.peaks.inconelInner.K, 0)} K`, cls(m.thermal2d.peaks.inconelInner.K, 973, 1073, false), `Inconel 718, 2-D field · at R ${f(m.thermal2d.peaks.inconelInner.R, 2)} m, Z ${f(m.thermal2d.peaks.inconelInner.Z, 2)} m · tungsten face ${f(m.thermal2d.peaks.w.K, 0)} K · 1-D ${f(m.thermal.vvMax, 0)} K`)
-        : kpi("Peak inner vessel", `${f(m.thermal.vvMax, 0)} K`, cls(m.thermal.vvMax, 973, 1073, false), `Inconel 718, 1-D estimate · channel out ${f(m.thermal.channelOutlet, 0)} K`),
+        : kpi("Peak inner vessel", `${f(m.thermal.vvMax, 0)} K`, cls(m.thermal.vvMax, 973, 1073, false), `Inconel 718, 1-D estimate${m.histories >= FAST && m.tritium ? " (2-D field needs every vessel layer ≥ 1 mm)" : ""} · channel out ${f(m.thermal.channelOutlet, 0)} K`),
       tfOk(m)
         ? kpi("TF magnet life", `${f(m.tfLifetimeFpy, 1)} y`, cls(m.tfLifetimeFpy, 10, 3), `${Number.isFinite(m.tfRelErr) ? `± ${Math.round(m.tfRelErr * 100)}% · ` : ""}full-power years to 3×10¹⁸ n/cm² on the inboard face`)
         : kpi("TF magnet life", "—", "", `too few neutrons reach the coil face in ${sig(m.histories, 2)} histories: run Resolved`),
