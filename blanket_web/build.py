@@ -35,7 +35,7 @@ for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
     dst.mkdir(exist_ok=True)
     shutil.copy(d / "manifest.json", dst / "manifest.json")
     raw = (d / "data.bin").read_bytes()
-    gz = gzip.compress(raw, 9)
+    gz = gzip.compress(raw, 9, mtime=0)
     (dst / "data.bin.gz").write_bytes(gz)
     # vessel dpa / He responses for this pack (blanket/damage, session sl8rv-41's sidecar)
     side = V / "blanket/damage/runs" / f"VITAMIN-J-175{tag}" / "damage_sidecar.json"
@@ -50,8 +50,8 @@ for d in sorted((V / "blanket/neutpack").glob("libra_*")):
     dst = out / "packs" / d.name
     dst.mkdir(exist_ok=True)
     shutil.copy(d / "manifest.json", dst / "manifest.json")
-    (dst / "data.bin.gz").write_bytes(gzip.compress((d / "data.bin").read_bytes(), 9))
-    (dst / "raster.u8.gz").write_bytes(gzip.compress((d / "raster.u8").read_bytes(), 9))
+    (dst / "data.bin.gz").write_bytes(gzip.compress((d / "data.bin").read_bytes(), 9, mtime=0))
+    (dst / "raster.u8.gz").write_bytes(gzip.compress((d / "raster.u8").read_bytes(), 9, mtime=0))
     print(f"pack {d.name}")
 
 
