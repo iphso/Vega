@@ -47,8 +47,9 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
   .dhead { order: 1; } .view { order: 2; min-height: 340px; flex: none; height: 52vh; }
   .work > .pn[aria-label="Metrics"] { order: 3; } .params { order: 4; overflow: visible; }
   .work > .pn[aria-label="Designs"] { order: 5; } .work > .pn[aria-label="Designs"] .pb { max-height: 50vh; flex: none; }
-  #keys { display: none !important; }
+  .keys { display: none !important; }
   .legend { left: auto; right: 10px; }
+  .view .inset canvas { width: 240px; height: 130px; }
 }
 
 /* designs */
@@ -74,10 +75,26 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 .view.in3d .vtop { top: auto; bottom: 10px; }
 .vtop button { font: 500 11px/1 var(--f-body); padding: 6px 10px; border-radius: 14px; border: 1px solid var(--rule); background: rgba(22,22,26,0.85); color: var(--ink-2); cursor: pointer; }
 .view:not(.in3d) .vtop button[aria-pressed="true"], .vtop button[data-f="3d"][aria-pressed="true"] { color: var(--ink); border-color: var(--flibe-dim); background: rgba(31,74,92,0.9); }
-.legend { position: absolute; left: 10px; bottom: 10px; display: grid; gap: 4px; font: 400 11px/1.2 var(--f-mono); color: var(--ink-2); background: rgba(22,22,26,0.8); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 8px; pointer-events: none; }
+.vtop .vc { padding: 6px 10px; color: var(--ink-2); font-weight: 600; }
+.vtop.min button:not(.vc):not([aria-pressed="true"]), .view.in3d .vtop.min button:not(.vc):not([data-f="3d"]), .view:not(.in3d) .vtop.min button[data-f="3d"] { display: none; }
+/* overlays on the view: each collapses to its title chip */
+.ov { position: absolute; z-index: 4; display: grid; gap: 4px; font: 400 11px/1.2 var(--f-mono); color: var(--ink-2); background: rgba(22,22,26,0.85); border: 1px solid var(--rule); border-radius: 8px; padding: 5px 8px 6px; }
+.ov .oh { display: flex; align-items: center; gap: 8px; justify-content: space-between; font: 500 10.5px/1.2 var(--f-body); color: var(--ink-2); cursor: pointer; user-select: none; }
+.ov .oc { border: 0; background: none; color: var(--ink-3); cursor: pointer; padding: 0 2px; font-size: 13px; line-height: 1; }
+.ov .oc:hover, .ov .oh:hover .oc { color: var(--ink); }
+.ov.min { padding: 4px 8px; border-radius: 12px; }
+.ov.min .ob { display: none; }
+.ov .ob { display: grid; gap: 3px; }
+.legend { left: 10px; bottom: 10px; }
 .legend i { width: 110px; height: 7px; border-radius: 4px; display: inline-block; }
-.keys { position: absolute; right: 10px; top: 10px; display: grid; gap: 3px; font-size: 11px; color: var(--ink-2); background: rgba(22,22,26,0.8); border: 1px solid var(--rule); border-radius: 8px; padding: 6px 8px; pointer-events: none; }
-.keys span { display: flex; gap: 6px; align-items: center; }
+.keys { right: 10px; top: 10px; font: 400 11px var(--f-body); }
+.keys .ob span { display: flex; gap: 6px; align-items: center; }
+.inset { left: 10px; top: 46px; }
+.view .inset canvas { position: static; display: block; width: 300px; height: 150px; }
+.gtip { position: fixed; z-index: 50; max-width: 300px; background: var(--card-2); border: 1px solid var(--ink-3); border-radius: 8px; padding: 7px 9px; font: 400 11.5px/1.45 var(--f-body); color: var(--ink); white-space: pre-line; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
+[data-tip] { cursor: help; }
+.kpi .k[data-tip], .prow > span[data-tip], h2[data-tip], .sub[data-tip] { text-decoration: underline dotted var(--ink-3); text-underline-offset: 3px; }
+.kpi .k .w { color: var(--warn); text-decoration: none; margin-left: 4px; }
 .keys i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 .tip { position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 5px 8px; font: 400 11px var(--f-mono); color: var(--ink-2); white-space: nowrap; z-index: 3; }
 .tip b { color: var(--ink); font-weight: 500; }
@@ -111,7 +128,7 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 .swc .eb { stroke: var(--flibe); stroke-width: 1.5; opacity: 0.6; }
 .swc .pt { fill: var(--flibe); stroke: #0f0f12; stroke-width: 2; }
 .swc .pt.on { fill: var(--ink); } .swc .pt.hv { stroke: var(--ink); stroke-width: 1.5; }
-.view.insweep .vtop { display: none; }
+.view.insweep .vtop, .view.insweep .ov { display: none; }
 
 /* metrics + fidelity */
 .side { padding: 14px; display: grid; gap: 16px; align-content: start; }
@@ -119,7 +136,7 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 .kpi { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 9px 10px; display: grid; gap: 2px; }
 .kpi .k { font: 600 9.5px/1.2 var(--f-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
 .kpi .v { font: 600 21px/1.1 var(--f-body); font-variant-numeric: tabular-nums; }
-.kpi .s { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.kpi .s { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kpi .v.good { color: var(--good); } .kpi .v.bad { color: var(--bad); } .kpi .v.warn { color: var(--warn); }
 .kpis.stale .v { color: var(--ink-3); }
 .lnk { background: none; border: 0; padding: 0; color: var(--flibe); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
@@ -146,7 +163,7 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 <div class="app">
   <header class="top">
     <h1>Blanket Simulator</h1>
-    <span class="sub">FLiBe immersion blanket · change any input and the neutronics, vessel heat and tritium re-run on your GPU in about a second · ⇆ sweeps one input across its range</span>
+    <span class="sub" data-tip="Change any input and the neutronics, vessel heat and tritium re-run on your GPU in about a second.&#10;⇆ beside an input sweeps it across its range.&#10;Hover a label for what it means.">FLiBe immersion blanket · runs on your GPU</span>
     <span class="right"><span id="store"></span><span id="gpu"></span><a href="validation.html">Validation</a></span>
   </header>
   <div class="work">
@@ -161,11 +178,12 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
       </div>
       <div class="view" id="view">
         <canvas id="cv" aria-label="Poloidal cross-section"></canvas>
-        <div class="vtop" id="layers"><button type="button" data-f="heat" aria-pressed="true">Heating</button><button type="button" data-f="trit" aria-pressed="false">Tritium production</button><button type="button" data-f="conc" aria-pressed="false">Tritium in salt</button><button type="button" data-f="temp" aria-pressed="false">Vessel temperature</button><button type="button" data-f="none" aria-pressed="false">Materials</button><button type="button" data-f="3d" aria-pressed="false">3D</button></div>
+        <div class="vtop" id="layers"><button type="button" data-f="heat" aria-pressed="true">Heating</button><button type="button" data-f="trit" aria-pressed="false">Tritium production</button><button type="button" data-f="conc" aria-pressed="false">Tritium in salt</button><button type="button" data-f="temp" aria-pressed="false">Vessel temperature</button><button type="button" data-f="none" aria-pressed="false">Materials</button><button type="button" data-f="3d" aria-pressed="false">3D</button><button type="button" class="vc" id="lcol" aria-label="Collapse the view options" aria-expanded="true">‹</button></div>
         <div id="v3" hidden style="position:absolute;inset:0"></div>
         <div class="sweep" id="sw" hidden><div class="sh" id="sw-head"></div><button type="button" class="x" id="sw-close" aria-label="Close the sweep">✕</button><div class="swg" id="sw-charts"></div></div>
-        <div class="keys" id="keys"></div>
-        <div class="legend" id="legend" hidden></div>
+        <div class="ov keys" id="keys" data-ov="keys"></div>
+        <div class="ov legend" id="legend" data-ov="legend" hidden></div>
+        <div class="ov inset" id="inset" data-ov="inset" hidden><div class="oh"><span>Along the first wall</span><button type="button" class="oc" aria-label="Collapse">–</button></div><div class="ob"><canvas id="insetcv"></canvas></div></div>
         <div class="tip" id="tip" hidden></div>
       </div>
       <div class="params" id="params"></div>
@@ -173,13 +191,14 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
     <section class="pn" aria-label="Metrics">
       <div class="pb side">
         <div class="kpis" id="kpis"></div>
-        <div><h2 style="margin-bottom:8px">Fidelity</h2><div class="ladder" id="ladder"></div></div>
-        <div><h2 style="margin-bottom:8px">Nuclear heating</h2><div class="bars" id="heat"></div></div>
+        <div><h2 style="margin-bottom:8px" data-tip="Each design runs at Fast on every edit. Resolved runs 80× more neutrons and the recirculating tank flow. Reference is offline continuous-energy OpenMC.">Fidelity</h2><div class="ladder" id="ladder"></div></div>
+        <div><h2 style="margin-bottom:8px" id="heat-h">Nuclear heating</h2><div class="bars" id="heat"></div></div>
         <div class="note" id="notes"></div>
       </div>
     </section>
   </div>
 </div>
+<div class="gtip" id="gtip" role="tooltip" hidden></div>
 <script type="module" src="app.js"></script>
 </body>
 </html>

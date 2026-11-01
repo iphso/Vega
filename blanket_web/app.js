@@ -12,6 +12,28 @@ const COLORS = { plasma: [58, 44, 22], fw: [150, 156, 176], vv_in: [104, 110, 12
 
 // ---- parameters
 const P = (group, key, label, unit, step, min, max) => ({ group, key, label, unit, step, min, max });
+const TIPS = {
+  "g.fw_cm": "Armour tile on the plasma side. Tungsten and beryllium multiply neutrons and raise TBR up to about 1.5 cm, then absorb.",
+  fwMaterial: "Armour material facing the plasma.",
+  "g.vv_in_cm": "Inconel 718 vessel wall behind the armour. It absorbs neutrons and runs hottest.",
+  "g.channel_cm": "FLiBe gap between the two vessel walls that carries the first-wall heat away.",
+  "g.be_cm": "Beryllium layer that multiplies neutrons (n,2n) before they reach the tank.",
+  "g.vv_out_cm": "Inconel wall between the channel and the FLiBe tank.",
+  li6Pct: "Lithium-6 share of the salt's lithium. Li-6 is the isotope that breeds tritium from slow neutrons.",
+  solubility: "Which measurement of hydrogen solubility in FLiBe sets the tank-wall permeation. The published values differ by about 1000×.",
+  "g.blanket_in_cm": "Depth of FLiBe on the inboard side, next to the central magnet column.",
+  "g.blanket_out_cm": "Depth of FLiBe on the outboard side.",
+  "g.blanket_vert_cm": "Depth of FLiBe above and below the vessel.",
+  "g.R0": "Major radius of the machine, measured at the first wall.",
+  "g.a": "Minor radius of the first wall.",
+  "g.kappa": "Vertical stretch of the vessel cross-section (height / width).",
+  fusionPowerMW: "D-T fusion power. 80% of it leaves as 14 MeV neutrons, the blanket's source.",
+  "g.shield_in_cm": "TiH₂ shield that protects the inboard legs of the TF magnets.",
+  channelVelocity: "Salt speed in the cooling channel. Faster flow cools the inner vessel better.",
+  bulkFlow: "Salt flow through the tank. Sets the outlet temperature and how fast tritium is carried out.",
+  inletK: "Salt temperature entering the vessel. FLiBe freezes at 732 K.",
+  qPlasma: "Heat flux from the plasma onto the first wall (radiation and particles).",
+};
 const PARAMS = [
   P("Vessel", "g.fw_cm", "First wall", "cm", 0.1, 0, 5),
   P("Vessel", "fwMaterial", "Wall material", "", null),
@@ -70,6 +92,40 @@ async function loadTeamStore() {
 const f = (x, n = 2) => Number.isFinite(x) ? x.toFixed(n) : "—";
 const sig = (x, n = 3) => !Number.isFinite(x) ? "—" : Math.abs(x) >= 1e6 || (Math.abs(x) < 1e-3 && x !== 0) ? x.toExponential(n - 1).replace(/e\+?(-?)(\d+)/, (_, s, e) => `×10${sup(s + e)}`) : Number(x.toPrecision(n)).toLocaleString();
 const sup = (t) => [...t].map((c) => "⁰¹²³⁴⁵⁶⁷⁸⁹"["0123456789".indexOf(c)] ?? (c === "-" ? "⁻" : c)).join("");
+const esc = (t) => String(t).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+const tipA = (t) => (t ? ` data-tip="${esc(t)}"` : "");
+
+// ---- tooltips: any [data-tip] element; hover, keyboard focus, or tap
+const gtip = $("gtip");
+let tipFor = null;
+function showTip(el) {
+  tipFor = el; gtip.textContent = el.dataset.tip; gtip.hidden = false;
+  const r = el.getBoundingClientRect(), t = gtip.getBoundingClientRect();
+  const x = Math.max(8, Math.min(innerWidth - t.width - 8, r.left));
+  const y = r.bottom + 6 + t.height < innerHeight ? r.bottom + 6 : Math.max(8, r.top - 6 - t.height);
+  gtip.style.left = `${x}px`; gtip.style.top = `${y}px`;
+}
+const hideTip = () => { tipFor = null; gtip.hidden = true; };
+document.addEventListener("pointerover", (e) => { if (e.pointerType === "touch") return; const el = e.target.closest?.("[data-tip]"); if (el) { if (el !== tipFor) showTip(el); } else if (tipFor) hideTip(); });
+document.addEventListener("pointerdown", (e) => { const el = e.target.closest?.("[data-tip]"); if (e.pointerType === "touch" && el && el !== tipFor) showTip(el); else if (!el || e.pointerType === "touch") hideTip(); });
+document.addEventListener("focusin", (e) => { const el = e.target.closest?.("[data-tip]"); if (el) showTip(el); else hideTip(); });
+addEventListener("scroll", hideTip, true);
+
+// ---- view overlays (material key, colour scale, first-wall profile): each collapses to its title
+let ovMin = {};
+try { ovMin = JSON.parse(localStorage.getItem("blanket.ov") ?? "{}"); } catch { ovMin = {}; }
+// on a phone the first-wall chart would cover the map, so it starts folded there
+const isMin = (k) => ovMin[k] ?? (k === "inset" && innerWidth < 700);
+const ovSync = () => { for (const el of document.querySelectorAll(".ov")) { const mn = isMin(el.dataset.ov); el.classList.toggle("min", mn); const b = el.querySelector(".oc"); if (b) { b.textContent = mn ? "+" : "–"; b.ariaLabel = mn ? "Expand" : "Collapse"; } } };
+const ovHead = (title) => `<div class="oh"><span>${title}</span><button type="button" class="oc" aria-label="Collapse">–</button></div>`;
+document.querySelector(".view").addEventListener("click", (e) => {
+  const h = e.target.closest(".ov .oh"); if (!h) return;
+  const k = h.parentElement.dataset.ov; ovMin[k] = !isMin(k);
+  try { localStorage.setItem("blanket.ov", JSON.stringify(ovMin)); } catch { /* private mode */ }
+  ovSync();
+  if (k === "inset" && !isMin(k)) show();
+});
+
 /** TF life is a deep-penetration tally: only show it when its standard error is under 30%. */
 const tfOk = (m) => Number.isFinite(m.tfLifetimeFpy) && Number.isFinite(m.tfRelErr) && m.tfRelErr < 0.3 && m.histories >= 1e6;
 
@@ -161,7 +217,7 @@ function renderParams() {
         input = document.createElement("input"); input.type = "number"; input.step = String(p.step); input.min = String(p.min); input.max = String(p.max); input.value = String(v);
         input.onchange = () => { const x = Number(input.value); if (Number.isFinite(x)) update(p.key, Math.min(p.max, Math.max(p.min, x))); };
       }
-      row.innerHTML = `<span>${p.label}${p.unit ? ` <span class="u">${p.unit}</span>` : ""}</span>`;
+      row.innerHTML = `<span${tipA(TIPS[p.key])}>${p.label}${p.unit ? ` <span class="u">${p.unit}</span>` : ""}</span>`;
       row.append(input);
       if (p.step || p.key === "li6Pct" || p.key === "fwMaterial") {
         const sw = document.createElement("button");
@@ -229,33 +285,49 @@ function show() {
   else {
     K.classList.remove("stale");
     const cls = (v, good, warn, hiGood = true) => !Number.isFinite(v) ? "" : hiGood ? (v >= good ? "good" : v >= warn ? "warn" : "bad") : (v <= good ? "good" : v <= warn ? "warn" : "bad");
-    const kpi = (k, v, c, s) => `<div class="kpi"><span class="k">${k}</span><span class="v ${c}">${v}</span><span class="s">${s}</span></div>`;
+    // one short line under each number; the detail lives in the label's tooltip
+    const kpi = (k, v, c, sub, tip, warn) => `<div class="kpi"><span class="k"${tipA(warn ? `${tip}\n\n⚠ ${warn}` : tip)}>${k}${warn ? '<span class="w">⚠</span>' : ""}</span><span class="v ${c}">${v}</span><span class="s">${sub}</span></div>`;
+    const t2 = m.thermal2d, P2 = t2?.peaks;
+    const flow = m.tritium?.flowModel === "rans" ? "Resolved: recirculating (k-epsilon) tank flow." : "Fast: potential tank flow, no recirculation. Resolved runs the recirculating flow.";
     K.innerHTML = [
-      kpi("Tritium breeding ratio", f(m.tbr, m.tbrErr < 0.001 ? 4 : 3), cls(m.tbr, 1.1, 1.0), `± ${f(m.tbrErr, m.tbrErr < 0.001 ? 4 : 3)} · target ≥ 1.1`),
-      m.thermal2d
-        ? kpi("Peak inner vessel", `${f(m.thermal2d.peaks.inconelInner.K, 0)} K`, cls(m.thermal2d.peaks.inconelInner.K, 973, 1073, false), `Inconel 718, 2-D field · at R ${f(m.thermal2d.peaks.inconelInner.R, 2)} m, Z ${f(m.thermal2d.peaks.inconelInner.Z, 2)} m · tungsten face ${f(m.thermal2d.peaks.w.K, 0)} K · 1-D ${f(m.thermal.vvMax, 0)} K`)
-        : kpi("Peak inner vessel", `${f(m.thermal.vvMax, 0)} K`, cls(m.thermal.vvMax, 973, 1073, false), `Inconel 718, 1-D estimate · channel out ${f(m.thermal.channelOutlet, 0)} K`),
+      kpi("Tritium breeding ratio", f(m.tbr, m.tbrErr < 0.001 ? 4 : 3), cls(m.tbr, 1.1, 1.0), `± ${f(m.tbrErr, m.tbrErr < 0.001 ? 4 : 3)} · target 1.1`,
+        "Tritium atoms bred per fusion neutron. A plant needs at least 1.1 to stay self-sufficient with margin. ± is the Monte Carlo standard error."),
+      t2
+        ? kpi("Peak inner vessel", `${f(P2.inconelInner.K, 0)} K`, cls(P2.inconelInner.K, 973, 1073, false), "limit ~973 K",
+          `Hottest point on the inner Inconel 718 wall, from the 2-D (R, Z) heat-conduction field. Inconel 718 loses strength above about 973 K.\nAt R ${f(P2.inconelInner.R, 2)} m, Z ${f(P2.inconelInner.Z, 2)} m · tungsten face ${f(P2.w.K, 0)} K · 1-D estimate ${f(m.thermal.vvMax, 0)} K.\nOuter vessel ${f(P2.inconelOuter.K, 0)} K, set by an assumed film coefficient to the tank.`,
+          t2.warnings?.length ? t2.warnings.join("\n") : null)
+        : kpi("Peak inner vessel", `${f(m.thermal.vvMax, 0)} K`, cls(m.thermal.vvMax, 973, 1073, false), "1-D estimate",
+          `Hottest point on the inner Inconel 718 wall (1-D estimate). Channel outlet ${f(m.thermal.channelOutlet, 0)} K.`),
       tfOk(m)
-        ? kpi("TF magnet life", `${f(m.tfLifetimeFpy, 1)} y`, cls(m.tfLifetimeFpy, 10, 3), `${Number.isFinite(m.tfRelErr) ? `± ${Math.round(m.tfRelErr * 100)}% · ` : ""}full-power years to 3×10¹⁸ n/cm² on the inboard face`)
-        : kpi("TF magnet life", "—", "", `too few neutrons reach the coil face in ${sig(m.histories, 2)} histories · <button type="button" class="lnk" data-run="resolved">run Resolved</button>`),
+        ? kpi("TF magnet life", `${f(m.tfLifetimeFpy, 1)} y`, cls(m.tfLifetimeFpy, 10, 3), Number.isFinite(m.tfRelErr) ? `± ${Math.round(m.tfRelErr * 100)}% · full-power` : "full-power years",
+          "Full-power years until the inboard face of the TF magnet reaches a fast-neutron fluence of 3×10¹⁸ n/cm².")
+        : kpi("TF magnet life", "—", "", `<button type="button" class="lnk" data-run="resolved">run Resolved</button>`,
+          `Full-power years until the inboard TF magnet face reaches 3×10¹⁸ n/cm². Too few of Fast's ${sig(m.histories, 2)} neutrons get through the shield to estimate it; Resolved runs enough.`),
       m.tritium
-        ? kpi("Tritium in the salt", `${f(m.tritium.inventoryMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · ${m.tritium.flowModel === "rans" ? "recirculating tank flow" : "potential flow, no recirculation"} · wall loss ${permBand(m)}`)
-        : kpi("Tritium in the salt", `${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred · ${f(m.residenceS / 60, 1)} min turnover`),
+        ? kpi("Tritium in the salt", `${f(m.tritium.inventoryMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred`,
+          `Steady-state tritium dissolved in the tank's salt, before extraction.\n${flow}\nTank-wall loss ${permBand(m)} of the bred tritium across the four FLiBe solubility datasets.`,
+          m.tritium.warnings?.length ? m.tritium.warnings.join("\n") : null)
+        : kpi("Tritium in the salt", `${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred`,
+          `Tritium held in the salt, between plug flow and a fully mixed tank. ${f(m.residenceS / 60, 1)} min turnover.`),
       m.damage
-        ? kpi("Vessel helium limit", `${f(500 / m.damage.vvInPeakHeAppmPerFpy, 1)} y`, cls(500 / m.damage.vvInPeakHeAppmPerFpy, 5, 1.5), `to 500 appm He at the inner vessel's peak (${f(m.damage.vvInPeakHeAppmPerFpy, 0)} appm/y) · ${f(m.damage.vvInPeakDpaPerFpy, 1)} dpa/y`)
+        ? kpi("Vessel helium limit", `${f(500 / m.damage.vvInPeakHeAppmPerFpy, 1)} y`, cls(500 / m.damage.vvInPeakHeAppmPerFpy, 5, 1.5), "to 500 appm He",
+          `Full-power years until the inner vessel's peak reaches 500 appm helium, past which Inconel can no longer be weld-repaired (Sorbom's criterion).\n${f(m.damage.vvInPeakHeAppmPerFpy, 0)} appm He/y · ${f(m.damage.vvInPeakDpaPerFpy, 1)} dpa/y (NRT).`)
         : "",
-      kpi("Energy multiplication", f(m.energyMultiplication, 3), "", `${f(m.nuclearMW, 0)} MW nuclear heat`),
-      kpi("Tank outlet", `${f(m.thermal.bulkOutlet, 0)} K`, cls(m.thermal.bulkOutlet, 1000, 1100, false), `inlet ${f(cur.design.inletK, 0)} K · FLiBe freezes at 732 K`),
+      kpi("Energy multiplication", f(m.energyMultiplication, 3), "", `${f(m.nuclearMW, 0)} MW heat`,
+        "Nuclear heat deposited in the machine per unit of neutron energy. Above 1 because Li-6 and beryllium reactions release energy."),
+      kpi("Tank outlet", `${f(m.thermal.bulkOutlet, 0)} K`, cls(m.thermal.bulkOutlet, 1000, 1100, false), `inlet ${f(cur.design.inletK, 0)} K`,
+        "Salt temperature leaving the tank, from the heat balance at this flow. FLiBe freezes at 732 K."),
     ].join("");
   }
   // ladder
   const ref = refFor();
   const L = $("ladder");
-  const rung = (t, name, desc, res, extra) => `<button type="button" class="rung ${extra ?? ""}" data-t="${t}" aria-current="${tier === t}"><span class="tn">${name}</span><span class="ts">${res ?? desc}</span><span class="tr">${t === "reference" ? "OpenMC" : "browser"}</span><span class="bar"><span style="width:${res ? 100 : 0}%"></span></span></button>`;
+  const RT = { fast: "100k neutron histories on your GPU; re-runs on every edit.", resolved: "8M histories and the recirculating tank-flow solve, about 12 s. Click to run.", reference: "Continuous-energy OpenMC, run offline. Library designs only, before edits." };
+  const rung = (t, name, desc, res, extra) => `<button type="button" class="rung ${extra ?? ""}" data-t="${t}" aria-current="${tier === t}"${tipA(RT[t])}><span class="tn">${name}</span><span class="ts">${res ?? desc}</span><span class="tr">${t === "reference" ? "OpenMC" : "browser"}</span><span class="bar"><span style="width:${res ? 100 : 0}%"></span></span></button>`;
   L.innerHTML = [
     rung("fast", "Fast", `${sig(FAST, 2)} histories`, r?.fast ? `TBR ${f(r.fast.tbr, 3)} ± ${f(r.fast.tbrErr, 3)} · ${f(r.fast.seconds, 2)} s` : null),
-    rung("resolved", "Resolved", `${RESOLVED / 1e6}M histories · click to run`, r?.resolved ? `TBR ${f(r.resolved.tbr, 4)} ± ${f(r.resolved.tbrErr, 4)} · ${f(r.resolved.seconds, 1)} s` : null),
-    rung("reference", "Reference", "continuous-energy OpenMC: library designs only", ref ? `TBR ${f(ref.TBR, 4)} ± ${f(ref.TBR_sd, 4)}` : null, ref ? "" : "na"),
+    rung("resolved", "Resolved", `${RESOLVED / 1e6}M histories · run`, r?.resolved ? `TBR ${f(r.resolved.tbr, 4)} ± ${f(r.resolved.tbrErr, 4)} · ${f(r.resolved.seconds, 1)} s` : null),
+    rung("reference", "Reference", "library designs only", ref ? `TBR ${f(ref.TBR, 4)} ± ${f(ref.TBR_sd, 4)}` : null, ref ? "" : "na"),
   ].join("");
   L.querySelector('[data-t="resolved"]').onclick = () => run("resolved");
   for (const b of K.querySelectorAll("[data-run]")) b.onclick = () => run(b.dataset.run);
@@ -268,9 +340,10 @@ function show() {
       const v = m.heatingMW[k], rv = ref?.heating_MW?.[k];
       const c = COLORS[k];
       return `<div class="brow"><span>${LABEL[k]}</span><span class="track"><span style="width:${(100 * v) / max}%;background:rgb(${c})"></span>${rv !== undefined ? `<em style="left:${Math.min(100, (100 * rv) / max)}%" title="OpenMC ${f(rv, 1)} MW"></em>` : ""}</span><span class="n">${f(v, v < 10 ? 2 : 1)} MW</span></div>`;
-    }).join("") + (ref?.heating_MW ? `<div class="note">Ticks: OpenMC reference.</div>` : "");
+    }).join("");
   }
-  $("notes").innerHTML = notes(m);
+  $("heat-h").dataset.tip = `Nuclear heat deposited in each layer, this run.${ref?.heating_MW ? " White ticks: the OpenMC reference." : ""}`;
+  $("notes").innerHTML = `<a href="validation.html">How these numbers are computed and checked →</a>`;
   drawMap(m);
   if (view3d && m && !$("v3").hidden) view3d.setLive(m, cur.design);
 }
@@ -287,23 +360,12 @@ function refFor() {
   return keyOf(cur.design) === keyOf(fullDesign(cur.base)) ? cur.reference : null;
 }
 
-function notes(m) {
-  const fw = cur.design.fwMaterial;
-  const parts = [`Cross sections: OpenMC ENDF/B-VIII.0, 175 groups, weighted on a ${FW_NAME[fw] ?? fw}-wall design at ${engine.enrichments().reduce((a, b) => Math.abs(b - cur.design.li6Pct) < Math.abs(a - cur.design.li6Pct) ? b : a)}% Li-6.`];
-  parts.push("Vessel temperature: 2-D (R, Z) conduction through the tile, vessel walls and multiplier with the cooling channel's film coefficient, driven by this run's heating map (the 1-D Sorbom eqs. 30–33 estimate is shown beside it).");
-  if (m?.damage) parts.push("Vessel damage: NRT dpa and He production from OpenMC group responses (ENDF/B-VIII MT444, MT207); the peak is the average times OpenMC's peak-sector ratio. He, not dpa, sets the limit here (Sorbom's 500 appm criterion). Our dpa is 2–3× below the ARC papers' (which do not state their dpa method); our He agrees with them within ~15%.");
-  if (m?.thermal2d) parts.push(`Outer vessel peak ${f(m.thermal2d.peaks.inconelOuter.K, 0)} K: set by the assumed film coefficient to the bulk tank (500 W/m²K, an order-of-magnitude estimate), not a margin result. The inner-vessel peak barely depends on it.`);
-  if (m?.thermal2d?.warnings?.length) parts.push(`<span style="color:var(--warn)">${m.thermal2d.warnings.join("<br>")}</span>`);
-  parts.push(`Tritium in the salt: steady transport through the tank from the bred-tritium map, with the cooling channel's tritium exhausting into the tank, clean salt at the inlet, and Sieverts permeation through the Inconel tank wall. ${m?.tritium?.flowModel === "rans" ? "Resolved: k-epsilon RANS tank flow, the channel entering as a jet at the vessel's lower inboard corner (FESTIM's layout); about ±20% from the 4 cm grid." : "Fast: potential flow (no recirculation); Resolved runs the recirculating k-epsilon flow."} The FLiBe solubility data disagree by ~3 decades, hence the wall-loss band.${m?.tritium?.warnings?.length ? `<br><span style="color:var(--warn)">${m.tritium.warnings.join("<br>")}</span>` : ""}`);
-  if (m) parts.push(`${sig(m.histories, 2)} histories · ${engine.device ? "WebGPU" : ""}`);
-  return parts.join("<br>");
-}
-
 // ---- cross-section
 function redraw() {
   raster = regionRaster(cur.design, 2);
   const used = new Set(raster.ids);
-  $("keys").innerHTML = REGIONS.map((r, i) => used.has(i) && r !== "bore" ? `<span><i style="background:rgb(${COLORS[r]})"></i>${r === "fw" ? `First wall (${FW_NAME[cur.design.fwMaterial] ?? cur.design.fwMaterial})` : LABEL[r]}</span>` : "").join("");
+  $("keys").innerHTML = ovHead("Layers") + `<div class="ob">${REGIONS.map((r, i) => used.has(i) && r !== "bore" ? `<span><i style="background:rgb(${COLORS[r]})"></i>${r === "fw" ? `First wall (${FW_NAME[cur.design.fwMaterial] ?? cur.design.fwMaterial})` : LABEL[r]}</span>` : "").join("")}</div>`;
+  ovSync();
   show();
 }
 
@@ -371,7 +433,14 @@ function drawMap(m) {
   const tmp = new OffscreenCanvas(w, nz); tmp.getContext("2d").putImageData(img, 0, 0);
   ctx.imageSmoothingEnabled = false;
   ctx.drawImage(tmp, ox, oy, w * s, nz * s);
-  if (field === "temp" && m?.thermal2d) drawStations(ctx, m.thermal2d, 16 * dpr, 70 * dpr, Math.max(120 * dpr, ox - 40 * dpr), Math.min(260 * dpr, cv.height * 0.45), dpr);
+  const inset = $("inset");
+  inset.hidden = !(field === "temp" && m?.thermal2d);
+  ovSync();
+  if (!inset.hidden && !isMin("inset")) {
+    const ic = $("insetcv"), iw = ic.clientWidth * dpr, ih = ic.clientHeight * dpr;
+    ic.width = iw; ic.height = ih;
+    drawStations(ic.getContext("2d"), m.thermal2d, 0, 4 * dpr, iw, ih - 18 * dpr, dpr);
+  }
   // axis tick: major radius
   ctx.fillStyle = "#55555e"; ctx.font = `${11 * dpr}px ui-monospace, monospace`;
   ctx.fillText(`R = ${(g.p.R0 / 100).toFixed(2)} m`, ox + ((g.p.R0 / h) - rLo) * s - 30 * dpr, oy + nz * s + 18 * dpr);
@@ -379,9 +448,10 @@ function drawMap(m) {
   if (dens) {
     L.hidden = false;
     const grad = `linear-gradient(90deg, ${INFERNO.map((c) => `rgb(${c})`).join(",")})`;
-    const ttl = { heat: "Nuclear heating, W/cm³", trit: "Tritium production, atoms/s/cm³", conc: "Tritium in the salt, mg/m³ (steady state)", temp: "Vessel temperature, K (2-D field)" }[field];
+    const ttl = { heat: "Heating, W/cm³", trit: "Tritium bred, /s/cm³", conc: "Tritium, mg/m³", temp: "Temperature, K" }[field];
     const [a, b] = view.linear ? [lo, hi] : [10 ** lo, 10 ** hi];
-    L.innerHTML = `<span>${ttl}</span><span><i style="background:${grad}"></i></span><span style="display:flex;justify-content:space-between"><span>${sig(a, 2)}</span><span>${sig(b, 2)}</span></span>`;
+    L.innerHTML = ovHead(ttl) + `<div class="ob"><span><i style="background:${grad}"></i></span><span style="display:flex;justify-content:space-between"><span>${sig(a, 2)}</span><span>${sig(b, 2)}</span></span></div>`;
+    ovSync();
   } else L.hidden = true;
 }
 
@@ -389,23 +459,21 @@ function drawMap(m) {
 function drawStations(ctx, t, x0, y0, w, h, dpr) {
   const S = t.stations, n = S.t.length;
   if (!n || w < 100 * dpr) return;
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   const series = [["W face", S.wFaceK, "rgb(250,193,39)"], ["inner Inconel", S.inconelPeakK, "rgb(212,72,66)"], ["coolant", S.bulkK, "rgb(79,179,217)"]];
   let lo = Infinity, hi = -Infinity;
   for (const [, a] of series) for (const v of a) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
   lo = Math.floor(lo / 50) * 50; hi = Math.ceil(hi / 50) * 50;
   const X = (k) => x0 + 34 * dpr + (k / (n - 1)) * (w - 40 * dpr), Y = (v) => y0 + 14 * dpr + (1 - (v - lo) / (hi - lo)) * (h - 34 * dpr);
   ctx.save();
-  ctx.fillStyle = "rgba(22,22,26,0.85)"; ctx.strokeStyle = "#2a2a30"; ctx.lineWidth = dpr;
-  ctx.beginPath(); ctx.roundRect(x0, y0 - 6 * dpr, w, h + 18 * dpr, 8 * dpr); ctx.fill(); ctx.stroke();
   ctx.font = `${10.5 * dpr}px ui-monospace, monospace`; ctx.fillStyle = "#8a8a94";
-  ctx.fillText("along the first wall, from the channel inlet", x0 + 8 * dpr, y0 + 6 * dpr);
   for (const v of [lo, (lo + hi) / 2, hi]) { ctx.fillText(`${v}`, x0 + 4 * dpr, Y(v) + 3 * dpr); ctx.strokeStyle = "#24242a"; ctx.beginPath(); ctx.moveTo(X(0), Y(v)); ctx.lineTo(X(n - 1), Y(v)); ctx.stroke(); }
   series.forEach(([lbl, a, c], si) => {
     ctx.strokeStyle = c; ctx.lineWidth = 2 * dpr; ctx.beginPath();
     for (let k = 0; k < n; k++) (k ? ctx.lineTo : ctx.moveTo).call(ctx, X(k), Y(a[k]));
     ctx.stroke();
-    ctx.fillStyle = c; ctx.fillRect(x0 + 34 * dpr + si * 118 * dpr, y0 + h + 2 * dpr, 8 * dpr, 8 * dpr);
-    ctx.fillStyle = "#a3a3ad"; ctx.fillText(lbl, x0 + 46 * dpr + si * 118 * dpr, y0 + h + 10 * dpr);
+    ctx.fillStyle = c; ctx.fillRect(x0 + 34 * dpr + si * 96 * dpr, y0 + h + 2 * dpr, 8 * dpr, 8 * dpr);
+    ctx.fillStyle = "#a3a3ad"; ctx.fillText(lbl, x0 + 46 * dpr + si * 96 * dpr, y0 + h + 10 * dpr);
   });
   ctx.restore();
 }
@@ -437,7 +505,7 @@ let view3d = null, view3dLoading = null;
 async function show3d(on) {
   $("v3").hidden = !on;
   $("view").classList.toggle("in3d", on);
-  for (const id of ["cv", "keys", "legend"]) $(id).style.visibility = on ? "hidden" : "";
+  for (const id of ["cv", "keys", "legend", "inset"]) $(id).style.visibility = on ? "hidden" : "";
   if (!on) return;
   if (!view3d && !view3dLoading) {
     view3dLoading = (async () => {
@@ -497,7 +565,7 @@ function drawSweep() {
   const lab = (x) => (cat ? FW_NAME[x] ?? x : sig(x, 4));
   const done = ms.filter(Boolean).length, now = get(cur.design, p.key);
   const unit = p.unit ? ` ${p.unit}` : "";
-  $("sw-head").innerHTML = `<span><b>${p.label}</b>${p.unit ? ` <span class="u">${p.unit}</span>` : ""} · ${xs.length} designs, Fast tier (${sig(FAST, 2)} histories each, same random numbers)${done < xs.length ? ` · <b>${done}/${xs.length}</b>` : ""}</span>${sweep.hover >= 0 ? `<span class="hxv">${p.label} = ${lab(xs[sweep.hover])}${unit}</span>` : `<span class="u">hover to compare · click a point to apply it</span>`}`;
+  $("sw-head").innerHTML = `<span${tipA(`${xs.length} designs at the Fast tier, ${sig(FAST, 2)} histories each, all with the same random numbers so the differences between points are real, not noise.`)}><b>${p.label}</b>${p.unit ? ` <span class="u">${p.unit}</span>` : ""} · ${xs.length} designs${done < xs.length ? ` · <b>${done}/${xs.length}</b>` : ""}</span>${sweep.hover >= 0 ? `<span class="hxv">${p.label} = ${lab(xs[sweep.hover])}${unit}</span>` : `<span class="u">click a point to apply it</span>`}`;
   const host = $("sw-charts");
   if (host.childElementCount !== SWEEP_OUT.length) host.innerHTML = SWEEP_OUT.map(() => `<div class="swc"><div class="swt"></div><svg></svg></div>`).join("");
   const x0 = cat ? -0.5 : pos[0], x1 = cat ? pos.length - 0.5 : pos[pos.length - 1];
@@ -559,8 +627,13 @@ $("sw-charts").addEventListener("click", (e) => {
 $("sw-close").onclick = () => { closeSweep(); };
 new ResizeObserver(() => drawSweep()).observe($("sw"));
 
+let layersMin = false;
+try { layersMin = localStorage.getItem("blanket.layersMin") === "1"; } catch { /* private mode */ }
+const layersSync = () => { $("layers").classList.toggle("min", layersMin); $("lcol").textContent = layersMin ? "›" : "‹"; $("lcol").setAttribute("aria-expanded", String(!layersMin)); $("lcol").ariaLabel = layersMin ? "Show the view options" : "Collapse the view options"; };
+layersSync();
 $("layers").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
+  if (b.id === "lcol") { layersMin = !layersMin; try { localStorage.setItem("blanket.layersMin", layersMin ? "1" : "0"); } catch { /* private mode */ } layersSync(); return; }
   if (sweep) closeSweep();
   if (b.dataset.f === "3d") {
     const on = b.getAttribute("aria-pressed") !== "true";
