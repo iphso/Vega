@@ -34,19 +34,38 @@ header.top { display: flex; align-items: center; gap: 14px; padding: 10px 16px; 
 header.top h1 { font: 600 14px/1.2 var(--f-body); margin: 0; }
 header.top .sub { font-size: 12px; color: var(--ink-2); }
 header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: center; font-size: 12px; color: var(--ink-3); }
-.work { display: grid; grid-template-columns: 260px minmax(0, 1fr) 330px; min-height: 0; }
-.pn { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-right: 1px solid var(--rule); }
-.pn:last-child { border-right: 0; }
+/* panes: Designs | (View / Parameters) | Metrics, as in the newwater simulator. Dividers drag
+   (double-click resets), x closes a pane and the rest take its room, + in the header reopens it. */
+.work { display: flex; min-height: 0; }
+.pn { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.center { display: flex; flex-direction: column; min-width: 0; min-height: 0; flex: 1 1 0; }
+.pn[hidden], .gut[hidden], .center[hidden] { display: none; }
+.ph { flex: none; display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 4px 0 12px; font: 500 11px/1 var(--f-body); color: var(--ink-3); border-bottom: 1px solid var(--rule); user-select: none; }
+.px { border: 0; background: none; color: var(--ink-3); font-size: 15px; line-height: 1; width: 22px; height: 22px; border-radius: 5px; cursor: pointer; }
+.px:hover { background: var(--card); color: var(--ink); }
 .pb { flex: 1 1 0; min-height: 0; overflow: auto; }
+.gut { flex: none; position: relative; z-index: 7; }
+.gut.v { width: 1px; background: var(--rule); cursor: col-resize; }
+.gut.h { height: 1px; background: var(--rule); cursor: row-resize; }
+.gut::after { content: ""; position: absolute; inset: -4px; }
+.gut.v::after { inset: 0 -4px; } .gut.h::after { inset: -4px 0; }
+.gut:hover, .gut.drag { background: var(--flibe); }
+body.dragging { user-select: none; } body.dragging.v { cursor: col-resize; } body.dragging.h { cursor: row-resize; }
+body.dragging canvas, body.dragging #v3 { pointer-events: none; }
+.reopen { display: inline-flex; gap: 6px; }
+.reopen button { font: 500 11px/1 var(--f-body); padding: 5px 9px; border-radius: 14px; border: 1px dashed var(--rule); background: none; color: var(--ink-2); cursor: pointer; }
+.reopen button:hover { border-color: var(--ink-3); color: var(--ink); }
 @media (max-width: 1100px) {
   /* phone / tablet: one column -- design, its view, its metrics, then the parameters and the list */
   .app { height: auto; }
   .work { display: flex; flex-direction: column; }
   .center { display: contents; }
-  .pn { border-right: 0; border-bottom: 1px solid var(--rule); }
-  .dhead { order: 1; } .view { order: 2; min-height: 340px; flex: none; height: 52vh; }
-  .work > .pn[aria-label="Metrics"] { order: 3; } .params { order: 4; overflow: visible; }
-  .work > .pn[aria-label="Designs"] { order: 5; } .work > .pn[aria-label="Designs"] .pb { max-height: 50vh; flex: none; }
+  .gut { display: none !important; }
+  .pn { width: auto !important; flex: none !important; border-bottom: 1px solid var(--rule); }
+  .dhead { order: 1; } .pn[data-pane="view"] { order: 2; } .pn[data-pane="view"] .view { min-height: 340px; flex: none; height: 52vh; }
+  .pn[data-pane="metrics"] { order: 3; } .pn[data-pane="params"] { order: 4; } .pn[data-pane="params"] .pb { overflow: visible; }
+  .pn[data-pane="designs"] { order: 5; }
+  .pb { flex: none; overflow: visible; } .pn[data-pane="designs"] .pb { max-height: 50vh; overflow: auto; }
   .keys { display: none !important; }
   .legend { left: auto; right: 10px; }
   .view .inset canvas { width: 240px; height: 130px; }
@@ -64,12 +83,11 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 .item .mx b { color: var(--ink); font-weight: 500; }
 
 /* stage */
-.center { display: flex; flex-direction: column; min-height: 0; }
-.dhead { display: flex; align-items: center; gap: 10px; padding: 12px 16px 0; flex-wrap: wrap; }
+.dhead { display: flex; align-items: center; gap: 10px; padding: 8px 16px; flex-wrap: wrap; border-bottom: 1px solid var(--rule); }
 .dhead .name { font: 600 16px/1.2 var(--f-body); background: transparent; border: 1px solid transparent; padding: 2px 4px; border-radius: 6px; width: min(36ch, 100%); }
 .dhead .name:hover { border-color: var(--rule); }
 .dhead .acts { margin-left: auto; display: flex; gap: 6px; }
-.view { position: relative; margin: 10px 12px; border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; background: #0f0f12; flex: 1 1 52%; min-height: 280px; }
+.view { position: relative; overflow: hidden; background: #0f0f12; flex: 1 1 0; min-height: 0; }
 .view canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .vtop { position: absolute; left: 10px; top: 10px; display: flex; gap: 4px; z-index: 5; flex-wrap: wrap; }
 .view.in3d .vtop { top: auto; bottom: 10px; }
@@ -98,13 +116,14 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 .keys i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
 .tip { position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 5px 8px; font: 400 11px var(--f-mono); color: var(--ink-2); white-space: nowrap; z-index: 3; }
 .tip b { color: var(--ink); font-weight: 500; }
-.params { padding: 6px 16px 24px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); overflow: auto; flex: 1 1 40%; min-height: 0; }
+.params { padding: 12px 16px 24px; display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
 .pgroup { display: grid; gap: 6px; align-content: start; }
 .prow { display: grid; grid-template-columns: minmax(0, 1fr) 86px 22px; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-2); }
 .prow .u { font-size: 10.5px; color: var(--ink-3); }
 .prow.changed { color: var(--ink); }
 .prow.changed input, .prow.changed select { border-color: var(--flibe-dim); }
-.swb { width: 22px; height: 22px; padding: 0; border-radius: 6px; border: 1px solid var(--rule); background: transparent; color: var(--ink-3); cursor: pointer; font-size: 12px; line-height: 1; }
+.swb { width: 22px; height: 22px; padding: 0; border-radius: 6px; border: 1px solid var(--rule); background: transparent; color: var(--ink-3); cursor: pointer; display: grid; place-items: center; }
+.swb svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .swb:hover { color: var(--ink); border-color: var(--ink-3); }
 .swb[aria-pressed="true"] { color: var(--ink); background: var(--flibe-dim); border-color: var(--flibe-dim); }
 
@@ -163,19 +182,23 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
 <div class="app">
   <header class="top">
     <h1>Blanket Simulator</h1>
-    <span class="sub" data-tip="Change any input and the neutronics, vessel heat and tritium re-run on your GPU in about a second.&#10;⇆ beside an input sweeps it across its range.&#10;Hover a label for what it means.">FLiBe immersion blanket · runs on your GPU</span>
+    <span class="sub" data-tip="Change any input and the neutronics, vessel heat and tritium re-run on your GPU in about a second.&#10;The chart button beside an input plots the results across that input's range.&#10;Drag the dividers to resize panes; × closes one.&#10;Hover a label for what it means.">FLiBe immersion blanket · runs on your GPU</span>
+    <span class="reopen" id="reopen" aria-label="Closed panes"></span>
     <span class="right"><span id="store"></span><span id="gpu"></span><a href="validation.html">Validation</a></span>
   </header>
-  <div class="work">
-    <section class="pn" aria-label="Designs">
-      <div class="lhead"><h2>Designs</h2></div>
+  <div class="work" id="work">
+    <section class="pn" data-pane="designs" aria-label="Designs">
+      <div class="ph"><span>Designs</span><button type="button" class="px" aria-label="Close Designs">×</button></div>
       <div class="pb" id="list"></div>
     </section>
-    <section class="center" aria-label="Design">
+    <div class="gut v" id="g1" role="separator" aria-orientation="vertical" aria-label="Resize Designs"></div>
+    <div class="center" id="center">
       <div class="dhead">
         <input class="name" id="dname" aria-label="Design name">
         <span class="acts"><button type="button" class="btn" id="dlink">Copy link</button><button type="button" class="btn" id="dreset">Reset</button><button type="button" class="btn" id="dsave">Save as new design</button><button type="button" class="btn" id="ddel" hidden>Delete</button></span>
       </div>
+      <section class="pn" data-pane="view" aria-label="View" style="flex: 1 1 0">
+      <div class="ph"><span>View</span><button type="button" class="px" aria-label="Close View">×</button></div>
       <div class="view" id="view">
         <canvas id="cv" aria-label="Poloidal cross-section"></canvas>
         <div class="vtop" id="layers"><button type="button" data-f="heat" aria-pressed="true">Heating</button><button type="button" data-f="trit" aria-pressed="false">Tritium production</button><button type="button" data-f="conc" aria-pressed="false">Tritium in salt</button><button type="button" data-f="temp" aria-pressed="false">Vessel temperature</button><button type="button" data-f="none" aria-pressed="false">Materials</button><button type="button" data-f="3d" aria-pressed="false">3D</button><button type="button" class="vc" id="lcol" aria-label="Collapse the view options" aria-expanded="true">‹</button></div>
@@ -186,9 +209,16 @@ header.top .right { margin-left: auto; display: flex; gap: 12px; align-items: ce
         <div class="ov inset" id="inset" data-ov="inset" hidden><div class="oh"><span>Along the first wall</span><button type="button" class="oc" aria-label="Collapse">–</button></div><div class="ob"><canvas id="insetcv"></canvas></div></div>
         <div class="tip" id="tip" hidden></div>
       </div>
-      <div class="params" id="params"></div>
-    </section>
-    <section class="pn" aria-label="Metrics">
+      </section>
+      <div class="gut h" id="gh" role="separator" aria-orientation="horizontal" aria-label="Resize View and Parameters"></div>
+      <section class="pn" data-pane="params" aria-label="Parameters" style="flex: 1 1 0">
+        <div class="ph"><span>Parameters</span><button type="button" class="px" aria-label="Close Parameters">×</button></div>
+        <div class="pb"><div class="params" id="params"></div></div>
+      </section>
+    </div>
+    <div class="gut v" id="g2" role="separator" aria-orientation="vertical" aria-label="Resize Metrics"></div>
+    <section class="pn" data-pane="metrics" aria-label="Metrics">
+      <div class="ph"><span>Metrics</span><button type="button" class="px" aria-label="Close Metrics">×</button></div>
       <div class="pb side">
         <div class="kpis" id="kpis"></div>
         <div><h2 style="margin-bottom:8px" data-tip="Each design runs at Fast on every edit. Resolved runs 80× more neutrons and the recirculating tank flow. Reference is offline continuous-energy OpenMC.">Fidelity</h2><div class="ladder" id="ladder"></div></div>
