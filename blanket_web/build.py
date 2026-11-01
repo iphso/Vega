@@ -122,6 +122,11 @@ VIEW = Path(os.environ.get("BLANKET_VIEW", Path.home() / "Projects/StoneLab-blan
 if VIEW.exists():
     shutil.copy(VIEW, out / "blanket-view.js")
     shutil.copy(V / "blanket/runs/arc_baseline/result.json", out / "arc_result.json")
-for f in ["index.html", "app.js", "validation.html", "validation.js"]:
+for f in ["index.html", "app.js", "validation.html", "validation.js", "reel.html"]:
     shutil.copy(H / f, out / f)
+# the reel: cinema engine + script + baked data (StoneLab packages/physics/scripts/reel-bake.ts), three.js
+for sub in ["cinema", "vendor"]:
+    (out / sub).mkdir(exist_ok=True)
+    for f in (H / sub).iterdir():
+        shutil.copy(f, out / sub / f.name)
 print(f"staged {out}")
