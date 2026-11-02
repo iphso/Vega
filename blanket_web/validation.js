@@ -275,7 +275,41 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
 }
 
 // ---------- open items
+// ---- generic-tool checks
+{
+  const X = V.extended ?? {}, rows = [];
+  const row = (what, check, ours, ref, d) => rows.push(`<tr><td>${what}</td><td>${check}</td><td class="n">${ours}</td><td class="n">${ref}</td><td class="n">${d}</td></tr>`);
+  const BN = { flinak: "FLiNaK", pbli: "PbLi", li: "lithium", hcpb: "He-cooled pebble bed" };
+  for (const b of X.breeders ?? []) {
+    const br = X.breeders_browser?.[b.breeder];
+    row(`${BN[b.breeder] ?? b.breeder} breeder, ARC geometry`, "TBR vs OpenMC continuous energy", br ? `${f(br[0], 4)} <span class="d">± ${f(br[1], 4)}</span>` : "—", f(b.openmc_ce, 4), br ? pct(br[0] / b.openmc_ce - 1) : "—");
+  }
+  const C = X.conformal;
+  if (C) {
+    const g = C.grids[0], hv = Object.entries(g.heating_MW).filter(([k]) => k !== "coil" && k !== "tank" && k !== "shield").map(([, [a, b]]) => Math.abs(a / b - 1));
+    row("3-D conformal path (axisymmetric case)", "TBR vs OpenMC on the same offset geometry", `${f(g.browser[0], 4)} <span class="d">± ${f(g.browser[1], 4)}</span>`, f(C.openmc_ce.TBR, 4), pct(g.rel));
+    row("", "heating, first wall to blanket (worst layer)", "", "", `≤ ${(Math.max(...hv) * 100).toFixed(1)}%`);
+  }
+  const P = X.ports;
+  if (P) {
+    row(`${P.ports.n} equatorial ports, ${P.ports.width_cm / 100} × ${P.ports.height_cm / 100} m`, "TBR vs OpenMC CSG ports", `${f(P.browser.with[0], 4)}`, `${f(P.openmc.with[0], 4)} <span class="d">± ${f(P.openmc.with[1], 4)}</span>`, pct(P.browser.with[0] / P.openmc.with[0] - 1));
+    row("", "TBR lost to the ports", f(P.browser.with[0] - P.browser.without[0], 3), f(P.openmc.with[0] - P.openmc.without[0], 3), "");
+  }
+  const S = X.sens;
+  if (S) {
+    const big = S.rows.filter((r) => Math.abs(r.dTBR_FD) > 0.005), w = Math.max(...big.map((r) => Math.abs(r.dTBR_LR - r.dTBR_FD)));
+    row("Layer sensitivities (one run)", `dTBR/d(density) vs finite differences, ${S.histories / 1e6}M histories`, `${big.length} layers`, "", `worst |Δ| ${f(w, 4)}`);
+    const sh = S.rows.find((r) => r.region === "blanket");
+    if (sh) row("", "magnet fluence vs blanket density, d ln F", f(sh.dlnTF_LR, 2), f(sh.dlnTF_FD, 2), "");
+  }
+  const M = X.mhd;
+  if (M) row("Liquid-metal duct flow in a field", "pressure gradient vs Shercliff / Hunt series, Ha 10–10⁵", "", "", "≤ 0.2%");
+  $("generic-table").innerHTML = `<tr><th>What</th><th>Checked against</th><th class="n">Ours</th><th class="n">Reference</th><th class="n">Δ</th></tr>` + rows.join("");
+}
+
 $("gaplist").innerHTML = [
+  "<b>Other breeders</b> run in ARC's geometry with coolant properties from recalled correlations; tritium transport and wall permeation are FLiBe-only, and the pebble bed has no purge-gas model. The MHD pressure drop treats the vessel channel as a square duct (no ribs, bends, inserts or manifolds).",
+  "<b>Stellarators</b> use the ARC cross sections (collapsed in a tokamak spectrum) and a uniform conformal build; no temperature, tritium or peak-damage factors yet, and the magnet fluence is the coil face's average, not its hot spot. The 3-D geometry path itself matches OpenMC on the axisymmetric case.",
   "<b>Browser vs OpenMC on the LIBRA stacks: +0.5% in both experiments</b> (1.7σ). An earlier +1.5% was the OpenMC reference's own noise: both experiments shared a seed and nearly the same geometry, so their errors were correlated; 20 million reference histories brought it to +0.5%. Halving the raster pitch to 0.025 cm changed nothing.",
   "<b>Neutron-multiplying first walls</b> gain about twice the published TBR per cm (above). The divertor and support columns are not modelled.",
   "<b>BABY run 3 and FLiBe-1L run 2</b> differ from the other runs well beyond their errors. That is LIBRA's open question, not ours; every run is shown.",

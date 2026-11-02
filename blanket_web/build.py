@@ -139,6 +139,18 @@ for rd in sorted((V / "blanket/ext").glob("*-1L-run-*")):
         "radius_m": pd["modelled_baby_radius"]["value"] / 100, "height_m": pd["modelled_baby_height"]["value"] * 1e3 / 1e2,
         "measured_TBR": pd["measured_TBR"]["value"],
     }
+# ---- checks of the generic-tool additions (breeders, 3-D, ports, sensitivities, MHD)
+def jl(path):
+    path = Path(path)
+    return json.load(open(path)) if path.exists() else None
+ext = {"breeders": [], "conformal": jl(R / "conformal_check.json"), "ports": jl(R / "ports_check.json"),
+       "sens": jl(R / "sens_check.json"), "breeders_browser": jl(R / "breeder_check.json"),
+       "mhd": jl(Path.home() / "Projects/StoneLab-blanket/packages/physics/src/mhd/validation.json")}
+for d in sorted((R / "mgxs").glob(f"{GS}_breeder-*")):
+    g = jl(d / "gate1.json")
+    if g:
+        ext["breeders"].append({"breeder": d.name.split("breeder-")[1], "openmc_ce": g["ce"]["TBR"], "openmc_mg": g["mg"]["TBR"]})
+val["extended"] = ext
 json.dump(val, open(out / "validation.json", "w"), indent=1)
 
 shutil.copy(ENGINE, out / "blanket-engine.js")
