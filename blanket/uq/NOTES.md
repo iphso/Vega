@@ -159,10 +159,10 @@ NJOY ERRORR/HEATR, on 8 threads of a shared machine.
   - `attribution.py` → `attribution.json`
 - Checks: `check_perturb.py`, `check_li7_share.py`
 - Data:
-  - `data/results/*.jsonl`: every run, with the transport seed. Sample factors are reproducible from
+  - `raw/results/*.jsonl`: every run, with the transport seed. Sample factors are reproducible from
     the base set name (e.g. `f19`, shared by the A and B seeds) and the index:
     `numpy.default_rng([crc32(name) % 100000, i])`.
-  - `data/plans/*.json`: the per-nuclide MT mapping, unsampled reactions and fits.
+  - `raw/plans/*.json`: the per-nuclide MT mapping, unsampled reactions and fits.
 - Kept outside git, in `~/runs/blanket/uq/`: ENDF files, ERRORR tapes and covariance matrices
   (`cov/<nuc>/plan.npz`), and the per-sample factor `.npz` files. Perturbed libraries are deleted
   after each run.
