@@ -500,6 +500,7 @@ function showRest(r, m, tier) {
   $("heat-h").dataset.tip = `Nuclear heat deposited in each layer, this run.${ref?.heating_MW ? " White ticks: the OpenMC reference." : ""}`;
   $("notes").innerHTML = `<a href="validation.html">How these numbers are computed and checked →</a>`;
   showSens();
+  showAct(m);
   drawMap(m);
   if (view3d && m && !$("v3").hidden && !isStell(cur.design)) view3d.setLive(m, cur.design);
 }
@@ -873,6 +874,19 @@ new ResizeObserver(() => show()).observe($("view"));
   drag($("gh"), "h", (dx, dy, s0) => { L.view = Math.max(0.15, Math.min(0.88, s0.view + dy / Math.max(1, $("center").clientHeight - 40))); });
   apply();
 })();
+
+// ---- after shutdown: decay heat and inner-vessel contact dose at a few cooling times
+const ACT_ROWS = [[2, "1 hour"], [3, "1 day"], [5, "1 month"], [6, "1 year"], [7, "10 years"]];
+const watts = (w) => w >= 1e6 ? `${f(w / 1e6, w >= 1e7 ? 0 : 1)} MW` : w >= 1e3 ? `${f(w / 1e3, w >= 1e4 ? 0 : 1)} kW` : `${f(w, 0)} W`;
+function showAct(m) {
+  const box = $("act-box"), A = m?.activation;
+  box.hidden = !A || isStell(cur.design);
+  if (box.hidden) return;
+  const vv = A.regions.vv_in;
+  const top = (i) => { const t = vv?.topDose?.[i]?.[0]; return t ? ` title="mostly ${t.nuclide}"` : ""; };
+  $("act").innerHTML = `<tr><th>Cooling</th><th>Decay heat</th><th>Vessel dose</th></tr>` + ACT_ROWS.map(([i, lab]) =>
+    `<tr><td>${lab}</td><td>${watts(A.totals.decayHeatW[i])}</td><td${top(i)}>${sig(vv ? vv.contactDoseSvPerH[i] : NaN, 2)} Sv/h</td></tr>`).join("");
+}
 
 // ---- which layer matters: density sensitivities of TBR and the magnet fluence, one GPU run
 const SENS_N = 2_000_000;

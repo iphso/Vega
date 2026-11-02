@@ -48,6 +48,10 @@ for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
     packs.append({"dir": dst.name, "fw": fw, "li6": li6, "bytes": len(gz), "damage": side.exists(), **({"breeder": breeder} if breeder else {})})
     print(f"pack {dst.name}: fw={fw} li6={li6} {len(gz)/1e6:.2f} MB gz")
 json.dump({"groups": GS, "packs": packs}, open(out / "packs" / "packs.json", "w"), indent=1)
+# activation / decay heat responses (blanket/activation, baseline materials and spectra)
+act = V / "blanket/activation/runs/VITAMIN-J-175_ww/activation_sidecar.json"
+if act.exists():
+    shutil.copy(act, out / "packs" / "activation.json")
 
 # LIBRA experiment packs (raster + point source), for the validation page's live runs
 for d in sorted((V / "blanket/neutpack").glob("libra_*")):

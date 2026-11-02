@@ -66,13 +66,33 @@ def put(arr):
     return {"offset": o, "length": int(a.size)}
 
 
+# groups a design run left empty in the deep cells (tank wall, shield, coil) take the
+# constants of the same material in every group (fill_mgxs.py); without them a neutron in
+# such a group would cross the cell unattenuated
+FILL = os.path.join(HERE, "runs", "mgxs", f"fill_{GS}_{FMT}")
+fill = None
+if not LIBRA and os.path.exists(os.path.join(FILL, "mgxs.h5")):
+    fill = (openmc.MGXSLibrary.from_hdf5(os.path.join(FILL, "mgxs.h5")), np.load(os.path.join(FILL, "coeffs.npz")))
+    manifest["filled"] = {}
+
 for i, name in enumerate(cells):
     xs = lib.get_by_name(f"cell_{name}")
-    st = np.asarray(xs.total[0]).reshape(G)
+    st = np.asarray(xs.total[0]).reshape(G).copy()
     # XSdata.scatter_matrix holds the NU-scatter matrix already (create_mg_library
     # writes "nu-scatter matrix" there; OpenMC divides by multiplicity_matrix to get
     # the plain scatter). [G_in, G_out, angular]
-    ns = np.asarray(xs.scatter_matrix[0]).reshape(G, G, -1)
+    ns = np.asarray(xs.scatter_matrix[0]).reshape(G, G, -1).copy()
+    sig_trit, kerm = co["sig_tritium"][i].copy(), co["kerma"][i].copy()
+    fnames = [str(c) for c in fill[1]["cells"]] if fill else []
+    if name in fnames:
+        empty = np.nonzero(co["ce_flux"][i] <= 0)[0]
+        if len(empty):
+            fx, fj = fill[0].get_by_name(f"cell_{name}"), fnames.index(name)
+            fst = np.asarray(fx.total[0]).reshape(G)
+            fns = np.asarray(fx.scatter_matrix[0]).reshape(G, G, -1)
+            st[empty] = fst[empty]; ns[empty] = fns[empty]
+            sig_trit[empty] = fill[1]["sig_tritium"][fj][empty]; kerm[empty] = fill[1]["kerma"][fj][empty]
+            manifest["filled"][name] = len(empty)
     if FMT.startswith("hist"):
         p0 = ns.sum(axis=2)
         w = np.clip(ns, 0.0, None)
@@ -101,7 +121,7 @@ for i, name in enumerate(cells):
     manifest["cells"][name] = {
         "sigma_t": put(st), "nu_out": put(nu_out), "row_ptr": put(np.array(row_ptr)),
         "tr_g": put(np.array(tr_g)), "tr_cdf": put(np.array(tr_cdf)), "mu_cdf": put(mu_sparse),
-        "sigma_tritium": put(co["sig_tritium"][i]), "kerma": put(co["kerma"][i]),
+        "sigma_tritium": put(sig_trit), "kerma": put(kerm),
     }
 
 if LIBRA:
