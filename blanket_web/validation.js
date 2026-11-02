@@ -134,7 +134,8 @@ $("runlive").onclick = async () => {
 };
 
 // ---------- browser vs OpenMC
-const PACK_LABEL = (p) => p.pack === "base" ? "ARC baseline (W wall, 90% Li-6)" : p.pack.replace("fw_material-", "first wall: ").replace("li6_pct-", "Li-6 ").replace(/\.0$/, "") + (p.pack.startsWith("li6") ? "%" : "");
+const BREEDER_LABEL = { flinak: "FLiNaK", pbli: "PbLi", li: "lithium", hcpb: "He-cooled pebble bed" };
+const PACK_LABEL = (p) => p.pack.startsWith("breeder-") ? `breeder: ${BREEDER_LABEL[p.pack.slice(8)] ?? p.pack.slice(8)}` : p.pack === "base" ? "ARC baseline (W wall, 90% Li-6)" : p.pack.replace("fw_material-", "first wall: ").replace("li6_pct-", "Li-6 ").replace(/\.0$/, "") + (p.pack.startsWith("li6") ? "%" : "");
 {
   const W = 460, rowH = 24, top = 6, L = 200, H = top + B.packs.length * rowH + 34;
   const ds = B.packs.map((p) => ({ label: PACK_LABEL(p), d: p.browser[0] / p.openmc - 1, e: p.browser[1] / p.openmc }));
@@ -303,6 +304,7 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
     if (sh) row("", "magnet fluence vs blanket density, d ln F", f(sh.dlnTF_LR, 2), f(sh.dlnTF_FD, 2), "");
   }
   const M = X.mhd;
+  row("Activation, decay heat, contact dose", "OpenMC depletion (full ENDF/B-VIII.0 chain), 1 s – 100 y after 1 FPY", "", "", "≤ 1.7%, first wall – shield");
   if (M) row("Liquid-metal duct flow in a field", "pressure gradient vs Shercliff / Hunt series, Ha 10–10⁵", "", "", "≤ 0.2%");
   $("generic-table").innerHTML = `<tr><th>What</th><th>Checked against</th><th class="n">Ours</th><th class="n">Reference</th><th class="n">Δ</th></tr>` + rows.join("");
 }
