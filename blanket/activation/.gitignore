@@ -1,0 +1,10 @@
+__pycache__/
+*.h5
+*.npz
+model.xml
+*.log
+data/*.xml
+runs/_test/
+runs/dose_check/
+runs/*/depletion/
+runs/VITAMIN-J-175/

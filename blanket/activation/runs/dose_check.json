@@ -1,0 +1,165 @@
+{
+ "note": "Checks the contact-dose proxy (FISPACT-II's semi-infinite-slab formula, B = 2) against\nan OpenMC photon transport of the same situation: a thick slab of the material with a\nuniform isotropic photon source, air-kerma rate at its surface from the tallied photon\nfluence (track length in a thin void layer on the surface, central patch), with the NIST\nair mass energy-absorption coefficient:\n    D [Gy/h] = 3600 * 1.602e-13 * 1e3 * sum_E phi(E) E[MeV] (mu_en/rho)_air(E)\n(Gy of air ~ Sv for this proxy, as FISPACT treats it). Source normalised to 1 photon / kg / s.",
+ "rows": [
+  {
+   "material": "inconel718",
+   "E_MeV": 0.3,
+   "mc_Gy_h_per_photon_kg_s": 3.585414955115995e-11,
+   "mc_rel_sd": 0.16030645930648582,
+   "proxy": 4.344629593571284e-11,
+   "proxy_over_mc": 1.2117508427781762
+  },
+  {
+   "material": "inconel718",
+   "E_MeV": 0.8,
+   "mc_Gy_h_per_photon_kg_s": 1.6575750893641342e-10,
+   "mc_rel_sd": 0.09574930900436607,
+   "proxy": 1.9613772723515165e-10,
+   "proxy_over_mc": 1.1832810983567112
+  },
+  {
+   "material": "inconel718",
+   "E_MeV": 1.25,
+   "mc_Gy_h_per_photon_kg_s": 3.0368624909032e-10,
+   "mc_rel_sd": 0.07865577664539271,
+   "proxy": 3.5585765158348573e-10,
+   "proxy_over_mc": 1.1717937596761232
+  },
+  {
+   "material": "inconel718",
+   "E_MeV": 2.5,
+   "mc_Gy_h_per_photon_kg_s": 5.912622433248715e-10,
+   "mc_rel_sd": 0.059886413899890696,
+   "proxy": 8.011890214579036e-10,
+   "proxy_over_mc": 1.3550485093594704
+  },
+  {
+   "material": "inconel718",
+   "E_MeV": 6.1,
+   "mc_Gy_h_per_photon_kg_s": 1.2174132494727547e-09,
+   "mc_rel_sd": 0.05936546009510533,
+   "proxy": 1.8396024073100284e-09,
+   "proxy_over_mc": 1.5110747382671705
+  },
+  {
+   "material": "tungsten",
+   "E_MeV": 0.3,
+   "mc_Gy_h_per_photon_kg_s": 6.546368947073264e-12,
+   "mc_rel_sd": 0.29985702169879275,
+   "proxy": 1.5318848755898962e-11,
+   "proxy_over_mc": 2.3400527650901313
+  },
+  {
+   "material": "tungsten",
+   "E_MeV": 0.8,
+   "mc_Gy_h_per_photon_kg_s": 1.1766092229168776e-10,
+   "mc_rel_sd": 0.19999986232908099,
+   "proxy": 1.651380768131472e-10,
+   "proxy_over_mc": 1.4035082642286367
+  },
+  {
+   "material": "tungsten",
+   "E_MeV": 1.25,
+   "mc_Gy_h_per_photon_kg_s": 2.452055441911403e-10,
+   "mc_rel_sd": 0.18060614642846862,
+   "proxy": 3.450214060864231e-10,
+   "proxy_over_mc": 1.4070701672939145
+  },
+  {
+   "material": "tungsten",
+   "E_MeV": 2.5,
+   "mc_Gy_h_per_photon_kg_s": 5.038653636948662e-10,
+   "mc_rel_sd": 0.1659610898818056,
+   "proxy": 7.528335948339916e-10,
+   "proxy_over_mc": 1.494116581686486
+  },
+  {
+   "material": "tungsten",
+   "E_MeV": 6.1,
+   "mc_Gy_h_per_photon_kg_s": 7.743961247190389e-10,
+   "mc_rel_sd": 0.18062937036504798,
+   "proxy": 1.3665334803522355e-09,
+   "proxy_over_mc": 1.7646440067711233
+  },
+  {
+   "material": "TiH2",
+   "E_MeV": 0.3,
+   "mc_Gy_h_per_photon_kg_s": 4.16981195827092e-11,
+   "mc_rel_sd": 0.06946008376568932,
+   "proxy": 4.5693680688326563e-11,
+   "proxy_over_mc": 1.0958211340368016
+  },
+  {
+   "material": "TiH2",
+   "E_MeV": 0.8,
+   "mc_Gy_h_per_photon_kg_s": 1.630207085008789e-10,
+   "mc_rel_sd": 0.04892204479793292,
+   "proxy": 1.9335448785165427e-10,
+   "proxy_over_mc": 1.1860731659782464
+  },
+  {
+   "material": "TiH2",
+   "E_MeV": 1.25,
+   "mc_Gy_h_per_photon_kg_s": 2.739060918463895e-10,
+   "mc_rel_sd": 0.051072937577189496,
+   "proxy": 3.489943054741172e-10,
+   "proxy_over_mc": 1.2741385309160567
+  },
+  {
+   "material": "TiH2",
+   "E_MeV": 2.5,
+   "mc_Gy_h_per_photon_kg_s": 5.866189386040215e-10,
+   "mc_rel_sd": 0.05081561699759531,
+   "proxy": 7.984069300165604e-10,
+   "proxy_over_mc": 1.3610316296922347
+  },
+  {
+   "material": "TiH2",
+   "E_MeV": 6.1,
+   "mc_Gy_h_per_photon_kg_s": 1.4031830779127557e-09,
+   "mc_rel_sd": 0.05585022161447175,
+   "proxy": 1.9746331300446416e-09,
+   "proxy_over_mc": 1.4072526679711117
+  },
+  {
+   "material": "flibe",
+   "E_MeV": 0.3,
+   "mc_Gy_h_per_photon_kg_s": 6.498399517880073e-11,
+   "mc_rel_sd": 0.12915053685062938,
+   "proxy": 4.980145615966773e-11,
+   "proxy_over_mc": 0.7663649491331076
+  },
+  {
+   "material": "flibe",
+   "E_MeV": 0.8,
+   "mc_Gy_h_per_photon_kg_s": 1.956611292547798e-10,
+   "mc_rel_sd": 0.04493538460007236,
+   "proxy": 2.0137969917999253e-10,
+   "proxy_over_mc": 1.0292269085177685
+  },
+  {
+   "material": "flibe",
+   "E_MeV": 1.25,
+   "mc_Gy_h_per_photon_kg_s": 3.041882119343481e-10,
+   "mc_rel_sd": 0.03532882430738309,
+   "proxy": 3.622382004710284e-10,
+   "proxy_over_mc": 1.1908357597670782
+  },
+  {
+   "material": "flibe",
+   "E_MeV": 2.5,
+   "mc_Gy_h_per_photon_kg_s": 6.47796303731126e-10,
+   "mc_rel_sd": 0.038125815862416035,
+   "proxy": 8.538681664452125e-10,
+   "proxy_over_mc": 1.3181121311238888
+  },
+  {
+   "material": "flibe",
+   "E_MeV": 6.1,
+   "mc_Gy_h_per_photon_kg_s": 1.602977502742685e-09,
+   "mc_rel_sd": 0.026410787510037247,
+   "proxy": 2.453245069196463e-09,
+   "proxy_over_mc": 1.5304301308028185
+  }
+ ]
+}

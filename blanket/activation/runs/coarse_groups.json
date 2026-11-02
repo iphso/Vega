@@ -1,0 +1,413 @@
+{
+ "note": "The sidecar collapses each reaction to Gc groups in the BASELINE cell's own CE spectrum.\nA design change moves the spectrum; the browser then has the right coarse-group track\nbut the baseline within-group shape. This script measures that error on real spectra:\nthe 175-group CE fluxes of the damage-tier design variants (../damage/runs/*/coeffs_damage.npz,\nsame cells, same groups), folded with the baseline's per-group direct reaction rates\n(rate_g / flux_g, self-shielded, from runs/VITAMIN-J-175_ww/tallies.npz):\n    exact  = sum_g sigma_g phi'_g,      coarse = sum_c sigma_c(baseline) Phi'_c\nfor the reactions that make the dominant activation products, for several candidate\ncoarse-group structures. (Self-shielding changes with the variant are not in this test:\nit holds sigma_g at the baseline; it isolates the coarse-group collapse.)",
+ "variants": [
+  "VITAMIN-J-175_fw_cm-2.0",
+  "VITAMIN-J-175_fw_material-Be",
+  "VITAMIN-J-175_fw_material-CFC",
+  "VITAMIN-J-175_fw_material-Inconel",
+  "VITAMIN-J-175_li6_pct-30.0",
+  "VITAMIN-J-175_li6_pct-60.0",
+  "VITAMIN-J-175_li6_pct-7.5",
+  "VITAMIN-J-175_vv_in_cm-2.0"
+ ],
+ "candidates": {
+  "4: 14 MeV | 1 MeV | 1 keV | thermal": {
+   "Gc": 4,
+   "n": 471,
+   "excluded": "coil",
+   "max_abs_rel": 1.1492544030647518,
+   "p95_abs_rel": 0.24323453636678427,
+   "worst": [
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "tank",
+     "reaction": "Cr50(n,gamma)",
+     "rel": 1.1492544030647518,
+     "mc_rel_sd": 0.006452036082425443
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "tank",
+     "reaction": "Ni62(n,gamma)",
+     "rel": 1.0204669767105852,
+     "mc_rel_sd": 0.005995634922151834
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "tank",
+     "reaction": "Ni64(n,gamma)",
+     "rel": 0.8054953642825948,
+     "mc_rel_sd": 0.005114789108707311
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.5851112173079039,
+     "mc_rel_sd": 0.001292243241630298
+    },
+    {
+     "variant": "VITAMIN-J-175_fw_material-Be",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.544233123180599,
+     "mc_rel_sd": 0.0026534760005710338
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-30.0",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.45252570983470297,
+     "mc_rel_sd": 0.002383851083935173
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "vv_out",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.4306642001904163,
+     "mc_rel_sd": 0.001459306072773806
+    },
+    {
+     "variant": "VITAMIN-J-175_fw_material-CFC",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.4247503587853918,
+     "mc_rel_sd": 0.003268391797737246
+    }
+   ]
+  },
+  "6": {
+   "Gc": 6,
+   "n": 471,
+   "excluded": "coil",
+   "max_abs_rel": 1.1784203427326387,
+   "p95_abs_rel": 0.20593059914091205,
+   "worst": [
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "tank",
+     "reaction": "Cr50(n,gamma)",
+     "rel": 1.1784203427326387,
+     "mc_rel_sd": 0.006452036082425443
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "tank",
+     "reaction": "Ni62(n,gamma)",
+     "rel": 1.0528479211825794,
+     "mc_rel_sd": 0.005995634922151834
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "tank",
+     "reaction": "Ni64(n,gamma)",
+     "rel": 0.9057590103915512,
+     "mc_rel_sd": 0.005114789108707311
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.5805895333524417,
+     "mc_rel_sd": 0.001292243241630298
+    },
+    {
+     "variant": "VITAMIN-J-175_fw_material-Be",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.5385229157375075,
+     "mc_rel_sd": 0.0026534760005710338
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-30.0",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.4442849998523587,
+     "mc_rel_sd": 0.002383851083935173
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "vv_out",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.4267760862267934,
+     "mc_rel_sd": 0.001459306072773806
+    },
+    {
+     "variant": "VITAMIN-J-175_fw_material-CFC",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.41468800361513714,
+     "mc_rel_sd": 0.003268391797737246
+    }
+   ]
+  },
+  "8 (sidecar default)": {
+   "Gc": 8,
+   "n": 471,
+   "excluded": "coil",
+   "max_abs_rel": 0.5822306345772239,
+   "p95_abs_rel": 0.16983920489060272,
+   "worst": [
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.5822306345772239,
+     "mc_rel_sd": 0.001292243241630298
+    },
+    {
+     "variant": "VITAMIN-J-175_fw_material-Be",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.5414765282910725,
+     "mc_rel_sd": 0.0026534760005710338
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-30.0",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.444444517543256,
+     "mc_rel_sd": 0.002383851083935173
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "vv_out",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.4318470806692528,
+     "mc_rel_sd": 0.001459306072773806
+    },
+    {
+     "variant": "VITAMIN-J-175_fw_material-CFC",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.4149641135306178,
+     "mc_rel_sd": 0.003268391797737246
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "fw",
+     "reaction": "W180(n,gamma)",
+     "rel": -0.35407472086416847,
+     "mc_rel_sd": 0.0016215810481703251
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-30.0",
+     "cell": "vv_out",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.27961357004373744,
+     "mc_rel_sd": 0.002243547637636339
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "tank",
+     "reaction": "Nb93(n,gamma)",
+     "rel": -0.2584701082273785,
+     "mc_rel_sd": 0.002639897400564029
+    }
+   ]
+  },
+  "8 alt (finer fast)": {
+   "Gc": 8,
+   "n": 471,
+   "excluded": "coil",
+   "max_abs_rel": 0.5808825373718149,
+   "p95_abs_rel": 0.17290304843054027,
+   "worst": [
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.5808825373718149,
+     "mc_rel_sd": 0.001292243241630298
+    },
+    {
+     "variant": "VITAMIN-J-175_fw_material-Be",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.5402637455195407,
+     "mc_rel_sd": 0.0026534760005710338
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-30.0",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.44428730481920853,
+     "mc_rel_sd": 0.002383851083935173
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "vv_out",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.4260153778430117,
+     "mc_rel_sd": 0.001459306072773806
+    },
+    {
+     "variant": "VITAMIN-J-175_fw_material-CFC",
+     "cell": "vv_in",
+     "reaction": "Co59(n,gamma)",
+     "rel": -0.414830543429219,
+     "mc_rel_sd": 0.003268391797737246
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "fw",
+     "reaction": "W180(n,gamma)",
+     "rel": -0.3483317019031561,
+     "mc_rel_sd": 0.0016215810481703251
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "tank",
+     "reaction": "Nb93(n,gamma)",
+     "rel": -0.31227847049885427,
+     "mc_rel_sd": 0.002639897400564029
+    },
+    {
+     "variant": "VITAMIN-J-175_li6_pct-7.5",
+     "cell": "vv_out",
+     "reaction": "Ni62(n,gamma)",
+     "rel": -0.28039058275171524,
+     "mc_rel_sd": 0.0004420612491708221
+    }
+   ]
+  }
+ },
+ "by_cell": {
+  "4: 14 MeV | 1 MeV | 1 keV | thermal": {
+   "fw": {
+    "max": 0.3739867627811453,
+    "median": 0.005436525121930158
+   },
+   "vv_in": {
+    "max": 0.5851112173079039,
+    "median": 0.04269040414200542
+   },
+   "channel": {
+    "max": 0.14495614404579893,
+    "median": 0.0254250329925233
+   },
+   "be": {
+    "max": 0.03528281862040605,
+    "median": 0.002071078954339778
+   },
+   "vv_out": {
+    "max": 0.4306642001904163,
+    "median": 0.019612371657739325
+   },
+   "blanket": {
+    "max": 0.04218525187067179,
+    "median": 0.011903220828843986
+   },
+   "tank": {
+    "max": 1.1492544030647518,
+    "median": 0.012048963028162274
+   },
+   "shield": {
+    "max": 0.03219127649554632,
+    "median": 0.0035137804945902795
+   }
+  },
+  "6": {
+   "fw": {
+    "max": 0.34809928074143404,
+    "median": 0.0015622442166461914
+   },
+   "vv_in": {
+    "max": 0.5805895333524417,
+    "median": 0.019733476133218353
+   },
+   "channel": {
+    "max": 0.12131212970037564,
+    "median": 0.013361079317316171
+   },
+   "be": {
+    "max": 0.04241438013832255,
+    "median": 0.002020409152999836
+   },
+   "vv_out": {
+    "max": 0.4267760862267934,
+    "median": 0.0055384715597033285
+   },
+   "blanket": {
+    "max": 0.012647266209172336,
+    "median": 0.00492449789593008
+   },
+   "tank": {
+    "max": 1.1784203427326387,
+    "median": 0.007073518872424911
+   },
+   "shield": {
+    "max": 0.03219094065098993,
+    "median": 0.003149545735433912
+   }
+  },
+  "8 (sidecar default)": {
+   "fw": {
+    "max": 0.35407472086416847,
+    "median": 0.0015622442166461914
+   },
+   "vv_in": {
+    "max": 0.5822306345772239,
+    "median": 0.015367153022780577
+   },
+   "channel": {
+    "max": 0.11129216018849275,
+    "median": 0.013312447991795928
+   },
+   "be": {
+    "max": 0.04241438013832255,
+    "median": 0.002020409152999836
+   },
+   "vv_out": {
+    "max": 0.4318470806692528,
+    "median": 0.0055384715597033285
+   },
+   "blanket": {
+    "max": 0.012647266209172336,
+    "median": 0.004962347098827147
+   },
+   "tank": {
+    "max": 0.2584701082273785,
+    "median": 0.006429133170946566
+   },
+   "shield": {
+    "max": 0.03219094065098993,
+    "median": 0.0024231798863359466
+   }
+  },
+  "8 alt (finer fast)": {
+   "fw": {
+    "max": 0.3483317019031561,
+    "median": 0.0009917136262544979
+   },
+   "vv_in": {
+    "max": 0.5808825373718149,
+    "median": 0.015604073903791427
+   },
+   "channel": {
+    "max": 0.12006440783474104,
+    "median": 0.01163392411770292
+   },
+   "be": {
+    "max": 0.01951448504615394,
+    "median": 0.003682893128386766
+   },
+   "vv_out": {
+    "max": 0.4260153778430117,
+    "median": 0.0036678582946271243
+   },
+   "blanket": {
+    "max": 0.012291498111167143,
+    "median": 0.004028081149537399
+   },
+   "tank": {
+    "max": 0.31227847049885427,
+    "median": 0.005446913178871193
+   },
+   "shield": {
+    "max": 0.021372054228457005,
+    "median": 0.0020405311328212106
+   }
+  }
+ }
+}
