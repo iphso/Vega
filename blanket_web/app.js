@@ -1,7 +1,7 @@
 // Blanket Simulator page. Engine: StoneLab apps/blanket (bundled as blanket-engine.js);
 // data: packs/ (OpenMC-derived cross sections) and designs.json (library + OpenMC
 // references), both staged by build.py.
-import { BlanketEngine, ARC_DESIGN, ARC_DEFAULTS, CONFORMAL_DEFAULTS, REGIONS, regionRaster, conformalSlice, FLIBE_SOLUBILITY } from "./blanket-engine.js";
+import { BlanketEngine, evaluateChannel, ARC_DESIGN, ARC_DEFAULTS, CONFORMAL_DEFAULTS, REGIONS, regionRaster, conformalSlice, FLIBE_SOLUBILITY } from "./blanket-engine.js";
 
 const $ = (id) => document.getElementById(id);
 const FAST = 100_000, RESOLVED = 8_000_000;
@@ -65,6 +65,7 @@ const TIPS = {
   bulkFlow: "Salt flow through the tank. Sets the outlet temperature and how fast tritium is carried out.",
   inletK: "Salt temperature entering the vessel. FLiBe freezes at 732 K.",
   qPlasma: "Heat flux from the plasma onto the first wall (radiation and particles).",
+  B0T: "Toroidal field at the major radius (ARC: 9.2 T). Only liquid metals feel it here: it drags on their flow (MHD pressure drop).",
 };
 const PARAMS = [
   P("Vessel", "g.fw_cm", "First wall", "cm", 0.1, 0, 5),
@@ -90,6 +91,7 @@ const PARAMS = [
   P("Cooling", "channelVelocity", "Channel velocity", "m/s", 0.1, 0.1, 120),
   P("Cooling", "bulkFlow", "Tank flow", "m³/s", 0.05, 0.1, 100),
   P("Cooling", "inletK", "Inlet temperature", "K", 5, 300, 950),
+  P("Cooling", "B0T", "Toroidal field", "T", 0.1, 1, 15),
   P("Cooling", "qPlasma", "Plasma heat on wall", "MW/m²", 0.05, 0, 2),
 ];
 // stellarators: a conformal build around a Fourier first wall (surfaces.json)
@@ -122,7 +124,7 @@ const set = (d, key, v) => {
   else if (key.startsWith("p.")) d.ports = { ...PORT_DEFAULTS, ...(d.ports ?? {}), [key.slice(2)]: v };
   else d[key] = v;
 };
-const fullDesign = (partial) => ({ ...structuredClone(ARC_DESIGN), ...structuredClone(partial ?? {}), geometry: { ...(partial?.geometry ?? {}) }, layers: { ...(partial?.layers ?? {}) } });
+const fullDesign = (partial) => ({ ...structuredClone(ARC_DESIGN), B0T: 9.2, ...structuredClone(partial ?? {}), geometry: { ...(partial?.geometry ?? {}) }, layers: { ...(partial?.layers ?? {}) } });
 const toConf = (d) => { const S = SURF[d.surface]; return { surface: { rc: S.rc, zs: S.zs, nfp: S.nfp }, majorRadiusM: d.majorRadiusM, layers: d.layers ?? {}, breeder: d.breeder, fwMaterial: d.fwMaterial, li6Pct: d.li6Pct, fusionPowerMW: d.fusionPowerMW }; };
 /** One design through the engine: the tokamak path or the conformal (3-D) one. */
 const evalDesign = (d, tier, N, onUpdate, seed) => isStell(d)
@@ -396,9 +398,12 @@ function show() {
           "Full-power years until the inboard face of the TF magnet reaches a fast-neutron fluence of 3×10¹⁸ n/cm².")
         : kpi("TF magnet life", "—", "", `<button type="button" class="lnk" data-run="resolved">run Resolved</button>`,
           `Full-power years until the inboard TF magnet face reaches 3×10¹⁸ n/cm². Too few of Fast's ${sig(m.histories, 2)} neutrons get through the shield to estimate it; Resolved runs enough.`),
-      breederOf(cur.design) !== "flibe"
-        ? kpi("Tritium in the salt", "—", "", `${f(m.tritiumMgPerS, 2)} mg/s bred`,
-          `Tritium transport in the blanket is modelled for FLiBe only so far. ${BREEDER_NAME[breederOf(cur.design)]} needs its own solubility and extraction model.`)
+      breederOf(cur.design) === "hcpb"
+        ? kpi("Tritium in the breeder", "—", "", `${f(m.tritiumMgPerS, 2)} mg/s bred`,
+          "A pebble bed releases its tritium into a helium purge gas, which this model does not have yet.")
+        : breederOf(cur.design) !== "flibe"
+        ? kpi("Tritium in the breeder", `${f(m.inventoryPlugMg, 0)}–${f(m.inventoryMixedMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred`,
+          `Tritium held in the ${BREEDER_NAME[breederOf(cur.design)]} before extraction, between plug flow and a fully mixed blanket (${f(m.residenceS / 60, 1)} min turnover). The tank-flow and wall-permeation model is FLiBe-only so far.`)
         : m.tritium
         ? kpi("Tritium in the salt", `${f(m.tritium.inventoryMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred`,
           `Steady-state tritium dissolved in the tank's salt, before extraction.\n${flow}\nTank-wall loss ${permBand(m)} of the bred tritium across the four FLiBe solubility datasets.`,
@@ -409,6 +414,7 @@ function show() {
         ? kpi("Vessel helium limit", `${f(500 / m.damage.vvInPeakHeAppmPerFpy, 1)} y`, cls(500 / m.damage.vvInPeakHeAppmPerFpy, 5, 1.5), "to 500 appm He",
           `Full-power years until the inner vessel's peak reaches 500 appm helium, past which Inconel can no longer be weld-repaired (Sorbom's criterion).\n${f(m.damage.vvInPeakHeAppmPerFpy, 0)} appm He/y · ${f(m.damage.vvInPeakDpaPerFpy, 1)} dpa/y (NRT).`)
         : "",
+      mhdKpi(kpi, cls),
       kpi("Energy multiplication", f(m.energyMultiplication, 3), "", `${f(m.nuclearMW, 0)} MW heat`,
         "Nuclear heat deposited in the machine per unit of neutron energy. Above 1 because Li-6 and beryllium reactions release energy."),
       kpi("Tank outlet", `${f(m.thermal.bulkOutlet, 0)} K`, cls(m.thermal.bulkOutlet, 1000, 1100, false), `inlet ${f(cur.design.inletK, 0)} K`,
@@ -416,6 +422,32 @@ function show() {
     ].join("");
   }
   showRest(r, m, tier);
+}
+
+// ---- MHD: a liquid metal's cooling channel in the toroidal field (StoneLab mhd, 2-D duct solve)
+const mhdCache = new Map();
+/** Pressure drop in the vessel cooling channel for PbLi / lithium, as a square duct of the
+ * channel gap with 3 mm Inconel walls, at the inboard midplane field, over half the poloidal
+ * perimeter. A design indicator: real channels have ribs, inserts, bends and manifolds. */
+function mhdChannel(d) {
+  const b = breederOf(d);
+  if (b !== "pbli" && b !== "li") return null;
+  const g = { ...ARC_DEFAULTS, ...d.geometry }, k = JSON.stringify([b, g.R0, g.a, g.kappa, g.channel_cm, d.channelVelocity, d.inletK, d.B0T]);
+  if (mhdCache.has(k)) return mhdCache.get(k);
+  let r = null;
+  try {
+    const half = g.channel_cm / 200, B = d.B0T * g.R0 / (g.R0 - g.a);
+    const L = Math.PI * (g.a / 100) * Math.sqrt((1 + g.kappa ** 2) / 2);
+    r = { ...evaluateChannel({ fluid: b === "pbli" ? "PbLi" : "Li", T: d.inletK, B, a: half, b: half, walls: { thickness: 0.003, sigma: 8e5 }, velocity: d.channelVelocity, length: L }), B, L };
+  } catch (e) { console.warn("mhd", e); }
+  mhdCache.set(k, r);
+  return r;
+}
+function mhdKpi(kpi, cls) {
+  const r = mhdChannel(cur.design);
+  if (!r) return "";
+  return kpi("Channel MHD drop", `${f(r.dp / 1e6, r.dp < 1e6 ? 2 : 1)} MPa`, cls(r.dp / 1e6, 2, 5, false), `Ha ${sig(r.Ha, 2)} · aim ≲ 2 MPa`,
+    `Pressure the field's drag costs a ${BREEDER_NAME[breederOf(cur.design)]} flow along the vessel channel: a square duct of the channel gap with 3 mm Inconel walls, at the inboard field ${f(r.B, 1)} T, over ${f(r.L, 1)} m. Fully developed laminar MHD (2-D duct solve, checked against Shercliff and Hunt). Ribs, bends and manifolds add more.`);
 }
 
 /** KPIs for a stellarator (conformal 3-D build): what that path computes. */
