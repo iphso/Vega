@@ -150,6 +150,11 @@ def jl(path):
 ext = {"breeders": [], "conformal": jl(R / "conformal_check.json"), "ports": jl(R / "ports_check.json"),
        "sens": jl(R / "sens_check.json"), "breeders_browser": jl(R / "breeder_check.json"),
        "mhd": jl(Path.home() / "Projects/StoneLab-blanket/packages/physics/src/mhd/validation.json")}
+uq = jl(V / "blanket/uq/results.json")
+if uq:
+    ext["uq"] = {k: {"tbr": [v["TBR"]["nd_rsd_pct"], *v["TBR"]["nd_rsd_pct_68"]], "resolved": v["TBR"]["resolved"],
+                     "heat": v["heating_total_MW"]["nd_rsd_pct"], "n": v["TBR"]["n"], "nominal": v["TBR"]["nominal"]}
+                 for k, v in uq.items() if isinstance(v, dict) and isinstance(v.get("TBR"), dict)}
 for d in sorted((R / "mgxs").glob(f"{GS}_breeder-*")):
     g = jl(d / "gate1.json")
     if g:

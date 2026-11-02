@@ -305,11 +305,18 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
   }
   const M = X.mhd;
   row("Activation, decay heat, contact dose", "OpenMC depletion (full ENDF/B-VIII.0 chain), 1 s – 100 y after 1 FPY", "", "", "≤ 1.7%, first wall – shield");
+  const U = X.uq;
+  if (U?.all) {
+    const a = U.all, part = ["ni58", "f19", "be9", "w"].filter((k) => U[k]?.resolved).map((k) => `${{ f19: "F-19", ni58: "Ni-58", be9: "Be-9", w: "W" }[k]} ${U[k].tbr[0].toFixed(2)}%`).join(", ");
+    row("Nuclear-data uncertainty on TBR", `ENDF/B-VIII.0 covariances, ${a.n} correlated samples of 9 nuclides in OpenMC`, `± ${a.tbr[0].toFixed(2)}% <span class="d">(± ${(a.tbr[0] / 100 * a.nominal).toFixed(3)})</span>`, "", `68%: ${a.tbr[1].toFixed(2)}–${a.tbr[2].toFixed(2)}%`);
+    row("", `largest terms: ${part}; heating ± ${a.heat.toFixed(2)}%`, "", "", "");
+  }
   if (M) row("Liquid-metal duct flow in a field", "pressure gradient vs Shercliff / Hunt series, Ha 10–10⁵", "", "", "≤ 0.2%");
   $("generic-table").innerHTML = `<tr><th>What</th><th>Checked against</th><th class="n">Ours</th><th class="n">Reference</th><th class="n">Δ</th></tr>` + rows.join("");
 }
 
 $("gaplist").innerHTML = [
+  "<b>Nuclear-data uncertainty is a lower bound.</b> Sampled: Li-6, Li-7, Be-9, F-19, Ni-58 and W; the other Inconel nuclides, the shield and the coil were not, nor any angular or secondary-energy distributions (where older studies found the Be (n,2n) term dominant). Per-nuclide values agree with Aimetta et al. (PHYSOR 2022) within about 20%.",
   "<b>Other breeders</b> run in ARC's geometry with coolant properties from recalled correlations; tritium transport and wall permeation are FLiBe-only, and the pebble bed has no purge-gas model. The MHD pressure drop treats the vessel channel as a square duct (no ribs, bends, inserts or manifolds).",
   "<b>Stellarators</b> use the ARC cross sections (collapsed in a tokamak spectrum) and a uniform conformal build; no temperature, tritium or peak-damage factors yet, and the magnet fluence is the coil face's average, not its hot spot. The 3-D geometry path itself matches OpenMC on the axisymmetric case.",
   "<b>Browser vs OpenMC on the LIBRA stacks: +0.5% in both experiments</b> (1.7σ). An earlier +1.5% was the OpenMC reference's own noise: both experiments shared a seed and nearly the same geometry, so their errors were correlated; 20 million reference histories brought it to +0.5%. Halving the raster pitch to 0.025 cm changed nothing.",
