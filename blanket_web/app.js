@@ -49,6 +49,9 @@ const TIPS = {
   "l.vv_out_cm": "Wall between the channel and the blanket.",
   "l.blanket_cm": "Breeder depth, the same everywhere around the plasma.",
   "l.shield_cm": "Shield between the blanket and the magnets.",
+  "p.n": "Openings through the vessel and tank at the outboard midplane (heating, diagnostics, maintenance). Each removes breeding blanket; the 3-D transport sees them, the cross-section view shows the toroidal average.",
+  "p.width_cm": "Toroidal width of each port at the outboard first wall.",
+  "p.height_cm": "Vertical height of each port.",
   solubility: "Which measurement of hydrogen solubility in FLiBe sets the tank-wall permeation. The published values differ by about 1000×.",
   "g.blanket_in_cm": "Depth of FLiBe on the inboard side, next to the central magnet column.",
   "g.blanket_out_cm": "Depth of FLiBe on the outboard side.",
@@ -81,6 +84,9 @@ const PARAMS = [
   P("Machine", "g.kappa", "Elongation", "", 0.02, 1, 2.2),
   P("Machine", "fusionPowerMW", "Fusion power", "MW", 25, 50, 2000),
   P("Machine", "g.shield_in_cm", "Inboard shield", "cm", 1, 10, 100),
+  P("Ports", "p.n", "Equatorial ports", "", 1, 0, 24),
+  P("Ports", "p.width_cm", "Port width", "cm", 10, 20, 400),
+  P("Ports", "p.height_cm", "Port height", "cm", 10, 20, 400),
   P("Cooling", "channelVelocity", "Channel velocity", "m/s", 0.1, 0.1, 120),
   P("Cooling", "bulkFlow", "Tank flow", "m³/s", 0.05, 0.1, 100),
   P("Cooling", "inletK", "Inlet temperature", "K", 5, 300, 950),
@@ -105,10 +111,17 @@ const SPARAMS = [
 const paramsOf = (d) => isStell(d) ? SPARAMS : PARAMS;
 const ALLPARAMS = [...PARAMS, ...SPARAMS.filter((p) => !PARAMS.some((q) => q.key === p.key))];
 let SURF = {};
+const PORT_DEFAULTS = { n: 0, width_cm: 150, height_cm: 150 };
 const get = (d, key) => key.startsWith("g.") ? (d.geometry[key.slice(2)] ?? ARC_DEFAULTS[key.slice(2)])
   : key.startsWith("l.") ? (d.layers?.[key.slice(2)] ?? CONFORMAL_DEFAULTS[key.slice(2)])
+  : key.startsWith("p.") ? (d.ports?.[key.slice(2)] ?? PORT_DEFAULTS[key.slice(2)])
   : key === "breeder" ? breederOf(d) : d[key];
-const set = (d, key, v) => { if (key.startsWith("g.")) d.geometry[key.slice(2)] = v; else if (key.startsWith("l.")) (d.layers ??= {})[key.slice(2)] = v; else d[key] = v; };
+const set = (d, key, v) => {
+  if (key.startsWith("g.")) d.geometry[key.slice(2)] = v;
+  else if (key.startsWith("l.")) (d.layers ??= {})[key.slice(2)] = v;
+  else if (key.startsWith("p.")) d.ports = { ...PORT_DEFAULTS, ...(d.ports ?? {}), [key.slice(2)]: v };
+  else d[key] = v;
+};
 const fullDesign = (partial) => ({ ...structuredClone(ARC_DESIGN), ...structuredClone(partial ?? {}), geometry: { ...(partial?.geometry ?? {}) }, layers: { ...(partial?.layers ?? {}) } });
 const toConf = (d) => { const S = SURF[d.surface]; return { surface: { rc: S.rc, zs: S.zs, nfp: S.nfp }, majorRadiusM: d.majorRadiusM, layers: d.layers ?? {}, breeder: d.breeder, fwMaterial: d.fwMaterial, li6Pct: d.li6Pct, fusionPowerMW: d.fusionPowerMW }; };
 /** One design through the engine: the tokamak path or the conformal (3-D) one. */
@@ -122,7 +135,7 @@ const results = new Map(); // design json -> {fast, resolved}
 // the tank flow per tier: Fast uses potential flow (0.15 s), Resolved the k-epsilon RANS
 // (seconds per new tank shape); the results map stays keyed by the design itself
 const withTier = (d, tier) => ({ ...d, tankFlow: tier === "resolved" ? "rans" : "potential" });
-const keyOf = (d) => JSON.stringify(d, Object.keys(d).sort()) + JSON.stringify(d.geometry, Object.keys(d.geometry).sort()) + JSON.stringify(d.layers ?? {}, Object.keys(d.layers ?? {}).sort());
+const keyOf = (d) => JSON.stringify(d, Object.keys(d).sort()) + JSON.stringify(d.geometry, Object.keys(d.geometry).sort()) + JSON.stringify(d.layers ?? {}, Object.keys(d.layers ?? {}).sort()) + JSON.stringify(d.ports?.n ? d.ports : {}, ["n", "width_cm", "height_cm"]);
 try { saved = JSON.parse(localStorage.getItem("blanket.designs") ?? "[]"); } catch { saved = []; }
 // Saved designs: the team store (./api, Cloudflare KV behind Access) when the server has one,
 // this browser's storage otherwise. `team` flips on when GET ./api/store answers.
@@ -564,6 +577,16 @@ function drawMap(m) {
   }
   // axis tick: major radius
   ctx.fillStyle = "#55555e"; ctx.font = `${11 * dpr}px ui-monospace, monospace`;
+  // ports: where the 3-D transport opens the vessel and tank (the map is their toroidal average)
+  const po = cur.design.ports;
+  if (!raster.stell && po?.n > 0) {
+    const X = (R) => ox + (R / h - rLo) * s, Y = (Z) => oy + (nz - (Z - z0) / h) * s;
+    ctx.save(); ctx.setLineDash([5 * dpr, 4 * dpr]); ctx.strokeStyle = "rgba(235,235,240,0.75)"; ctx.lineWidth = 1.2 * dpr;
+    ctx.strokeRect(X(g.p.R0 + g.p.a), Y(po.height_cm / 2), X(g.tank.rmax) - X(g.p.R0 + g.p.a), Y(-po.height_cm / 2) - Y(po.height_cm / 2));
+    ctx.fillStyle = "rgba(235,235,240,0.85)"; ctx.font = `${10 * dpr}px ui-monospace, monospace`;
+    ctx.fillText(`${po.n} port${po.n > 1 ? "s" : ""}`, X(g.p.R0 + g.p.a) + 4 * dpr, Y(po.height_cm / 2) - 4 * dpr);
+    ctx.restore();
+  }
   const R0 = raster.stell ? raster.R0 : g.p.R0, rr0 = raster.stell ? raster.r0 : 0;
   ctx.fillText(`R = ${(R0 / 100).toFixed(2)} m`, ox + (((R0 - rr0) / h) - rLo) * s - 30 * dpr, oy + nz * s + 18 * dpr);
   const L = $("legend");

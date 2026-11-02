@@ -40,6 +40,8 @@ DEFAULTS = dict(
     coil_cm=64.0,
     layout="box",                        # "box" (ARC's squared tank) or "conformal"
     conf_blanket_cm=70.0, conf_shield_cm=35.0,   # conformal layout: uniform offsets
+    ports_n=0, ports_w_cm=0.0, ports_h_cm=0.0,   # equatorial ports (box layout): void through
+                                                 # fw .. tank wall, outboard, centred on phi = k 2pi/n
 )
 
 
@@ -179,6 +181,8 @@ def build(p=None, particles=20000, batches=50, photons=True):
     coil_box = rz_box(coil_rmin, b_rmax + tk + p["shield_out_cm"] + c,
                       -b_zmax - tk - p["shield_vert_cm"] - c, b_zmax + tk + p["shield_vert_cm"] + c)
     cells["coil"] = openmc.Cell(name="coil", fill=mats["coil"], region=coil_box & ~sh_box)
+    if p["ports_n"] > 0:
+        _carve_ports(p, cells, tank_box, polys[0])
     bound = openmc.Sphere(r=1500, boundary_type="vacuum")
     cells["void"] = openmc.Cell(name="void", region=-bound & ~coil_box)
     # the plasma polygon is inside every box; exclude VV interior from box cells
@@ -204,6 +208,26 @@ def build(p=None, particles=20000, batches=50, photons=True):
 
     model = openmc.Model(geom, openmc.Materials(mats.values()), settings, tallies)
     return model, cells, p
+
+
+def _carve_ports(p, cells, tank_box, fw_poly):
+    """Equatorial ports as StoneLab gpu.ts PortSpec: wedges of toroidal width ports_w_cm at the
+    outboard first wall (R0 + a), |Z| < ports_h_cm / 2, R > R0, cut out of fw .. tank wall."""
+    n = int(p["ports_n"])
+    psi = min(np.pi / n, p["ports_w_cm"] / 2 / (p["R0"] + p["a"]))
+    zlo, zhi = openmc.ZPlane(-p["ports_h_cm"] / 2), openmc.ZPlane(p["ports_h_cm"] / 2)
+    out = +openmc.ZCylinder(r=p["R0"]) & +zlo & -zhi
+    port = None
+    for k in range(n):
+        c = 2 * np.pi * k / n
+        a1, a2 = c - psi, c + psi
+        w = +openmc.Plane(a=-np.sin(a1), b=np.cos(a1), c=0, d=0) & -openmc.Plane(a=-np.sin(a2), b=np.cos(a2), c=0, d=0)
+        port = w if port is None else (port | w)
+    port = port & out
+    for name in ("fw", "vv_in", "channel", "be", "vv_out", "blanket", "tank"):
+        if name in cells:
+            cells[name].region = cells[name].region & ~port
+    cells["port"] = openmc.Cell(name="port", region=port & tank_box & +fw_poly)
 
 
 def _conformal_rest(p, mats, cells, polys, particles, batches, photons):
