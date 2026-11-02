@@ -1,0 +1,637 @@
+{
+ "li7": {
+  "nuclides": [
+   "Li7"
+  ],
+  "n_samples": 20,
+  "particles_per_run": 150000,
+  "cpu_wall_h": 0.5539978747897678,
+  "TBR": {
+   "n": 20,
+   "nominal": 1.1371405905654384,
+   "nd_rsd_pct": 0.005621310629891102,
+   "nd_rsd_pct_68": [
+    0.0,
+    0.016488739048965775
+   ],
+   "nd_rsd_pct_95_upper": 0.031162130514363662,
+   "resolved": false,
+   "residual_noise_rsd_pct": 0.022033502131581024,
+   "single_run_stat_rsd_pct": 0.235796523841915,
+   "mean_shift_pct": 0.00904231533595982,
+   "mean_shift_se_pct": 0.0050846550983331806,
+   "min_max_pct": [
+    -0.040526903390489255,
+    0.03910377953550313
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.0
+  },
+  "heating_total_MW": {
+   "n": 20,
+   "nominal": 486.07664244008174,
+   "nd_rsd_pct": 0.004176223698332651,
+   "nd_rsd_pct_68": [
+    0.0,
+    0.007581716564488541
+   ],
+   "nd_rsd_pct_95_upper": 0.01272109514780498,
+   "resolved": false,
+   "residual_noise_rsd_pct": 0.00829020462290991,
+   "single_run_stat_rsd_pct": 0.13710723539338965,
+   "mean_shift_pct": 0.0008150074093541881,
+   "mean_shift_se_pct": 0.002075672626743342,
+   "min_max_pct": [
+    -0.019333039282746864,
+    0.017255739208194888
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.0
+  },
+  "heating_by_cell": {
+   "fw": {
+    "nominal_MW": 54.78384760493488,
+    "nd_rsd_pct": 0.0
+   },
+   "vv_in": {
+    "nominal_MW": 30.051753353885424,
+    "nd_rsd_pct": 0.0
+   },
+   "channel": {
+    "nominal_MW": 74.67917134812365,
+    "nd_rsd_pct": 0.022630098977711295
+   },
+   "be": {
+    "nominal_MW": 18.367288370698,
+    "nd_rsd_pct": 0.0
+   },
+   "vv_out": {
+    "nominal_MW": 63.785896371558195,
+    "nd_rsd_pct": 0.0
+   },
+   "blanket": {
+    "nominal_MW": 238.86432557315743,
+    "nd_rsd_pct": 0.0
+   },
+   "tank": {
+    "nominal_MW": 1.6929444581336854,
+    "nd_rsd_pct": 0.029114604058647117
+   },
+   "shield": {
+    "nominal_MW": 3.8425430065547377,
+    "nd_rsd_pct": 0.0
+   },
+   "coil": {
+    "nominal_MW": 0.008872353003895824,
+    "nd_rsd_pct": 0.9931801196763883
+   }
+  },
+  "label": "Li-7"
+ },
+ "f19": {
+  "nuclides": [
+   "F19"
+  ],
+  "n_samples": 20,
+  "particles_per_run": 150000,
+  "cpu_wall_h": 0.5535149241156049,
+  "TBR": {
+   "n": 20,
+   "nominal": 1.1371405905654384,
+   "nd_rsd_pct": 0.43985089827967494,
+   "nd_rsd_pct_68": [
+    0.3772354879305073,
+    0.5406691516778649
+   ],
+   "nd_rsd_pct_95_upper": 0.6320722339980813,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.13879067135449896,
+   "single_run_stat_rsd_pct": 0.24567312597429886,
+   "mean_shift_pct": -0.24746086246845125,
+   "mean_shift_se_pct": 0.10313381190775153,
+   "min_max_pct": [
+    -1.1665934200734938,
+    0.6251053674050305
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.41813537011059065
+  },
+  "heating_total_MW": {
+   "n": 20,
+   "nominal": 486.07664244008174,
+   "nd_rsd_pct": 0.2800826066573436,
+   "nd_rsd_pct_68": [
+    0.24251970171078807,
+    0.34113890249560647
+   ],
+   "nd_rsd_pct_95_upper": 0.3915230700732744,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.056363971721566944,
+   "single_run_stat_rsd_pct": 0.15091315048723028,
+   "mean_shift_pct": -0.07498236365754411,
+   "mean_shift_se_pct": 0.06388394315483424,
+   "min_max_pct": [
+    -0.6079393695813947,
+    0.44768059585736203
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.22662328622663486
+  },
+  "heating_by_cell": {
+   "fw": {
+    "nominal_MW": 54.78384760493488,
+    "nd_rsd_pct": 0.3025373497906814
+   },
+   "vv_in": {
+    "nominal_MW": 30.051753353885424,
+    "nd_rsd_pct": 0.3636208086205897
+   },
+   "channel": {
+    "nominal_MW": 74.67917134812365,
+    "nd_rsd_pct": 1.1555704252293069
+   },
+   "be": {
+    "nominal_MW": 18.367288370698,
+    "nd_rsd_pct": 0.5371757663995413
+   },
+   "vv_out": {
+    "nominal_MW": 63.785896371558195,
+    "nd_rsd_pct": 0.6262664221674654
+   },
+   "blanket": {
+    "nominal_MW": 238.86432557315743,
+    "nd_rsd_pct": 0.5774057718580093
+   },
+   "tank": {
+    "nominal_MW": 1.6929444581336854,
+    "nd_rsd_pct": 3.543825537203678
+   },
+   "shield": {
+    "nominal_MW": 3.8425430065547377,
+    "nd_rsd_pct": 5.148863655510327
+   },
+   "coil": {
+    "nominal_MW": 0.008872353003895824,
+    "nd_rsd_pct": 14.581915709232273
+   }
+  },
+  "label": "F-19"
+ },
+ "be9": {
+  "nuclides": [
+   "Be9"
+  ],
+  "n_samples": 20,
+  "particles_per_run": 150000,
+  "cpu_wall_h": 0.5416756909423405,
+  "TBR": {
+   "n": 20,
+   "nominal": 1.1371405905654384,
+   "nd_rsd_pct": 0.22139200715190482,
+   "nd_rsd_pct_68": [
+    0.18887930795349336,
+    0.27347350149176286
+   ],
+   "nd_rsd_pct_95_upper": 0.32274104418199323,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.08030602960078348,
+   "single_run_stat_rsd_pct": 0.2459163210729417,
+   "mean_shift_pct": 0.02418868881912104,
+   "mean_shift_se_pct": 0.052660933917369424,
+   "min_max_pct": [
+    -0.4621080325625172,
+    0.43345211861213295
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.0
+  },
+  "heating_total_MW": {
+   "n": 20,
+   "nominal": 486.07664244008174,
+   "nd_rsd_pct": 0.09190517593972175,
+   "nd_rsd_pct_68": [
+    0.07848686984165734,
+    0.11342060319824161
+   ],
+   "nd_rsd_pct_95_upper": 0.13361819969407246,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.032559821490068926,
+   "single_run_stat_rsd_pct": 0.14334358527992414,
+   "mean_shift_pct": 0.004927851838885053,
+   "mean_shift_se_pct": 0.021802182620068528,
+   "min_max_pct": [
+    -0.18204586773219808,
+    0.23058875923851627
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.0
+  },
+  "heating_by_cell": {
+   "fw": {
+    "nominal_MW": 54.78384760493488,
+    "nd_rsd_pct": 0.13056661555702306
+   },
+   "vv_in": {
+    "nominal_MW": 30.051753353885424,
+    "nd_rsd_pct": 0.08166604156901094
+   },
+   "channel": {
+    "nominal_MW": 74.67917134812365,
+    "nd_rsd_pct": 0.345465852621496
+   },
+   "be": {
+    "nominal_MW": 18.367288370698,
+    "nd_rsd_pct": 1.6639424807443202
+   },
+   "vv_out": {
+    "nominal_MW": 63.785896371558195,
+    "nd_rsd_pct": 0.08639424224360917
+   },
+   "blanket": {
+    "nominal_MW": 238.86432557315743,
+    "nd_rsd_pct": 0.20318255831564275
+   },
+   "tank": {
+    "nominal_MW": 1.6929444581336854,
+    "nd_rsd_pct": 0.0
+   },
+   "shield": {
+    "nominal_MW": 3.8425430065547377,
+    "nd_rsd_pct": 0.48529642253701727
+   },
+   "coil": {
+    "nominal_MW": 0.008872353003895824,
+    "nd_rsd_pct": 0.0
+   }
+  },
+  "label": "Be-9"
+ },
+ "li6": {
+  "nuclides": [
+   "Li6"
+  ],
+  "n_samples": 10,
+  "particles_per_run": 150000,
+  "cpu_wall_h": 0.26642235590351954,
+  "TBR": {
+   "n": 10,
+   "nominal": 1.1371405905654384,
+   "nd_rsd_pct": 0.0,
+   "nd_rsd_pct_68": [
+    0.0,
+    0.029562629367621752
+   ],
+   "nd_rsd_pct_95_upper": 0.07371404318514994,
+   "resolved": false,
+   "residual_noise_rsd_pct": 0.05279924822615185,
+   "single_run_stat_rsd_pct": 0.26052510199659856,
+   "mean_shift_pct": -0.07622568716304723,
+   "mean_shift_se_pct": 0.014168770707732065,
+   "min_max_pct": [
+    -0.14673241087010946,
+    0.003853060029526338
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.0
+  },
+  "heating_total_MW": {
+   "n": 10,
+   "nominal": 486.07664244008174,
+   "nd_rsd_pct": 0.016897808615909737,
+   "nd_rsd_pct_68": [
+    0.006872298606357477,
+    0.030288496785378708
+   ],
+   "nd_rsd_pct_95_upper": 0.045558532329075224,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.021938585621507602,
+   "single_run_stat_rsd_pct": 0.14065530346134036,
+   "mean_shift_pct": -0.020127678195480767,
+   "mean_shift_se_pct": 0.008756925688231762,
+   "min_max_pct": [
+    -0.0671574672187153,
+    0.021263031438123543
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.0
+  },
+  "heating_by_cell": {
+   "fw": {
+    "nominal_MW": 54.78384760493488,
+    "nd_rsd_pct": 0.0
+   },
+   "vv_in": {
+    "nominal_MW": 30.051753353885424,
+    "nd_rsd_pct": 0.0
+   },
+   "channel": {
+    "nominal_MW": 74.67917134812365,
+    "nd_rsd_pct": 0.18489568854550478
+   },
+   "be": {
+    "nominal_MW": 18.367288370698,
+    "nd_rsd_pct": 0.06316336942545697
+   },
+   "vv_out": {
+    "nominal_MW": 63.785896371558195,
+    "nd_rsd_pct": 0.03420890154489514
+   },
+   "blanket": {
+    "nominal_MW": 238.86432557315743,
+    "nd_rsd_pct": 0.014872065495209665
+   },
+   "tank": {
+    "nominal_MW": 1.6929444581336854,
+    "nd_rsd_pct": 0.2268089898096439
+   },
+   "shield": {
+    "nominal_MW": 3.8425430065547377,
+    "nd_rsd_pct": 0.7188349183462543
+   },
+   "coil": {
+    "nominal_MW": 0.008872353003895824,
+    "nd_rsd_pct": 0.0
+   }
+  },
+  "label": "Li-6"
+ },
+ "w": {
+  "nuclides": [
+   "W182",
+   "W183",
+   "W184",
+   "W186"
+  ],
+  "n_samples": 10,
+  "particles_per_run": 150000,
+  "cpu_wall_h": 0.27570143434736466,
+  "TBR": {
+   "n": 10,
+   "nominal": 1.1371405905654384,
+   "nd_rsd_pct": 0.17128452561825055,
+   "nd_rsd_pct_68": [
+    0.13965664752796209,
+    0.23540115239884737
+   ],
+   "nd_rsd_pct_95_upper": 0.2926678798332545,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.04803394550839868,
+   "single_run_stat_rsd_pct": 0.26851919926118434,
+   "mean_shift_pct": 0.10239034860307586,
+   "mean_shift_se_pct": 0.05625446527820964,
+   "min_max_pct": [
+    -0.19130191750883563,
+    0.44237129570155453
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.0
+  },
+  "heating_total_MW": {
+   "n": 10,
+   "nominal": 486.07664244008174,
+   "nd_rsd_pct": 0.006612783456973453,
+   "nd_rsd_pct_68": [
+    0.0,
+    0.028872637900569462
+   ],
+   "nd_rsd_pct_95_upper": 0.050938532915194255,
+   "resolved": false,
+   "residual_noise_rsd_pct": 0.030247541044281637,
+   "single_run_stat_rsd_pct": 0.14430617705117196,
+   "mean_shift_pct": 0.016523310253247055,
+   "mean_shift_se_pct": 0.009791029794022302,
+   "min_max_pct": [
+    -0.02872575820864153,
+    0.08035055786173649
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.0
+  },
+  "heating_by_cell": {
+   "fw": {
+    "nominal_MW": 54.78384760493488,
+    "nd_rsd_pct": 0.6271819309817062
+   },
+   "vv_in": {
+    "nominal_MW": 30.051753353885424,
+    "nd_rsd_pct": 0.04822014502194512
+   },
+   "channel": {
+    "nominal_MW": 74.67917134812365,
+    "nd_rsd_pct": 0.15416214526339475
+   },
+   "be": {
+    "nominal_MW": 18.367288370698,
+    "nd_rsd_pct": 0.17417333243707195
+   },
+   "vv_out": {
+    "nominal_MW": 63.785896371558195,
+    "nd_rsd_pct": 0.12678698713946118
+   },
+   "blanket": {
+    "nominal_MW": 238.86432557315743,
+    "nd_rsd_pct": 0.10551497478838512
+   },
+   "tank": {
+    "nominal_MW": 1.6929444581336854,
+    "nd_rsd_pct": 0.0
+   },
+   "shield": {
+    "nominal_MW": 3.8425430065547377,
+    "nd_rsd_pct": 0.2578529751448244
+   },
+   "coil": {
+    "nominal_MW": 0.008872353003895824,
+    "nd_rsd_pct": 1.6600597457919566
+   }
+  },
+  "label": "W-182/183/184/186"
+ },
+ "ni58": {
+  "nuclides": [
+   "Ni58"
+  ],
+  "n_samples": 20,
+  "particles_per_run": 150000,
+  "cpu_wall_h": 0.5332637527916166,
+  "TBR": {
+   "n": 20,
+   "nominal": 1.1371405905654384,
+   "nd_rsd_pct": 0.5736689653720434,
+   "nd_rsd_pct_68": [
+    0.4975216457753269,
+    0.6976390858046297
+   ],
+   "nd_rsd_pct_95_upper": 0.7980917088492875,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.10031784160488061,
+   "single_run_stat_rsd_pct": 0.2579953031955722,
+   "mean_shift_pct": 0.02792806115213472,
+   "mean_shift_se_pct": 0.1302228380844337,
+   "min_max_pct": [
+    -1.1390111202724915,
+    1.2778927514516283
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.5401666384778085
+  },
+  "heating_total_MW": {
+   "n": 20,
+   "nominal": 486.07664244008174,
+   "nd_rsd_pct": 0.11330411494139124,
+   "nd_rsd_pct_68": [
+    0.09453915869415531,
+    0.14273623585861694
+   ],
+   "nd_rsd_pct_95_upper": 0.1745154474581673,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.058129390671537454,
+   "single_run_stat_rsd_pct": 0.14808418319439207,
+   "mean_shift_pct": -0.01568737851604237,
+   "mean_shift_se_pct": 0.028475295013832797,
+   "min_max_pct": [
+    -0.2587112460894824,
+    0.2587335181422459
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.0
+  },
+  "heating_by_cell": {
+   "fw": {
+    "nominal_MW": 54.78384760493488,
+    "nd_rsd_pct": 0.2959026083914509
+   },
+   "vv_in": {
+    "nominal_MW": 30.051753353885424,
+    "nd_rsd_pct": 2.3921237724146955
+   },
+   "channel": {
+    "nominal_MW": 74.67917134812365,
+    "nd_rsd_pct": 0.3280073648109315
+   },
+   "be": {
+    "nominal_MW": 18.367288370698,
+    "nd_rsd_pct": 0.36055533699249565
+   },
+   "vv_out": {
+    "nominal_MW": 63.785896371558195,
+    "nd_rsd_pct": 1.6358739601176442
+   },
+   "blanket": {
+    "nominal_MW": 238.86432557315743,
+    "nd_rsd_pct": 0.7959727772908441
+   },
+   "tank": {
+    "nominal_MW": 1.6929444581336854,
+    "nd_rsd_pct": 0.9821879123400447
+   },
+   "shield": {
+    "nominal_MW": 3.8425430065547377,
+    "nd_rsd_pct": 1.2508733437687383
+   },
+   "coil": {
+    "nominal_MW": 0.008872353003895824,
+    "nd_rsd_pct": 0.0
+   }
+  },
+  "label": "Ni-58"
+ },
+ "all": {
+  "nuclides": [
+   "Li6",
+   "Li7",
+   "Be9",
+   "F19",
+   "Ni58",
+   "W182",
+   "W183",
+   "W184",
+   "W186"
+  ],
+  "n_samples": 30,
+  "particles_per_run": 150000,
+  "cpu_wall_h": 0.9019959794812732,
+  "TBR": {
+   "n": 30,
+   "nominal": 1.1371405905654384,
+   "nd_rsd_pct": 0.6673874651443807,
+   "nd_rsd_pct_68": [
+    0.5908530341248545,
+    0.7803963607646852
+   ],
+   "nd_rsd_pct_95_upper": 0.8769988587471763,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.15571943112593362,
+   "single_run_stat_rsd_pct": 0.27655327178160843,
+   "mean_shift_pct": 0.10897527443050137,
+   "mean_shift_se_pct": 0.12512055118458443,
+   "min_max_pct": [
+    -1.6895582233320332,
+    1.159501691388206
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.630491000351736
+  },
+  "heating_total_MW": {
+   "n": 30,
+   "nominal": 486.07664244008174,
+   "nd_rsd_pct": 0.3854802437761858,
+   "nd_rsd_pct_68": [
+    0.34150323049437253,
+    0.4504589992920283
+   ],
+   "nd_rsd_pct_95_upper": 0.5053169940911239,
+   "resolved": true,
+   "residual_noise_rsd_pct": 0.0855996928796603,
+   "single_run_stat_rsd_pct": 0.16251071155689487,
+   "mean_shift_pct": -0.03973910814313846,
+   "mean_shift_se_pct": 0.07209307080962309,
+   "min_max_pct": [
+    -1.1231338765482408,
+    0.5571818742458523
+   ],
+   "uncorrelated_estimator_rsd_pct": 0.34412092455761956
+  },
+  "heating_by_cell": {
+   "fw": {
+    "nominal_MW": 54.78384760493488,
+    "nd_rsd_pct": 0.7615305103972279
+   },
+   "vv_in": {
+    "nominal_MW": 30.051753353885424,
+    "nd_rsd_pct": 2.4626554881793337
+   },
+   "channel": {
+    "nominal_MW": 74.67917134812365,
+    "nd_rsd_pct": 1.1917671384839403
+   },
+   "be": {
+    "nominal_MW": 18.367288370698,
+    "nd_rsd_pct": 1.16794318091492
+   },
+   "vv_out": {
+    "nominal_MW": 63.785896371558195,
+    "nd_rsd_pct": 1.8685413333357745
+   },
+   "blanket": {
+    "nominal_MW": 238.86432557315743,
+    "nd_rsd_pct": 0.9837678183101729
+   },
+   "tank": {
+    "nominal_MW": 1.6929444581336854,
+    "nd_rsd_pct": 3.9725466140310717
+   },
+   "shield": {
+    "nominal_MW": 3.8425430065547377,
+    "nd_rsd_pct": 5.225390260795466
+   },
+   "coil": {
+    "nominal_MW": 0.008872353003895824,
+    "nd_rsd_pct": 20.837591485848016
+   }
+  },
+  "label": "all of the above, jointly"
+ },
+ "quadrature_sum_of_individual": {
+  "TBR": 0.775209199654315,
+  "heating_total_MW": 0.31635005304975483
+ },
+ "sanity_checks": {
+  "unperturbed_pipeline_TBR": [
+   1.1383293848640759,
+   1.138329384864073
+  ],
+  "unperturbed_pipeline_identical": true,
+  "li6_nt_plus10pct_dTBR_pct": 0.7053671516933147,
+  "li6_nt_plus10pct_sensitivity": 0.07053671516933147,
+  "li6_nt_plus10pct_dheat_pct": -0.08226141632833306,
+  "li6_nt_plus10pct_single_run_stat_pct": 0.17165095770943836
+ }
+}
