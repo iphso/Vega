@@ -31,7 +31,7 @@ HIST = int(FMT[4:]) if FMT.startswith("hist") else 0
 OVER = {}
 for kv in sys.argv[3:]:
     k, v = kv.split("=")
-    OVER[k] = v if k == "fw_material" else float(v)
+    OVER[k] = v if k in ("fw_material", "breeder", "layout") else float(v)
 TAG = "".join(f"_{k}-{v}" for k, v in OVER.items())
 THREADS = int(os.environ.get("OMP_NUM_THREADS", "24"))
 d = os.path.join(HERE, "runs", "mgxs", f"{GS}_{FMT}{TAG}")

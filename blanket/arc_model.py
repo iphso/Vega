@@ -32,12 +32,73 @@ DEFAULTS = dict(
     R0=333.0, a=113.0, kappa=1.84, delta=0.10,
     fw_material="W", fw_cm=1.0,          # first wall (PFC tiles)
     vv_in_cm=1.0, channel_cm=2.0, be_cm=1.0, vv_out_cm=3.0,
-    li6_pct=90.0,
+    li6_pct=None,                        # None: the breeder's default (BREEDERS)
+    breeder="flibe",                     # blanket + channel fill (BREEDERS)
     blanket_in_cm=20.0, blanket_out_cm=90.0, blanket_vert_cm=70.0,
     tank_cm=3.0,
     shield_in_cm=51.0, shield_out_cm=24.0, shield_vert_cm=28.0,
     coil_cm=64.0,
+    layout="box",                        # "box" (ARC's squared tank) or "conformal"
+    conf_blanket_cm=70.0, conf_shield_cm=35.0,   # conformal layout: uniform offsets
 )
+
+
+# Breeder concepts: fill of the bulk blanket and of the VV cooling channel, and the
+# Li-6 enrichment each is usually quoted at. Densities at operating temperature.
+#   flibe   2LiF-BeF2, 1.94 g/cc (~900 K): ARC
+#   flinak  LiF-NaF-KF 46.5-11.5-42 mol%, 2.02 g/cc (~900 K; Sohal 2010)
+#   pbli    Pb-15.7Li eutectic (at%), 9.4 g/cc (~700 K; Martelli 2019), DCLL/WCLL: 90% Li-6;
+#           the channel carries PbLi too (self-cooled first-wall channel, DCLL-like)
+#   li      liquid lithium, 0.48 g/cc (~800 K), natural enrichment, self-cooled
+#   hcpb    helium-cooled pebble bed, homogenised breeding zone, solid volume fractions:
+#           Li4SiO4 15% (2.40 g/cc), Be 40% (1.85), EUROFER 10%, 8 MPa He the rest
+#           (~63%-packed Li4SiO4 and Be beds plus cooling plates, EU DEMO HCPB-like);
+#           60% Li-6; channel = 8 MPa He (0.0055 g/cc, ~void)
+BREEDERS = {"flibe": 90.0, "flinak": 90.0, "pbli": 90.0, "li": 7.5, "hcpb": 60.0}
+
+
+def breeder_material(name, li6):
+    enr = dict(enrichment_target="Li6", enrichment_type="ao", enrichment=li6)
+    if name == "flibe":
+        m = openmc.Material(name="flibe"); m.add_elements_from_formula("F4Li2Be", **enr); m.set_density("g/cm3", 1.94)
+    elif name == "flinak":
+        m = openmc.Material(name="flinak")
+        m.add_element("Li", 46.5, enrichment_target="Li6", enrichment_type="ao", enrichment=li6)
+        m.add_element("Na", 11.5); m.add_element("K", 42.0); m.add_element("F", 100.0)
+        m.set_density("g/cm3", 2.02)
+    elif name == "pbli":
+        m = openmc.Material(name="pbli")
+        m.add_element("Pb", 84.3); m.add_element("Li", 15.7, enrichment_target="Li6", enrichment_type="ao", enrichment=li6)
+        m.set_density("g/cm3", 9.4)
+    elif name == "li":
+        m = openmc.Material(name="lithium"); m.add_element("Li", 1.0, enrichment_target="Li6", enrichment_type="ao", enrichment=li6)
+        m.set_density("g/cm3", 0.48)
+    elif name == "hcpb":
+        lis = openmc.Material(name="li4sio4"); lis.add_elements_from_formula("Li4SiO4", **enr); lis.set_density("g/cm3", 2.40)
+        be = openmc.Material(name="be_peb"); be.add_element("Be", 1.0); be.set_density("g/cm3", 1.85)
+        eu = eurofer()
+        he = helium()
+        m = openmc.Material.mix_materials([lis, be, eu, he], [0.15, 0.40, 0.10, 0.35], "vo", name="hcpb")
+    else:
+        raise ValueError(name)
+    return m
+
+
+def eurofer():
+    eu = openmc.Material(name="eurofer97")
+    for el, wt in [("Fe", 88.9), ("Cr", 9.0), ("W", 1.1), ("Mn", 0.4), ("V", 0.2), ("Ta", 0.12), ("C", 0.11)]:
+        eu.add_element(el, wt, "wo")
+    eu.set_density("g/cm3", 7.75)
+    return eu
+
+
+def helium():
+    he = openmc.Material(name="helium"); he.add_element("He", 1.0); he.set_density("g/cm3", 0.0055)
+    return he
+
+
+def li6_of(p):
+    return p["li6_pct"] if p.get("li6_pct") is not None else BREEDERS[p.get("breeder", "flibe")]
 
 
 def materials(p):
@@ -49,10 +110,8 @@ def materials(p):
                    ("Si", 0.18)]:
         inc.add_element(el, wt, "wo")
     inc.set_density("g/cm3", 8.19)
-    flibe = openmc.Material(name="flibe")
-    flibe.add_elements_from_formula("F4Li2Be", enrichment_target="Li6",
-                                    enrichment_type="ao", enrichment=p["li6_pct"])
-    flibe.set_density("g/cm3", 1.94)
+    flibe = breeder_material(p["breeder"], li6_of(p))
+    chan = helium() if p["breeder"] == "hcpb" else flibe
     be = openmc.Material(name="beryllium"); be.add_element("Be", 1.0); be.set_density("g/cm3", 1.85)
     tih2 = openmc.Material(name="TiH2"); tih2.add_elements_from_formula("TiH2"); tih2.set_density("g/cm3", 3.75)
     # coil pack: REBCO + Cu + steel case smeared; steel-dominated (only the
@@ -62,6 +121,8 @@ def materials(p):
         coil.add_element(el, wt, "wo")
     coil.set_density("g/cm3", 7.9)
     cfc = openmc.Material(name="cfc"); cfc.add_element("C", 1.0); cfc.set_density("g/cm3", 1.9)
+    if chan is not flibe:
+        m["chan"] = chan
     m.update(W=W, inconel=inc, flibe=flibe, Be=be, TiH2=tih2, coil=coil, CFC=cfc)
     return m
 
@@ -84,7 +145,7 @@ def build(p=None, particles=20000, batches=50, photons=True):
     # VV layers as successive offsets of the plasma-facing polygon
     fw_poly = openmc.model.Polygon(miller(p["R0"], p["a"], p["kappa"], p["delta"]), basis="rz")
     layers = [("fw", p["fw_cm"], fw_mat), ("vv_in", p["vv_in_cm"], mats["inconel"]),
-              ("channel", p["channel_cm"], mats["flibe"]), ("be", p["be_cm"], mats["Be"]),
+              ("channel", p["channel_cm"], mats.get("chan", mats["flibe"])), ("be", p["be_cm"], mats["Be"]),
               ("vv_out", p["vv_out_cm"], mats["inconel"])]
     polys = [fw_poly]
     for _, t, _ in layers:
@@ -94,6 +155,8 @@ def build(p=None, particles=20000, batches=50, photons=True):
         if t > 0:
             cells[name] = openmc.Cell(name=name, fill=mat, region=+polys[i] & -polys[i + 1])
     vv_outer = polys[-1]
+    if p["layout"] == "conformal":
+        return _conformal_rest(p, mats, cells, polys, particles, batches, photons)
 
     # squared tank: extents from the VV's bounding box
     pts = miller(p["R0"], p["a"], p["kappa"], p["delta"], 720)
@@ -139,6 +202,41 @@ def build(p=None, particles=20000, batches=50, photons=True):
     f.filters = [openmc.CellFilter([cells["coil"]]), openmc.EnergyFilter([0.1e6, 20e6])]
     f.scores = ["flux"]; tallies.append(f)
 
+    model = openmc.Model(geom, openmc.Materials(mats.values()), settings, tallies)
+    return model, cells, p
+
+
+def _conformal_rest(p, mats, cells, polys, particles, batches, photons):
+    """Blanket, tank wall, shield and coil as uniform offsets of the VV's outer polygon:
+    the axisymmetric case of StoneLab's conformal 3-D geometry (neutron/conformal.ts),
+    whose GPU path this checks."""
+    vv_outer = polys[-1]
+    outs = [("blanket", p["conf_blanket_cm"], mats["flibe"]), ("tank", p["tank_cm"], mats["inconel"]),
+            ("shield", p["conf_shield_cm"], mats["TiH2"]), ("coil", p["coil_cm"], mats["coil"])]
+    prev = vv_outer
+    for name, t, mat in outs:
+        nxt = prev.offset(t)
+        cells[name] = openmc.Cell(name=name, fill=mat, region=+prev & -nxt)
+        prev = nxt
+    bound = openmc.Sphere(r=1500, boundary_type="vacuum")
+    cells["void"] = openmc.Cell(name="void", region=-bound & +prev)
+    geom = openmc.Geometry(list(cells.values()))
+    settings = openmc.Settings()
+    settings.run_mode = "fixed source"
+    settings.particles, settings.batches = particles, batches
+    settings.photon_transport = photons
+    settings.source = plasma_source(p)
+    settings.output = {"tallies": False}
+    tallies = openmc.Tallies()
+    breed = [cells[k] for k in ("channel", "blanket")]
+    t = openmc.Tally(name="TBR"); t.filters = [openmc.CellFilter(breed)]; t.scores = ["(n,Xt)"]; tallies.append(t)
+    named = [cells[k] for k in ("fw", "vv_in", "channel", "be", "vv_out", "blanket", "tank", "shield", "coil") if k in cells]
+    h = openmc.Tally(name="heating"); h.filters = [openmc.CellFilter(named)]
+    h.scores = ["heating"] if photons else ["heating-local"]; tallies.append(h)
+    # fast flux in the whole coil layer (the GPU tallies only its plasma-facing 5 cm)
+    f = openmc.Tally(name="coil_fast_flux")
+    f.filters = [openmc.CellFilter([cells["coil"]]), openmc.EnergyFilter([0.1e6, 20e6])]
+    f.scores = ["flux"]; tallies.append(f)
     model = openmc.Model(geom, openmc.Materials(mats.values()), settings, tallies)
     return model, cells, p
 
@@ -222,5 +320,5 @@ if __name__ == "__main__":
     over = {}
     for kv in a.set:
         k, v = kv.split("=")
-        over[k] = v if k == "fw_material" else float(v)
+        over[k] = v if k in ("fw_material", "breeder", "layout") else float(v)
     print(json.dumps(run(over, a.particles, a.batches, not a.no_photons, a.tag), indent=2))

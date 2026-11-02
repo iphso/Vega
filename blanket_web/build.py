@@ -24,11 +24,15 @@ out = Path(ap.parse_args().out)
 packs = []
 for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
     tag = d.name[len(GS):]
-    fw, li6 = "W", 90.0
+    fw, li6, breeder = "W", 90.0, None
     if m := re.match(r"_fw_material-(\w+)$", tag):
         fw = m.group(1)
     elif m := re.match(r"_li6_pct-([\d.]+)$", tag):
         li6 = float(m.group(1))
+    elif m := re.match(r"_breeder-(\w+)$", tag):
+        # other breeder concepts at their usual enrichment (arc_model.BREEDERS)
+        breeder = m.group(1)
+        li6 = {"flibe": 90.0, "flinak": 90.0, "pbli": 90.0, "li": 7.5, "hcpb": 60.0}[breeder]
     elif tag:
         continue
     dst = out / "packs" / (tag.lstrip("_") or "base")
@@ -41,7 +45,7 @@ for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
     side = V / "blanket/damage/runs" / f"VITAMIN-J-175{tag}" / "damage_sidecar.json"
     if side.exists():
         shutil.copy(side, dst / "damage.json")
-    packs.append({"dir": dst.name, "fw": fw, "li6": li6, "bytes": len(gz), "damage": side.exists()})
+    packs.append({"dir": dst.name, "fw": fw, "li6": li6, "bytes": len(gz), "damage": side.exists(), **({"breeder": breeder} if breeder else {})})
     print(f"pack {dst.name}: fw={fw} li6={li6} {len(gz)/1e6:.2f} MB gz")
 json.dump({"groups": GS, "packs": packs}, open(out / "packs" / "packs.json", "w"), indent=1)
 
@@ -77,6 +81,27 @@ LIB = [
     ("Deep outboard tank", "Tank", {"geometry": {"blanket_out_cm": 140}}, None),
     ("Larger machine (R0 3.6 m)", "Machine", {"geometry": {"R0": 363}}, None),
 ]
+# other breeder concepts in the ARC geometry, with coolant presets (inlet above each one's
+# melting point, flows that carry ~the same heat): only where their packs exist
+packs_have = {p.get("breeder") for p in packs}
+BREEDER_LIB = [
+    ("PbLi breeder", {"breeder": "pbli", "li6Pct": 90, "inletK": 600, "channelVelocity": 0.5, "bulkFlow": 1.1}),
+    ("Liquid lithium", {"breeder": "li", "li6Pct": 7.5, "inletK": 600, "channelVelocity": 1, "bulkFlow": 1.0}),
+    ("FLiNaK salt", {"breeder": "flinak", "li6Pct": 90, "inletK": 800}),
+    ("He-cooled pebble bed", {"breeder": "hcpb", "li6Pct": 60, "inletK": 573, "channelVelocity": 60, "bulkFlow": 70}),
+]
+LIB += [(n, "Breeders", d, None) for n, d in BREEDER_LIB if d["breeder"] in packs_have]
+# stellarators: a conformal build around a Fourier first wall (StoneLab neutron/conformal.ts)
+surfaces = {}
+for f in sorted((V / "blanket/stellarators").glob("*.json")):
+    b = json.load(open(f))
+    surfaces[b["id"]] = {"label": b["label"], "nfp": b["nfp"], "rc": b["r_cos"], "zs": b["z_sin"], "source": b["source"]}
+json.dump(surfaces, open(out / "surfaces.json", "w"))
+STELL = [
+    ("Stellarator, 3 periods", {"machine": "stellarator", "surface": "vega-p1-nfp3", "majorRadiusM": 6.8, "fusionPowerMW": 1000}),
+    ("Stellarator, 5 periods", {"machine": "stellarator", "surface": "bench-nfp5", "majorRadiusM": 8.0, "fusionPowerMW": 1000}),
+]
+LIB += [(n, "Stellarators", d, None) for n, d in STELL if d["surface"] in surfaces]
 lib = [{"id": f"lib-{i}", "name": n, "family": f, "design": d, "reference": r} for i, (n, f, d, r) in enumerate(LIB)]
 json.dump(lib, open(out / "designs.json", "w"), indent=1)
 

@@ -1,13 +1,32 @@
 // Blanket Simulator page. Engine: StoneLab apps/blanket (bundled as blanket-engine.js);
 // data: packs/ (OpenMC-derived cross sections) and designs.json (library + OpenMC
 // references), both staged by build.py.
-import { BlanketEngine, ARC_DESIGN, ARC_DEFAULTS, REGIONS, regionRaster, FLIBE_SOLUBILITY } from "./blanket-engine.js";
+import { BlanketEngine, ARC_DESIGN, ARC_DEFAULTS, CONFORMAL_DEFAULTS, REGIONS, regionRaster, conformalSlice, FLIBE_SOLUBILITY } from "./blanket-engine.js";
 
 const $ = (id) => document.getElementById(id);
 const FAST = 100_000, RESOLVED = 8_000_000;
 const LABEL = { plasma: "Plasma", fw: "First wall", vv_in: "Inner vessel", channel: "Cooling channel", be: "Be multiplier", vv_out: "Outer vessel", blanket: "FLiBe tank", tank: "Tank wall", shield: "TiH₂ shield", coil: "TF coil", bore: "Bore" };
 const MATERIAL = { fw: null, vv_in: "Inconel 718", channel: "FLiBe", be: "beryllium", vv_out: "Inconel 718", blanket: "FLiBe", tank: "Inconel 718", shield: "TiH₂", coil: "coil pack", plasma: "D-T plasma" };
 const FW_NAME = { W: "tungsten", Be: "beryllium", CFC: "carbon fibre", Inconel: "Inconel 718" };
+// breeder concepts (StoneLab neutron/design.ts BREEDERS) and the coolant settings each starts
+// from: inlet above its melting point, flows that carry about the same heat
+const BREEDER_NAME = { flibe: "FLiBe", flinak: "FLiNaK", pbli: "PbLi", li: "lithium", hcpb: "He-cooled pebble bed" };
+const BREEDER_PRESET = {
+  flibe: { li6Pct: 90, inletK: 800, channelVelocity: 2, bulkFlow: 1.08 },
+  flinak: { li6Pct: 90, inletK: 800, channelVelocity: 2, bulkFlow: 1.08 },
+  pbli: { li6Pct: 90, inletK: 600, channelVelocity: 0.5, bulkFlow: 1.1 },
+  li: { li6Pct: 7.5, inletK: 600, channelVelocity: 1, bulkFlow: 1.0 },
+  hcpb: { li6Pct: 60, inletK: 573, channelVelocity: 60, bulkFlow: 70 },
+};
+const breederOf = (d) => d?.breeder ?? "flibe";
+const isStell = (d) => d?.machine === "stellarator";
+/** Layer label for the current design: the breeder names the blanket. */
+function lbl(k, d = cur?.design) {
+  if (k === "blanket") return `${BREEDER_NAME[breederOf(d)]} ${isStell(d) ? "blanket" : "tank"}`;
+  if (k === "channel" && breederOf(d) === "hcpb") return "He channel";
+  return LABEL[k];
+}
+const matOf = (k, d = cur?.design) => k === "fw" ? FW_NAME[d.fwMaterial] : (k === "blanket" || k === "channel") ? (breederOf(d) === "hcpb" && k === "channel" ? "helium" : BREEDER_NAME[breederOf(d)]) : MATERIAL[k];
 const COLORS = { plasma: [58, 44, 22], fw: [150, 156, 176], vv_in: [104, 110, 122], channel: [79, 179, 217], be: [126, 196, 140], vv_out: [104, 110, 122], blanket: [37, 98, 125], tank: [84, 88, 98], shield: [196, 128, 64], coil: [110, 78, 58], bore: [15, 15, 18] };
 
 // ---- parameters
@@ -19,7 +38,17 @@ const TIPS = {
   "g.channel_cm": "FLiBe gap between the two vessel walls that carries the first-wall heat away.",
   "g.be_cm": "Beryllium layer that multiplies neutrons (n,2n) before they reach the tank.",
   "g.vv_out_cm": "Inconel wall between the channel and the FLiBe tank.",
-  li6Pct: "Lithium-6 share of the salt's lithium. Li-6 is the isotope that breeds tritium from slow neutrons.",
+  li6Pct: "Lithium-6 share of the breeder's lithium. Li-6 is the isotope that breeds tritium from slow neutrons.",
+  breeder: "What breeds tritium and carries the heat: FLiBe or FLiNaK salt, PbLi or lithium metal, or a helium-cooled ceramic pebble bed with beryllium. Switching loads that concept's usual Li-6 enrichment and coolant settings.",
+  surface: "Plasma boundary from Vega's stellarator work (ConStellaration format), scaled to the major radius. Every layer is a uniform offset of the first wall in 3-D.",
+  majorRadiusM: "Major radius the plasma shape is scaled to.",
+  "l.fw_cm": "Armour tile on the plasma side.",
+  "l.vv_in_cm": "Structural wall behind the armour.",
+  "l.channel_cm": "Coolant gap between the two vessel walls.",
+  "l.be_cm": "Beryllium neutron multiplier.",
+  "l.vv_out_cm": "Wall between the channel and the blanket.",
+  "l.blanket_cm": "Breeder depth, the same everywhere around the plasma.",
+  "l.shield_cm": "Shield between the blanket and the magnets.",
   solubility: "Which measurement of hydrogen solubility in FLiBe sets the tank-wall permeation. The published values differ by about 1000×.",
   "g.blanket_in_cm": "Depth of FLiBe on the inboard side, next to the central magnet column.",
   "g.blanket_out_cm": "Depth of FLiBe on the outboard side.",
@@ -41,6 +70,7 @@ const PARAMS = [
   P("Vessel", "g.channel_cm", "Cooling channel", "cm", 0.5, 0.5, 10),
   P("Vessel", "g.be_cm", "Be multiplier", "cm", 0.5, 0, 6),
   P("Vessel", "g.vv_out_cm", "Outer vessel", "cm", 0.5, 0.5, 8),
+  P("Breeder", "breeder", "Breeder", "", null),
   P("Breeder", "li6Pct", "Li-6 enrichment", "%", null),
   P("Breeder", "solubility", "H solubility data", "", null),
   P("Breeder", "g.blanket_in_cm", "Tank, inboard", "cm", 5, 0, 60),
@@ -51,14 +81,40 @@ const PARAMS = [
   P("Machine", "g.kappa", "Elongation", "", 0.02, 1, 2.2),
   P("Machine", "fusionPowerMW", "Fusion power", "MW", 25, 50, 2000),
   P("Machine", "g.shield_in_cm", "Inboard shield", "cm", 1, 10, 100),
-  P("Cooling", "channelVelocity", "Channel velocity", "m/s", 0.1, 0.2, 10),
-  P("Cooling", "bulkFlow", "Tank flow", "m³/s", 0.05, 0.1, 10),
-  P("Cooling", "inletK", "Inlet temperature", "K", 5, 740, 950),
+  P("Cooling", "channelVelocity", "Channel velocity", "m/s", 0.1, 0.1, 120),
+  P("Cooling", "bulkFlow", "Tank flow", "m³/s", 0.05, 0.1, 100),
+  P("Cooling", "inletK", "Inlet temperature", "K", 5, 300, 950),
   P("Cooling", "qPlasma", "Plasma heat on wall", "MW/m²", 0.05, 0, 2),
 ];
-const get = (d, key) => key.startsWith("g.") ? (d.geometry[key.slice(2)] ?? ARC_DEFAULTS[key.slice(2)]) : d[key];
-const set = (d, key, v) => { if (key.startsWith("g.")) d.geometry[key.slice(2)] = v; else d[key] = v; };
-const fullDesign = (partial) => ({ ...structuredClone(ARC_DESIGN), ...structuredClone(partial ?? {}), geometry: { ...(partial?.geometry ?? {}) } });
+// stellarators: a conformal build around a Fourier first wall (surfaces.json)
+const SPARAMS = [
+  P("Vessel", "l.fw_cm", "First wall", "cm", 0.1, 0, 5),
+  P("Vessel", "fwMaterial", "Wall material", "", null),
+  P("Vessel", "l.vv_in_cm", "Inner vessel", "cm", 0.1, 0.2, 5),
+  P("Vessel", "l.channel_cm", "Cooling channel", "cm", 0.5, 0.5, 10),
+  P("Vessel", "l.be_cm", "Be multiplier", "cm", 0.5, 0, 6),
+  P("Vessel", "l.vv_out_cm", "Outer vessel", "cm", 0.5, 0.5, 8),
+  P("Breeder", "breeder", "Breeder", "", null),
+  P("Breeder", "li6Pct", "Li-6 enrichment", "%", null),
+  P("Breeder", "l.blanket_cm", "Blanket depth", "cm", 5, 10, 200),
+  P("Machine", "surface", "Plasma shape", "", null),
+  P("Machine", "majorRadiusM", "Major radius", "m", 0.1, 3, 15),
+  P("Machine", "fusionPowerMW", "Fusion power", "MW", 25, 50, 4000),
+  P("Machine", "l.shield_cm", "Shield", "cm", 1, 10, 100),
+];
+const paramsOf = (d) => isStell(d) ? SPARAMS : PARAMS;
+const ALLPARAMS = [...PARAMS, ...SPARAMS.filter((p) => !PARAMS.some((q) => q.key === p.key))];
+let SURF = {};
+const get = (d, key) => key.startsWith("g.") ? (d.geometry[key.slice(2)] ?? ARC_DEFAULTS[key.slice(2)])
+  : key.startsWith("l.") ? (d.layers?.[key.slice(2)] ?? CONFORMAL_DEFAULTS[key.slice(2)])
+  : key === "breeder" ? breederOf(d) : d[key];
+const set = (d, key, v) => { if (key.startsWith("g.")) d.geometry[key.slice(2)] = v; else if (key.startsWith("l.")) (d.layers ??= {})[key.slice(2)] = v; else d[key] = v; };
+const fullDesign = (partial) => ({ ...structuredClone(ARC_DESIGN), ...structuredClone(partial ?? {}), geometry: { ...(partial?.geometry ?? {}) }, layers: { ...(partial?.layers ?? {}) } });
+const toConf = (d) => { const S = SURF[d.surface]; return { surface: { rc: S.rc, zs: S.zs, nfp: S.nfp }, majorRadiusM: d.majorRadiusM, layers: d.layers ?? {}, breeder: d.breeder, fwMaterial: d.fwMaterial, li6Pct: d.li6Pct, fusionPowerMW: d.fusionPowerMW }; };
+/** One design through the engine: the tokamak path or the conformal (3-D) one. */
+const evalDesign = (d, tier, N, onUpdate, seed) => isStell(d)
+  ? engine.evaluateConformal(toConf(d), N, onUpdate, seed)
+  : engine.evaluate(withTier(d, tier), N, onUpdate, seed);
 
 // ---- state
 let engine = null, lib = [], saved = [], cur = null, field = "heat", raster = null, runToken = 0;
@@ -66,7 +122,7 @@ const results = new Map(); // design json -> {fast, resolved}
 // the tank flow per tier: Fast uses potential flow (0.15 s), Resolved the k-epsilon RANS
 // (seconds per new tank shape); the results map stays keyed by the design itself
 const withTier = (d, tier) => ({ ...d, tankFlow: tier === "resolved" ? "rans" : "potential" });
-const keyOf = (d) => JSON.stringify(d, Object.keys(d).sort()) + JSON.stringify(d.geometry, Object.keys(d.geometry).sort());
+const keyOf = (d) => JSON.stringify(d, Object.keys(d).sort()) + JSON.stringify(d.geometry, Object.keys(d.geometry).sort()) + JSON.stringify(d.layers ?? {}, Object.keys(d.layers ?? {}).sort());
 try { saved = JSON.parse(localStorage.getItem("blanket.designs") ?? "[]"); } catch { saved = []; }
 // Saved designs: the team store (./api, Cloudflare KV behind Access) when the server has one,
 // this browser's storage otherwise. `team` flips on when GET ./api/store answers.
@@ -147,7 +203,7 @@ function renderList() {
       const r = results.get(keyOf(fullDesign(it.design)));
       const m = r?.resolved ?? r?.fast;
       el.innerHTML = `<span class="nm">${it.name}</span>${it.reference ? '<span class="ref" title="OpenMC continuous-energy reference available">REF</span>' : "<span></span>"}
-        <span class="mx">${m ? `<span>TBR <b>${f(m.tbr, 3)}</b></span><span>VV <b>${f(m.thermal2d?.peaks.inconelInner.K ?? m.thermal.vvMax, 0)}</b> K</span>${tfOk(m) ? `<span>TF <b>${f(m.tfLifetimeFpy, 1)}</b> y</span>` : ""}` : ""}</span>`;
+        <span class="mx">${m ? `<span>TBR <b>${f(m.tbr, 3)}</b></span>${m.thermal ? `<span>VV <b>${f(m.thermal2d?.peaks.inconelInner.K ?? m.thermal.vvMax, 0)}</b> K</span>` : ""}${tfOk(m) ? `<span>TF <b>${f(m.tfLifetimeFpy, 1)}</b> y</span>` : ""}` : ""}</span>`;
       el.onclick = () => select(it);
       L.append(el);
     }
@@ -159,7 +215,7 @@ function renderList() {
 function writeHash() {
   if (!cur) return;
   const base = fullDesign(cur.base), q = new URLSearchParams({ d: cur.id });
-  for (const p of PARAMS) { const v = get(cur.design, p.key); if (v !== get(base, p.key)) q.set(p.key.replace(/^g\./, ""), String(v)); }
+  for (const p of paramsOf(cur.design)) { const v = get(cur.design, p.key); if (v !== get(base, p.key)) q.set(p.key, String(v)); }
   history.replaceState(null, "", `#${q}`);
 }
 function readHash() {
@@ -168,12 +224,15 @@ function readHash() {
   if (!it) return false;
   select(it);
   let edited = false;
-  for (const p of PARAMS) {
-    const raw = q.get(p.key.replace(/^g\./, ""));
+  for (const p of paramsOf(cur.design)) {
+    // older links wrote geometry keys without the "g." prefix
+    const raw = q.get(p.key) ?? (p.key.startsWith("g.") ? q.get(p.key.slice(2)) : null);
     if (raw === null) continue;
     let v = p.step ? Number(raw) : p.key === "li6Pct" ? Number(raw) : raw;
     if (p.step) { if (!Number.isFinite(v)) continue; v = Math.min(p.max, Math.max(p.min, v)); }
-    if (p.key === "li6Pct" && !engine.enrichments().includes(v)) continue;
+    if (p.key === "li6Pct" && !engine.enrichments(breederOf(cur.design)).includes(v)) continue;
+    if (p.key === "breeder" && !engine.breeders().includes(v)) continue;
+    if (p.key === "surface" && !(v in SURF)) continue;
     if (p.key === "fwMaterial" && !engine.fwMaterials().includes(v)) continue;
     if (p.key === "solubility" && !(v in FLIBE_SOLUBILITY)) continue;
     set(cur.design, p.key, v); edited = true;
@@ -194,9 +253,10 @@ function select(it) {
 function renderParams() {
   const box = $("params"); box.innerHTML = "";
   const base = fullDesign(cur.base);
-  for (const g of [...new Set(PARAMS.map((p) => p.group))]) {
+  const PS = paramsOf(cur.design);
+  for (const g of [...new Set(PS.map((p) => p.group))]) {
     const grp = document.createElement("div"); grp.className = "pgroup"; grp.innerHTML = `<h2>${g}</h2>`;
-    for (const p of PARAMS.filter((q) => q.group === g)) {
+    for (const p of PS.filter((q) => q.group === g)) {
       const row = document.createElement("label"); row.className = "prow";
       const v = get(cur.design, p.key);
       if (v !== get(base, p.key)) row.classList.add("changed");
@@ -211,15 +271,23 @@ function renderParams() {
         input.onchange = () => update(p.key, input.value);
       } else if (p.key === "li6Pct") {
         input = document.createElement("select");
-        for (const e of engine.enrichments()) input.add(new Option(`${e}%`, String(e), false, e === v));
+        for (const e of engine.enrichments(breederOf(cur.design))) input.add(new Option(`${e}%`, String(e), false, e === v));
         input.onchange = () => update(p.key, Number(input.value));
+      } else if (p.key === "breeder") {
+        input = document.createElement("select");
+        for (const b of engine.breeders()) input.add(new Option(BREEDER_NAME[b] ?? b, b, false, b === v));
+        input.onchange = () => setBreeder(input.value);
+      } else if (p.key === "surface") {
+        input = document.createElement("select");
+        for (const [k, S] of Object.entries(SURF)) input.add(new Option(S.label, k, false, k === v));
+        input.onchange = () => update(p.key, input.value);
       } else {
         input = document.createElement("input"); input.type = "number"; input.step = String(p.step); input.min = String(p.min); input.max = String(p.max); input.value = String(v);
         input.onchange = () => { const x = Number(input.value); if (Number.isFinite(x)) update(p.key, Math.min(p.max, Math.max(p.min, x))); };
       }
       row.innerHTML = `<span${tipA(TIPS[p.key])}>${p.label}${p.unit ? ` <span class="u">${p.unit}</span>` : ""}</span>`;
       row.append(input);
-      if (p.step || p.key === "li6Pct" || p.key === "fwMaterial") {
+      if (p.step || p.key === "li6Pct" || p.key === "fwMaterial" || p.key === "breeder") {
         const sw = document.createElement("button");
         sw.type = "button"; sw.className = "swb"; sw.innerHTML = SWEEP_ICON;
         sw.ariaLabel = `Sweep ${p.label.toLowerCase()} across its range`;
@@ -232,6 +300,16 @@ function renderParams() {
     }
     box.append(grp);
   }
+}
+
+/** A breeder brings its usual enrichment and coolant settings (BREEDER_PRESET). */
+function setBreeder(b) {
+  if (sweep) closeSweep();
+  cur.design.breeder = b;
+  const pre = BREEDER_PRESET[b] ?? {};
+  for (const [k, v] of Object.entries(pre)) if (!isStell(cur.design) || k === "li6Pct") cur.design[k] = v;
+  if (!engine.enrichments(b).includes(cur.design.li6Pct)) cur.design.li6Pct = engine.enrichments(b)[0];
+  renderParams(); redraw(); schedule(); writeHash();
 }
 
 function update(key, v) {
@@ -253,7 +331,7 @@ async function run(tier) {
   setRung(tier, 0, "running…");
   const t0 = performance.now();
   try {
-    const m = await engine.evaluate(withTier(d, tier), N, (mm) => {
+    const m = await evalDesign(d, tier, N, (mm) => {
       if (token !== runToken) return false;
       setRung(tier, mm.histories / N, `${sig(mm.histories, 2)} histories`);
       if (tier === "resolved") { r.live = mm; results.set(k, r); show(mm); }
@@ -288,6 +366,7 @@ function show() {
     const cls = (v, good, warn, hiGood = true) => !Number.isFinite(v) ? "" : hiGood ? (v >= good ? "good" : v >= warn ? "warn" : "bad") : (v <= good ? "good" : v <= warn ? "warn" : "bad");
     // one short line under each number; the detail lives in the label's tooltip
     const kpi = (k, v, c, sub, tip, warn) => `<div class="kpi"><span class="k"${tipA(warn ? `${tip}\n\n⚠ ${warn}` : tip)}>${k}${warn ? '<span class="w">⚠</span>' : ""}</span><span class="v ${c}">${v}</span><span class="s">${sub}</span></div>`;
+    if (isStell(cur.design)) { showStell(m, kpi, cls); return showRest(r, m, tier); }
     const t2 = m.thermal2d, P2 = t2?.peaks;
     const flow = m.tritium?.flowModel === "rans" ? "Resolved: recirculating (k-epsilon) tank flow." : "Fast: potential tank flow, no recirculation. Resolved runs the recirculating flow.";
     K.innerHTML = [
@@ -304,7 +383,10 @@ function show() {
           "Full-power years until the inboard face of the TF magnet reaches a fast-neutron fluence of 3×10¹⁸ n/cm².")
         : kpi("TF magnet life", "—", "", `<button type="button" class="lnk" data-run="resolved">run Resolved</button>`,
           `Full-power years until the inboard TF magnet face reaches 3×10¹⁸ n/cm². Too few of Fast's ${sig(m.histories, 2)} neutrons get through the shield to estimate it; Resolved runs enough.`),
-      m.tritium
+      breederOf(cur.design) !== "flibe"
+        ? kpi("Tritium in the salt", "—", "", `${f(m.tritiumMgPerS, 2)} mg/s bred`,
+          `Tritium transport in the blanket is modelled for FLiBe only so far. ${BREEDER_NAME[breederOf(cur.design)]} needs its own solubility and extraction model.`)
+        : m.tritium
         ? kpi("Tritium in the salt", `${f(m.tritium.inventoryMg, 0)} mg`, "", `${f(m.tritiumMgPerS, 2)} mg/s bred`,
           `Steady-state tritium dissolved in the tank's salt, before extraction.\n${flow}\nTank-wall loss ${permBand(m)} of the bred tritium across the four FLiBe solubility datasets.`,
           m.tritium.warnings?.length ? m.tritium.warnings.join("\n") : null)
@@ -320,6 +402,33 @@ function show() {
         "Salt temperature leaving the tank, from the heat balance at this flow. FLiBe freezes at 732 K."),
     ].join("");
   }
+  showRest(r, m, tier);
+}
+
+/** KPIs for a stellarator (conformal 3-D build): what that path computes. */
+function showStell(m, kpi, cls) {
+  const he = m.damage?.layers?.vv_in?.heAppmPerFpy;
+  $("kpis").innerHTML = [
+    kpi("Tritium breeding ratio", f(m.tbr, m.tbrErr < 0.001 ? 4 : 3), cls(m.tbr, 1.1, 1.0), `± ${f(m.tbrErr, m.tbrErr < 0.001 ? 4 : 3)} · target 1.1`,
+      "Tritium atoms bred per fusion neutron, in the full 3-D stellarator geometry. ± is the Monte Carlo standard error."),
+    kpi("Neutron wall load", f(m.wallLoadMWm2, 2), cls(m.wallLoadMWm2, 2, 3.5, false), `MW/m² · ${f(m.wallAreaM2, 0)} m² wall`,
+      "Average 14 MeV neutron power per unit first-wall area. The local peak is higher where the plasma comes closest to the wall."),
+    tfOk(m)
+      ? kpi("Magnet life", `${f(m.tfLifetimeFpy, 1)} y`, cls(m.tfLifetimeFpy, 10, 3), Number.isFinite(m.tfRelErr) ? `± ${Math.round(m.tfRelErr * 100)}% · average face` : "full-power years",
+        "Full-power years until the coils' plasma-facing 5 cm reaches 3×10¹⁸ n/cm² fast fluence, averaged all round. Hot spots reach it sooner.")
+      : kpi("Magnet life", "—", "", `<button type="button" class="lnk" data-run="resolved">run Resolved</button>`,
+        "Too few Fast neutrons get through the shield to estimate it; Resolved runs enough."),
+    Number.isFinite(he)
+      ? kpi("Vessel helium limit", `${f(500 / he, 1)} y`, cls(500 / he, 5, 1.5), "average, to 500 appm",
+        `Full-power years until the inner vessel averages 500 appm helium (Sorbom's re-weldability criterion). Peaks are higher; their factor is not computed for 3-D shapes yet.\n${f(he, 0)} appm He/y average.`)
+      : "",
+    kpi("Energy multiplication", f(m.energyMultiplication, 3), "", `${f(m.nuclearMW, 0)} MW heat`,
+      "Nuclear heat deposited in the machine per unit of neutron energy."),
+  ].join("");
+}
+
+function showRest(r, m, tier) {
+  const K = $("kpis");
   // ladder
   const ref = refFor();
   const L = $("ladder");
@@ -340,13 +449,14 @@ function show() {
     H.innerHTML = rows.map((k) => {
       const v = m.heatingMW[k], rv = ref?.heating_MW?.[k];
       const c = COLORS[k];
-      return `<div class="brow"><span>${LABEL[k]}</span><span class="track"><span style="width:${(100 * v) / max}%;background:rgb(${c})"></span>${rv !== undefined ? `<em style="left:${Math.min(100, (100 * rv) / max)}%" title="OpenMC ${f(rv, 1)} MW"></em>` : ""}</span><span class="n">${f(v, v < 10 ? 2 : 1)} MW</span></div>`;
+      return `<div class="brow"><span>${lbl(k)}</span><span class="track"><span style="width:${(100 * v) / max}%;background:rgb(${c})"></span>${rv !== undefined ? `<em style="left:${Math.min(100, (100 * rv) / max)}%" title="OpenMC ${f(rv, 1)} MW"></em>` : ""}</span><span class="n">${f(v, v < 10 ? 2 : 1)} MW</span></div>`;
     }).join("");
   }
   $("heat-h").dataset.tip = `Nuclear heat deposited in each layer, this run.${ref?.heating_MW ? " White ticks: the OpenMC reference." : ""}`;
   $("notes").innerHTML = `<a href="validation.html">How these numbers are computed and checked →</a>`;
+  showSens();
   drawMap(m);
-  if (view3d && m && !$("v3").hidden) view3d.setLive(m, cur.design);
+  if (view3d && m && !$("v3").hidden && !isStell(cur.design)) view3d.setLive(m, cur.design);
 }
 
 /** Tank-wall permeation across the four FLiBe solubility sources, % of bred tritium. */
@@ -362,10 +472,19 @@ function refFor() {
 }
 
 // ---- cross-section
-function redraw() {
-  raster = regionRaster(cur.design, 2);
+let phi = 0, sliceToken = 0;
+async function redraw() {
+  const stell = isStell(cur.design);
+  $("layers").hidden = stell; $("phictl").hidden = !stell;
+  if (stell) {
+    const tok = ++sliceToken, d = cur.design;
+    const g = await engine.conformalGeometry(toConf(d));
+    if (tok !== sliceToken) return;
+    raster = { ...conformalSlice(g, phi, 2), stell: g, R0: d.majorRadiusM * 100 };
+    $("phiv").textContent = `${Math.round((phi * 180) / Math.PI)}°`;
+  } else raster = regionRaster(cur.design, 2);
   const used = new Set(raster.ids);
-  $("keys").innerHTML = ovHead("Layers") + `<div class="ob">${REGIONS.map((r, i) => used.has(i) && r !== "bore" ? `<span><i style="background:rgb(${COLORS[r]})"></i>${r === "fw" ? `First wall (${FW_NAME[cur.design.fwMaterial] ?? cur.design.fwMaterial})` : LABEL[r]}</span>` : "").join("")}</div>`;
+  $("keys").innerHTML = ovHead("Layers") + `<div class="ob">${REGIONS.map((r, i) => used.has(i) && r !== "bore" ? `<span><i style="background:rgb(${COLORS[r]})"></i>${r === "fw" ? `First wall (${FW_NAME[cur.design.fwMaterial] ?? cur.design.fwMaterial})` : lbl(r)}</span>` : "").join("")}</div>`;
   ovSync();
   show();
 }
@@ -384,7 +503,8 @@ function drawMap(m) {
   const { nr, nz, ids, h, z0 } = raster;
   // fit the R >= Rmin part (skip most of the bore)
   const g = raster.geom;
-  const rLo = Math.max(0, Math.floor((g.coil.rmin - 20) / h));
+  const rLo = raster.stell ? 0 : Math.max(0, Math.floor((g.coil.rmin - 20) / h));
+  if (raster.stell) m = null; // no (R, Z) maps for 3-D builds yet: materials only
   const w = nr - rLo, pad = 30 * dpr;
   const s = Math.min((cv.width - 2 * pad) / w, (cv.height - 2 * pad) / nz);
   const ox = (cv.width - w * s) / 2, oy = (cv.height - nz * s) / 2;
@@ -422,7 +542,7 @@ function drawMap(m) {
   for (let j = 0; j < nz; j++) for (let i = rLo; i < nr; i++) {
     const id = ids[j * nr + i];
     const o = 4 * ((nz - 1 - j) * w + (i - rLo));
-    let c = id >= 0 ? COLORS[REGIONS[id]] : [15, 15, 18];
+    let c = id >= 0 && !(raster.stell && id === 10) ? COLORS[REGIONS[id]] : [15, 15, 18];
     if (dens && id >= 1 && id <= 6) {
       const G = view.G, R = i * h + h / 2, Z = z0 + j * h + h / 2;
       const gi = Math.floor((R - G.r0) / G.h), gj = Math.floor((Z - G.z0) / G.h);
@@ -444,7 +564,8 @@ function drawMap(m) {
   }
   // axis tick: major radius
   ctx.fillStyle = "#55555e"; ctx.font = `${11 * dpr}px ui-monospace, monospace`;
-  ctx.fillText(`R = ${(g.p.R0 / 100).toFixed(2)} m`, ox + ((g.p.R0 / h) - rLo) * s - 30 * dpr, oy + nz * s + 18 * dpr);
+  const R0 = raster.stell ? raster.R0 : g.p.R0, rr0 = raster.stell ? raster.r0 : 0;
+  ctx.fillText(`R = ${(R0 / 100).toFixed(2)} m`, ox + (((R0 - rr0) / h) - rLo) * s - 30 * dpr, oy + nz * s + 18 * dpr);
   const L = $("legend");
   if (dens) {
     L.hidden = false;
@@ -487,16 +608,16 @@ $("cv").addEventListener("mousemove", (e) => {
   const tip = $("tip");
   if (i < view.rLo || i >= raster.nr || j < 0 || j >= raster.nz) { tip.hidden = true; return; }
   const id = raster.ids[j * raster.nr + i];
-  if (id < 0) { tip.hidden = true; return; }
-  const r = REGIONS[id], R = (i + 0.5) * raster.h, Z = raster.z0 + (j + 0.5) * raster.h;
+  if (id < 0 || (raster.stell && id === 10)) { tip.hidden = true; return; }
+  const r = REGIONS[id], R = (raster.stell ? raster.r0 : 0) + (i + 0.5) * raster.h, Z = raster.z0 + (j + 0.5) * raster.h;
   let val = "";
   if (view.dens && id >= 1 && id <= 6) {
     const G = view.G, gi = Math.floor((R - G.r0) / G.h), gj = Math.floor((Z - G.z0) / G.h);
     const v = view.dens[gj * G.nr + gi];
     if (v > 0) val = ` · <b>${field === "temp" ? f(v, 0) : sig(v, 3)}</b> ${{ heat: "W/cm³", trit: "T/s/cm³", conc: "mg/m³", temp: "K" }[field]}`;
   }
-  const mat = r === "fw" ? FW_NAME[cur.design.fwMaterial] : MATERIAL[r];
-  tip.innerHTML = `<b>${LABEL[r]}</b>${mat ? ` (${mat})` : ""} · R ${(R / 100).toFixed(2)} m, Z ${(Z / 100).toFixed(2)} m${val}`;
+  const mat = matOf(r);
+  tip.innerHTML = `<b>${lbl(r)}</b>${mat ? ` (${mat})` : ""} · R ${(R / 100).toFixed(2)} m, Z ${(Z / 100).toFixed(2)} m${val}`;
   tip.hidden = false;
   tip.style.left = `${e.clientX - rect.left + 12}px`; tip.style.top = `${e.clientY - rect.top + 12}px`;
 });
@@ -523,9 +644,9 @@ async function show3d(on) {
 // ---- sweep: one parameter across its range at the Fast tier, the coupled outputs side by side
 const SWEEP_OUT = [
   { k: "Tritium breeding ratio", v: (m) => m.tbr, e: (m) => m.tbrErr, n: 3, guide: [1.1, "target 1.1"] },
-  { k: "Peak inner vessel, K", v: (m) => m.thermal2d?.peaks.inconelInner.K ?? m.thermal.vvMax, n: 0, guide: [973, "973 K"] },
+  { k: "Peak inner vessel, K", v: (m) => m.thermal2d?.peaks.inconelInner.K ?? m.thermal?.vvMax ?? NaN, n: 0, guide: [973, "973 K"] },
   { k: "Tritium in the salt, mg", v: (m) => m.tritium?.inventoryMg ?? NaN, n: 0 },
-  { k: "Vessel helium limit, years", v: (m) => (m.damage ? 500 / m.damage.vvInPeakHeAppmPerFpy : NaN), n: 2 },
+  { k: "Vessel helium limit, years", v: (m) => (m.damage ? 500 / (Number.isFinite(m.damage.vvInPeakHeAppmPerFpy) ? m.damage.vvInPeakHeAppmPerFpy : m.damage.layers?.vv_in?.heAppmPerFpy) : NaN), n: 2 },
 ];
 const SWEEP_N = 9;
 // a small trend chart: "plot the results against this input"
@@ -537,8 +658,8 @@ async function startSweep(p) {
   const token = ++sweepToken;
   const now = get(cur.design, p.key);
   // wall material is categorical: one point per material, no line between them
-  const cat = p.key === "fwMaterial";
-  const grid = cat ? engine.fwMaterials() : p.key === "li6Pct" ? engine.enrichments() : Array.from({ length: SWEEP_N }, (_, i) => snapTo(p.min + ((p.max - p.min) * i) / (SWEEP_N - 1), p.step));
+  const cat = p.key === "fwMaterial" || p.key === "breeder";
+  const grid = cat ? (p.key === "breeder" ? engine.breeders() : engine.fwMaterials()) : p.key === "li6Pct" ? engine.enrichments(breederOf(cur.design)) : Array.from({ length: SWEEP_N }, (_, i) => snapTo(p.min + ((p.max - p.min) * i) / (SWEEP_N - 1), p.step));
   const xs = cat ? grid : [...new Set([...grid, now])].sort((a, b) => a - b);
   sweep = { p, xs, pos: cat ? xs.map((_, j) => j) : xs, cat, ms: xs.map(() => null), base: structuredClone(cur.design), hover: -1 };
   if (!$("v3").hidden) { show3d(false); $("layers").querySelector('[data-f="3d"]').setAttribute("aria-pressed", "false"); }
@@ -546,10 +667,11 @@ async function startSweep(p) {
   drawSweep();
   for (let i = 0; i < xs.length; i++) {
     const d = structuredClone(sweep.base); set(d, p.key, xs[i]);
+    if (p.key === "breeder") for (const [k, v] of Object.entries(BREEDER_PRESET[xs[i]] ?? {})) if (!isStell(d) || k === "li6Pct") d[k] = v;
     const k = keyOf(d);
     let m = results.get(k)?.fast;
     if (!m) {
-      try { m = await engine.evaluate(withTier(d, "fast"), FAST, undefined, 1); } catch (e) { console.warn("sweep", xs[i], e); }
+      try { m = await evalDesign(d, "fast", FAST, undefined, 1); } catch (e) { console.warn("sweep", xs[i], e); }
       if (m) results.set(k, { ...(results.get(k) ?? {}), fast: m });
     }
     if (token !== sweepToken) return;
@@ -565,7 +687,7 @@ function closeSweep() {
 function drawSweep() {
   if (!sweep) return;
   const { p, xs, ms, pos, cat } = sweep;
-  const lab = (x) => (cat ? FW_NAME[x] ?? x : sig(x, 4));
+  const lab = (x) => (cat ? FW_NAME[x] ?? BREEDER_NAME[x] ?? x : sig(x, 4));
   const done = ms.filter(Boolean).length, now = get(cur.design, p.key);
   const unit = p.unit ? ` ${p.unit}` : "";
   $("sw-head").innerHTML = `<span${tipA(`${xs.length} designs at the Fast tier, ${sig(FAST, 2)} histories each, all with the same random numbers so the differences between points are real, not noise.`)}><b>${p.label}</b>${p.unit ? ` <span class="u">${p.unit}</span>` : ""} · ${xs.length} designs${done < xs.length ? ` · <b>${done}/${xs.length}</b>` : ""}</span>${sweep.hover >= 0 ? `<span class="hxv">${p.label} = ${lab(xs[sweep.hover])}${unit}</span>` : `<span class="u">click a point to apply it</span>`}`;
@@ -697,6 +819,37 @@ new ResizeObserver(() => show()).observe($("view"));
   apply();
 })();
 
+// ---- which layer matters: density sensitivities of TBR and the magnet fluence, one GPU run
+const SENS_N = 2_000_000;
+const sensCache = new Map(); // design key -> Sensitivities
+let sensBusy = false;
+function showSens() {
+  const box = $("sens");
+  if (!box || !cur) return;
+  const s = sensCache.get(keyOf(cur.design));
+  if (!s) {
+    box.innerHTML = `<button type="button" class="lnk" id="sensgo">${sensBusy ? "computing…" : `compute (${sig(SENS_N, 2)} neutrons)`}</button>`;
+    $("sensgo").onclick = runSens;
+    return;
+  }
+  // +10% density of each layer: change in TBR (absolute) and in magnet fast fluence (%)
+  // fluence falls off exponentially with a shield's density, so its +10% is exp(0.1 d ln F) - 1, not linear
+  const rows = s.regions.map((r, i) => ({ r, t: 0.1 * s.dTbr[i], q: 100 * (Math.exp(0.1 * s.dlnTf[i]) - 1) })).filter((x) => x.r !== "coil" && (Math.abs(x.t) > 2e-4 || Math.abs(x.q) > 0.2));
+  const mt = Math.max(...rows.map((x) => Math.abs(x.t)), 1e-6), mq = Math.max(...rows.map((x) => Math.abs(x.q)), 1e-6);
+  const bar = (v, mx, c) => `<span class="track ctr"><span style="${v >= 0 ? "left:50%" : `left:${50 - (50 * Math.abs(v)) / mx}%`};width:${(50 * Math.abs(v)) / mx}%;background:${c}"></span></span>`;
+  box.innerHTML = `<div class="sensh"><span></span><span>TBR</span><span>Magnet fluence</span></div>` + rows.map((x) =>
+    `<div class="srow"><span>${lbl(x.r)}</span>${bar(x.t, mt, x.t >= 0 ? "var(--good)" : "var(--bad)")}<span class="n">${x.t >= 0 ? "+" : "−"}${f(Math.abs(x.t), 4)}</span>${bar(x.q, mq, x.q <= 0 ? "var(--good)" : "var(--bad)")}<span class="n">${x.q >= 0 ? "+" : "−"}${f(Math.abs(x.q), 1)}%</span></div>`).join("");
+}
+async function runSens() {
+  if (sensBusy) return;
+  sensBusy = true; showSens();
+  const d = structuredClone(cur.design), k = keyOf(d);
+  try { sensCache.set(k, await engine.sensitivities(isStell(d) ? toConf(d) : d, SENS_N, 5)); }
+  catch (e) { console.error(e); }
+  sensBusy = false; showSens();
+}
+$("phi").oninput = () => { phi = (Number($("phi").value) * Math.PI) / 180; redraw(); };
+
 // ---- design actions
 $("dname").onchange = () => { cur.name = $("dname").value; if (cur.saved) { const s = saved.find((x) => x.id === cur.id); if (s) { s.name = cur.name; persist(s); renderList(); } } };
 $("dreset").onclick = () => { if (sweep) closeSweep(); cur.design = fullDesign(cur.base); renderParams(); redraw(); schedule(); writeHash(); };
@@ -723,12 +876,13 @@ $("ddel").onclick = () => { const id = cur.id; saved = saved.filter((s) => s.id 
   $("gpu").textContent = "WebGPU";
   await loadTeamStore();
   lib = await (await fetch("./designs.json")).json();
+  try { SURF = await (await fetch("./surfaces.json")).json(); } catch { SURF = {}; }
   if (!readHash()) select(lib[0]);
   addEventListener("hashchange", () => readHash());
   // fill in the list's numbers in the background, one design at a time
   for (const it of lib.slice(1)) {
     const d = fullDesign(it.design), k = keyOf(d);
     if (results.get(k)?.fast) continue;
-    try { const m = await engine.evaluate(withTier(d, "fast"), FAST, undefined, 1); results.set(k, { ...(results.get(k) ?? {}), fast: m }); renderList(); } catch (e) { console.warn(it.name, e); }
+    try { const m = await evalDesign(d, "fast", FAST, undefined, 1); results.set(k, { ...(results.get(k) ?? {}), fast: m }); renderList(); } catch (e) { console.warn(it.name, e); }
   }
 })();

@@ -108,6 +108,9 @@ body.dragging canvas, body.dragging #v3 { pointer-events: none; }
 .keys { right: 10px; top: 10px; font: 400 11px var(--f-body); }
 .keys .ob span { display: flex; gap: 6px; align-items: center; }
 .inset { left: 10px; top: 46px; }
+.phictl { left: 10px; top: 10px; }
+.phictl .ob { display: flex; gap: 8px; align-items: center; }
+.phictl input { width: 140px; accent-color: var(--flibe); }
 .view .inset canvas { position: static; display: block; width: 300px; height: 150px; }
 .gtip { position: fixed; z-index: 50; max-width: 300px; background: var(--card-2); border: 1px solid var(--ink-3); border-radius: 8px; padding: 7px 9px; font: 400 11.5px/1.45 var(--f-body); color: var(--ink); white-space: pre-line; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,0.5); }
 [data-tip] { cursor: help; }
@@ -174,6 +177,15 @@ body.dragging canvas, body.dragging #v3 { pointer-events: none; }
 .brow .track span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; }
 .brow .track em { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: 0.7; }
 .brow .n { text-align: right; font: 400 11px var(--f-mono); color: var(--ink); }
+.brow .track.ctr span, .srow .track.ctr span { border-radius: 0; }
+.track.ctr::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--ink-3); }
+.srow, .sensh { display: grid; grid-template-columns: 92px minmax(0, 1fr) 52px minmax(0, 1fr) 44px; gap: 6px; align-items: center; font-size: 11.5px; color: var(--ink-2); }
+.srow .track { height: 8px; background: var(--card-2); border-radius: 4px; overflow: hidden; position: relative; }
+.srow .track span { position: absolute; top: 0; bottom: 0; }
+.srow .n { text-align: right; font: 400 11px var(--f-mono); color: var(--ink); }
+.sensh { font: 600 9.5px/1.2 var(--f-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.sensh span:nth-child(2) { grid-column: 2 / 4; } .sensh span:nth-child(3) { grid-column: 4 / 6; }
+#sens { display: grid; gap: 5px; }
 .note { font-size: 11.5px; color: var(--ink-3); line-height: 1.5; }
 .err { grid-column: 1 / -1; margin: 40px auto; max-width: 520px; padding: 16px; border: 1px solid var(--bad); border-radius: 10px; color: var(--ink-2); }
 </style>
@@ -182,7 +194,7 @@ body.dragging canvas, body.dragging #v3 { pointer-events: none; }
 <div class="app">
   <header class="top">
     <h1>Blanket Simulator</h1>
-    <span class="sub" data-tip="Change any input and the neutronics, vessel heat and tritium re-run on your GPU in about a second.&#10;The chart button beside an input plots the results across that input's range.&#10;Drag the dividers to resize panes; × closes one.&#10;Hover a label for what it means.">FLiBe immersion blanket · runs on your GPU</span>
+    <span class="sub" data-tip="Change any input and the neutronics, vessel heat and tritium re-run on your GPU in about a second.&#10;The chart button beside an input plots the results across that input's range.&#10;Drag the dividers to resize panes; × closes one.&#10;Hover a label for what it means.">Fusion blankets · runs on your GPU</span>
     <span class="reopen" id="reopen" aria-label="Closed panes"></span>
     <span class="right"><span id="store"></span><span id="gpu"></span><a href="reel.html">Reel</a><a href="validation.html">Validation</a></span>
   </header>
@@ -206,6 +218,7 @@ body.dragging canvas, body.dragging #v3 { pointer-events: none; }
         <div class="sweep" id="sw" hidden><div class="sh" id="sw-head"></div><button type="button" class="x" id="sw-close" aria-label="Close the sweep">✕</button><div class="swg" id="sw-charts"></div></div>
         <div class="ov keys" id="keys" data-ov="keys"></div>
         <div class="ov legend" id="legend" data-ov="legend" hidden></div>
+        <div class="ov phictl" id="phictl" data-ov="phictl" hidden><div class="oh"><span>Toroidal angle</span></div><div class="ob"><input type="range" id="phi" min="0" max="180" step="1" value="0" aria-label="Toroidal angle of the cut"><span id="phiv">0°</span></div></div>
         <div class="ov inset" id="inset" data-ov="inset" hidden><div class="oh"><span>Along the first wall</span><button type="button" class="oc" aria-label="Collapse">–</button></div><div class="ob"><canvas id="insetcv"></canvas></div></div>
         <div class="tip" id="tip" hidden></div>
       </div>
@@ -223,6 +236,7 @@ body.dragging canvas, body.dragging #v3 { pointer-events: none; }
         <div class="kpis" id="kpis"></div>
         <div><h2 style="margin-bottom:8px" data-tip="Each design runs at Fast on every edit. Resolved runs 80× more neutrons and the recirculating tank flow. Reference is offline continuous-energy OpenMC.">Fidelity</h2><div class="ladder" id="ladder"></div></div>
         <div><h2 style="margin-bottom:8px" id="heat-h">Nuclear heating</h2><div class="bars" id="heat"></div></div>
+        <div><h2 style="margin-bottom:8px" data-tip="What a 10% denser layer would change, from one Monte Carlo run that carries the derivative along every neutron path. For thin layers that is the same as 10% thicker. Magnet fluence: the coils' fast-neutron dose (lower is better).">Which layer matters</h2><div id="sens"></div></div>
         <div class="note" id="notes"></div>
       </div>
     </section>
