@@ -1,0 +1,984 @@
+{
+ "oktavian": {
+  "benchmarks": [
+   "oktavian"
+  ],
+  "n_responses": 120,
+  "samples": 30,
+  "shrinkage": 0.253951589164267,
+  "model_unc": 0.03,
+  "arc_tbr_prior": 1.1383797926446677,
+  "arc_nd_rsd_prior_pct": 0.673234739709805,
+  "arc_nd_rsd_post_pct": 0.6243193782454172,
+  "arc_tbr_post": 1.1368334781109124,
+  "shift_pct": -0.1359270176307326,
+  "chi2": 472.9780699743419,
+  "dof": 120,
+  "band_reduction": 0.07265721535028402,
+  "null_reduction_mean": 0.05454999083298499,
+  "null_reduction_p95": 0.0918891866187879,
+  "p_value": 0.172,
+  "responses": [
+   {
+    "id": "tbr",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.9110262012062447,
+    "representativity": -0.21931664005984977,
+    "nd_rsd_pct": 1.0426862473853333
+   },
+   {
+    "id": "rr6@10.0",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.7484776958579811,
+    "representativity": -0.028052660182207426,
+    "nd_rsd_pct": 2.1065655204254172
+   },
+   {
+    "id": "rr7@10.0",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.9682949418162393,
+    "representativity": -0.0026033290055011904,
+    "nd_rsd_pct": 1.645674195626462
+   },
+   {
+    "id": "al@10.0",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.8782982132725645,
+    "representativity": 0.011794813297590318,
+    "nd_rsd_pct": 0.025684586633300376
+   },
+   {
+    "id": "rr6@20.3",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.7830838419630893,
+    "representativity": -0.0239622415484726,
+    "nd_rsd_pct": 2.783409898154432
+   },
+   {
+    "id": "rr7@20.3",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.9694603968608404,
+    "representativity": -0.1468035918330739,
+    "nd_rsd_pct": 1.4278464298195757
+   },
+   {
+    "id": "al@20.3",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.8872028209073938,
+    "representativity": 0.026137775668193163,
+    "nd_rsd_pct": 0.579974194654818
+   },
+   {
+    "id": "rr6@30.8",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.7912121716540227,
+    "representativity": -0.013910511936827958,
+    "nd_rsd_pct": 3.0176683691484234
+   },
+   {
+    "id": "rr7@30.8",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 1.0110430755103406,
+    "representativity": -0.20456781659904386,
+    "nd_rsd_pct": 1.5899283999602147
+   },
+   {
+    "id": "al@30.8",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.9269116931100498,
+    "representativity": 0.02155323336770888,
+    "nd_rsd_pct": 1.179252119717591
+   },
+   {
+    "id": "rr6@41.4",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.7923536758805647,
+    "representativity": -0.007751938479049159,
+    "nd_rsd_pct": 3.1558271049494073
+   },
+   {
+    "id": "rr7@41.4",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 1.0011065987665118,
+    "representativity": -0.20080959106336718,
+    "nd_rsd_pct": 1.9839737112282891
+   },
+   {
+    "id": "al@41.4",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.9684310602179401,
+    "representativity": 0.022310993689244624,
+    "nd_rsd_pct": 1.8320218156491406
+   },
+   {
+    "id": "rr6@52.1",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.7051893782640135,
+    "representativity": 0.007326689333313723,
+    "nd_rsd_pct": 2.9578659038532877
+   },
+   {
+    "id": "rr7@52.1",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.9612197763151276,
+    "representativity": -0.18384627098796955,
+    "nd_rsd_pct": 2.3876439073329676
+   },
+   {
+    "id": "al@52.1",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.9521686019992119,
+    "representativity": 0.02561941877440667,
+    "nd_rsd_pct": 2.4697384632804633
+   },
+   {
+    "id": "rr6@57.7",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.5364060617856637,
+    "representativity": -0.007974507510428218,
+    "nd_rsd_pct": 2.891879195019081
+   },
+   {
+    "id": "rr7@57.7",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 1.034717113027507,
+    "representativity": -0.15670191832143496,
+    "nd_rsd_pct": 2.625789990664773
+   },
+   {
+    "id": "al@57.7",
+    "bench": "oktavian",
+    "case": "tbr_li",
+    "CE": 0.9711746265191145,
+    "representativity": 0.03467911294565956,
+    "nd_rsd_pct": 2.8033594538004087
+   },
+   {
+    "id": "tbr",
+    "bench": "oktavian",
+    "case": "tbr_lic",
+    "CE": 0.863928706191384,
+    "representativity": -0.09519471967112031,
+    "nd_rsd_pct": 1.01005945566986
+   },
+   {
+    "id": "tpr@20.2",
+    "bench": "oktavian",
+    "case": "tbr_lic",
+    "CE": 0.8361924943764389,
+    "representativity": -0.17003473127914082,
+    "nd_rsd_pct": 1.2751798013491336
+   },
+   {
+    "id": "tpr@25.7",
+    "bench": "oktavian",
+    "case": "tbr_lic",
+    "CE": 0.7449819041333202,
+    "representativity": -0.1997215493169365,
+    "nd_rsd_pct": 1.147896343274281
+   },
+   {
+    "id": "tpr@31.2",
+    "bench": "oktavian",
+    "case": "tbr_lic",
+    "CE": 1.0193927602273256,
+    "representativity": -0.22042873265906612,
+    "nd_rsd_pct": 1.0407268568535728
+   },
+   {
+    "id": "tpr@36.7",
+    "bench": "oktavian",
+    "case": "tbr_lic",
+    "CE": 1.0797383478606704,
+    "representativity": -0.19171313814313018,
+    "nd_rsd_pct": 0.9259130479549993
+   },
+   {
+    "id": "tpr@42.2",
+    "bench": "oktavian",
+    "case": "tbr_lic",
+    "CE": 0.9169036794928307,
+    "representativity": -0.12996733606082972,
+    "nd_rsd_pct": 0.9198418509602463
+   },
+   {
+    "id": "tpr@47.7",
+    "bench": "oktavian",
+    "case": "tbr_lic",
+    "CE": 0.883860241896162,
+    "representativity": -0.07341243825307568,
+    "nd_rsd_pct": 0.9557959878699779
+   },
+   {
+    "id": "tpr@53.2",
+    "bench": "oktavian",
+    "case": "tbr_lic",
+    "CE": 1.146864676545071,
+    "representativity": 0.0020108128048464528,
+    "nd_rsd_pct": 1.0355257139070306
+   },
+   {
+    "id": "tpr@58.7",
+    "bench": "oktavian",
+    "case": "tbr_lic",
+    "CE": 0.6542953754732607,
+    "representativity": 0.11452032240359385,
+    "nd_rsd_pct": 1.658009127043377
+   },
+   {
+    "id": "tbr",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.9058515977384244,
+    "representativity": -0.24177143811736054,
+    "nd_rsd_pct": 0.8815350622897471
+   },
+   {
+    "id": "rr6@10.0",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.8295934861538191,
+    "representativity": -0.16553111256686684,
+    "nd_rsd_pct": 0.8755755455303247
+   },
+   {
+    "id": "rr7@10.0",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.877931933635831,
+    "representativity": -0.0030154311099585816,
+    "nd_rsd_pct": 1.677276107616191
+   },
+   {
+    "id": "al@10.0",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.8292827675300452,
+    "representativity": -0.026476795637022505,
+    "nd_rsd_pct": 0.001233407652144276
+   },
+   {
+    "id": "rr6@20.3",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.8917033836772931,
+    "representativity": -0.15214600200658696,
+    "nd_rsd_pct": 1.0192341708174752
+   },
+   {
+    "id": "rr7@20.3",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.8627957665409289,
+    "representativity": -0.08737100595621221,
+    "nd_rsd_pct": 1.5660369101654719
+   },
+   {
+    "id": "al@20.3",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.8111591008755106,
+    "representativity": 0.030868683156262386,
+    "nd_rsd_pct": 0.05060854181319124
+   },
+   {
+    "id": "rr6@30.8",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.9013466000489607,
+    "representativity": -0.13187804703971434,
+    "nd_rsd_pct": 1.2913252169794995
+   },
+   {
+    "id": "rr7@30.8",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.9433306746848868,
+    "representativity": -0.18763778431064074,
+    "nd_rsd_pct": 1.4428643681984463
+   },
+   {
+    "id": "al@30.8",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.8399950741882433,
+    "representativity": 0.009106198673948119,
+    "nd_rsd_pct": 0.6775508651195411
+   },
+   {
+    "id": "rr6@41.4",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.8910849974066849,
+    "representativity": -0.1215750822784243,
+    "nd_rsd_pct": 1.349056113435233
+   },
+   {
+    "id": "rr7@41.4",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.9767218055504586,
+    "representativity": -0.21103652600637027,
+    "nd_rsd_pct": 1.6657408744735784
+   },
+   {
+    "id": "al@41.4",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.9273341814373404,
+    "representativity": 0.01879267639551317,
+    "nd_rsd_pct": 1.309351919621089
+   },
+   {
+    "id": "rr6@52.1",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.7935531196970487,
+    "representativity": -0.1143010849052658,
+    "nd_rsd_pct": 1.3631990950768664
+   },
+   {
+    "id": "rr7@52.1",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.944511589351539,
+    "representativity": -0.19095060142019818,
+    "nd_rsd_pct": 2.021132230202597
+   },
+   {
+    "id": "al@52.1",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.9047815488197458,
+    "representativity": 0.029692934789382945,
+    "nd_rsd_pct": 1.9425510165568296
+   },
+   {
+    "id": "rr6@57.7",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.6401272941984586,
+    "representativity": -0.10140799693582761,
+    "nd_rsd_pct": 1.161749811282529
+   },
+   {
+    "id": "rr7@57.7",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 1.0180407275386483,
+    "representativity": -0.18349268940956984,
+    "nd_rsd_pct": 2.1813108927862257
+   },
+   {
+    "id": "al@57.7",
+    "bench": "oktavian",
+    "case": "tbr_pbli",
+    "CE": 0.9137003132175399,
+    "representativity": 0.025418523799740654,
+    "nd_rsd_pct": 2.258031089892063
+   },
+   {
+    "id": "tbr",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.8916716834072284,
+    "representativity": -0.15595978969536822,
+    "nd_rsd_pct": 0.47181861115856255
+   },
+   {
+    "id": "tpr@20.55",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9635876646754135,
+    "representativity": -0.16335179723879603,
+    "nd_rsd_pct": 0.8303564332129859
+   },
+   {
+    "id": "tpr@26.0",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9479826804142857,
+    "representativity": -0.19472987937313038,
+    "nd_rsd_pct": 0.7055034933591305
+   },
+   {
+    "id": "tpr@31.45",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9170952541133333,
+    "representativity": -0.22202111108468753,
+    "nd_rsd_pct": 0.6496430408826634
+   },
+   {
+    "id": "tpr@36.9",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9547203917085306,
+    "representativity": -0.22312415309614245,
+    "nd_rsd_pct": 0.5407183102419323
+   },
+   {
+    "id": "tpr@42.4",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9298194575310852,
+    "representativity": -0.22370076150000598,
+    "nd_rsd_pct": 0.48013686466997973
+   },
+   {
+    "id": "tpr@47.85",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9447881769881947,
+    "representativity": -0.15955292011787325,
+    "nd_rsd_pct": 0.47952685441389264
+   },
+   {
+    "id": "tpr@52.3",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9371340767092151,
+    "representativity": -0.085486972308522,
+    "nd_rsd_pct": 0.40461813789607415
+   },
+   {
+    "id": "tpr@53.35",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9347895041806213,
+    "representativity": -0.07666592963860915,
+    "nd_rsd_pct": 0.38493850116928124
+   },
+   {
+    "id": "tpr@54.35",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9314284393563035,
+    "representativity": -0.03379316530882798,
+    "nd_rsd_pct": 0.435626078388912
+   },
+   {
+    "id": "tpr@56.45",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.9297406841068167,
+    "representativity": -0.004999284443657632,
+    "nd_rsd_pct": 0.41722389268272997
+   },
+   {
+    "id": "tpr@57.2",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.942212283481315,
+    "representativity": -0.03162673712993177,
+    "nd_rsd_pct": 0.4302367655515628
+   },
+   {
+    "id": "tpr@58.5",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 1.093539401462834,
+    "representativity": 0.051871570940855025,
+    "nd_rsd_pct": 0.5321053105363811
+   },
+   {
+    "id": "tpr@58.85",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 1.041534305575038,
+    "representativity": 0.04371870407393527,
+    "nd_rsd_pct": 0.5335167704410836
+   },
+   {
+    "id": "tpr@59.4",
+    "bench": "oktavian",
+    "case": "tbr_pblic",
+    "CE": 0.7031580614574299,
+    "representativity": 0.0804517799766292,
+    "nd_rsd_pct": 0.572207595219079
+   },
+   {
+    "id": "tbr",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 1.0613882784766495,
+    "representativity": -0.1318478821379097,
+    "nd_rsd_pct": 0.8898779817164539
+   },
+   {
+    "id": "tpr@20.3",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 0.7674722195858474,
+    "representativity": 0.0042515084331596655,
+    "nd_rsd_pct": 2.2351091200108084
+   },
+   {
+    "id": "tpr@21.4",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 0.8516192744790807,
+    "representativity": -0.019904934658782156,
+    "nd_rsd_pct": 1.5224934508915084
+   },
+   {
+    "id": "tpr@24.2",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 0.9004486245525494,
+    "representativity": -0.15244143655174539,
+    "nd_rsd_pct": 1.0537588124529116
+   },
+   {
+    "id": "tpr@26.7",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 1.090035395508348,
+    "representativity": -0.18045894028587273,
+    "nd_rsd_pct": 0.9491712965425056
+   },
+   {
+    "id": "tpr@27.8",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 1.0567765260146231,
+    "representativity": -0.18721664589846113,
+    "nd_rsd_pct": 1.0224697364990476
+   },
+   {
+    "id": "tpr@30.2",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 1.1204274065610351,
+    "representativity": -0.20453722536624386,
+    "nd_rsd_pct": 0.9689099282310953
+   },
+   {
+    "id": "tpr@35.6",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 1.03227849337676,
+    "representativity": -0.20785065067485511,
+    "nd_rsd_pct": 0.9464948354738345
+   },
+   {
+    "id": "tpr@41.1",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 1.1487706249653649,
+    "representativity": -0.17944432376694383,
+    "nd_rsd_pct": 0.9606370963435196
+   },
+   {
+    "id": "tpr@46.6",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 1.3242318769780488,
+    "representativity": -0.1412358667787417,
+    "nd_rsd_pct": 1.0313480516639528
+   },
+   {
+    "id": "tpr@52.0",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 1.047937436640784,
+    "representativity": -0.14755839486904562,
+    "nd_rsd_pct": 0.923030646515971
+   },
+   {
+    "id": "tpr@57.5",
+    "bench": "oktavian",
+    "case": "tbr_beli",
+    "CE": 1.1794164624963432,
+    "representativity": -0.09373071476004621,
+    "nd_rsd_pct": 0.8368989517375294
+   },
+   {
+    "id": "tbr",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.9037417813395171,
+    "representativity": 0.047427453116225475,
+    "nd_rsd_pct": 0.6299075979351946
+   },
+   {
+    "id": "tpr@20.3",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.7693955644284903,
+    "representativity": 0.011054222484868058,
+    "nd_rsd_pct": 2.1822949907645937
+   },
+   {
+    "id": "tpr@21.4",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.8380669956358092,
+    "representativity": -0.00865174287549226,
+    "nd_rsd_pct": 1.4070655825473695
+   },
+   {
+    "id": "tpr@24.2",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.8828796474369273,
+    "representativity": -0.11200440259253017,
+    "nd_rsd_pct": 0.9237917199722827
+   },
+   {
+    "id": "tpr@25.7",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.8107405533849483,
+    "representativity": -0.12823382626972374,
+    "nd_rsd_pct": 0.8074959361859563
+   },
+   {
+    "id": "tpr@31.2",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 1.0191117120120927,
+    "representativity": -0.12592709411880013,
+    "nd_rsd_pct": 0.7680812461432466
+   },
+   {
+    "id": "tpr@36.7",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.8629203694003684,
+    "representativity": -0.08238306451311034,
+    "nd_rsd_pct": 0.7768035471397525
+   },
+   {
+    "id": "tpr@42.2",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.9422540155286159,
+    "representativity": -0.0029367650229483538,
+    "nd_rsd_pct": 0.8013786263289894
+   },
+   {
+    "id": "tpr@47.7",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.8960221020567087,
+    "representativity": 0.07482041627410745,
+    "nd_rsd_pct": 0.9197074796305894
+   },
+   {
+    "id": "tpr@53.2",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.8408731202657422,
+    "representativity": 0.15308924544357205,
+    "nd_rsd_pct": 1.048663328533864
+   },
+   {
+    "id": "tpr@55.7",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.8505415606378589,
+    "representativity": 0.16533991359617425,
+    "nd_rsd_pct": 1.099476030392734
+   },
+   {
+    "id": "tpr@58.2",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.6474183768151935,
+    "representativity": 0.13577825931455823,
+    "nd_rsd_pct": 1.1926661737144792
+   },
+   {
+    "id": "tpr@59.7",
+    "bench": "oktavian",
+    "case": "tbr_belic",
+    "CE": 0.5748263697551348,
+    "representativity": 0.18194825683114108,
+    "nd_rsd_pct": 1.3869554930358619
+   },
+   {
+    "id": "leak_9.99-17MeV",
+    "bench": "oktavian",
+    "case": "be57",
+    "CE": 1.2008724021852824,
+    "representativity": -0.08833777842138553,
+    "nd_rsd_pct": 1.4829421841516846
+   },
+   {
+    "id": "leak_2.89-9.99MeV",
+    "bench": "oktavian",
+    "case": "be57",
+    "CE": 0.9112643687671004,
+    "representativity": -0.009938148105309814,
+    "nd_rsd_pct": 1.3128040391998037
+   },
+   {
+    "id": "leak_1.03-2.89MeV",
+    "bench": "oktavian",
+    "case": "be57",
+    "CE": 0.8469159746126637,
+    "representativity": 0.22403898029750774,
+    "nd_rsd_pct": 1.9211220365257613
+   },
+   {
+    "id": "leak_0.101-1.03MeV",
+    "bench": "oktavian",
+    "case": "be57",
+    "CE": 0.8714469130394613,
+    "representativity": 0.18877020016441098,
+    "nd_rsd_pct": 2.3844668608494155
+   },
+   {
+    "id": "leak_0.0104-0.101MeV",
+    "bench": "oktavian",
+    "case": "be57",
+    "CE": 1.162500680920456,
+    "representativity": 0.15022871366410254,
+    "nd_rsd_pct": 2.429350687821282
+   },
+   {
+    "id": "leak_10.1-17MeV",
+    "bench": "oktavian",
+    "case": "be69",
+    "CE": 1.2633714835845244,
+    "representativity": -0.09157948112210475,
+    "nd_rsd_pct": 1.3326275959646794
+   },
+   {
+    "id": "leak_2.9-10.1MeV",
+    "bench": "oktavian",
+    "case": "be69",
+    "CE": 0.8383146744116524,
+    "representativity": 0.0018690236030531968,
+    "nd_rsd_pct": 1.296751513093752
+   },
+   {
+    "id": "leak_1.03-2.9MeV",
+    "bench": "oktavian",
+    "case": "be69",
+    "CE": 0.7987205814619449,
+    "representativity": 0.21879584755751902,
+    "nd_rsd_pct": 1.8240043977210822
+   },
+   {
+    "id": "leak_0.101-1.03MeV",
+    "bench": "oktavian",
+    "case": "be69",
+    "CE": 0.8477524705325238,
+    "representativity": 0.19428850998201777,
+    "nd_rsd_pct": 2.2818706765830132
+   },
+   {
+    "id": "leak_0.0104-0.101MeV",
+    "bench": "oktavian",
+    "case": "be69",
+    "CE": 1.2436327260589082,
+    "representativity": 0.1381328246849214,
+    "nd_rsd_pct": 2.4269969034223244
+   },
+   {
+    "id": "leak_10.1-16.4MeV",
+    "bench": "oktavian",
+    "case": "be128",
+    "CE": 0.981973158860265,
+    "representativity": -0.10271948087063662,
+    "nd_rsd_pct": 0.5132800365643437
+   },
+   {
+    "id": "leak_2.92-10.1MeV",
+    "bench": "oktavian",
+    "case": "be128",
+    "CE": 1.029035728637977,
+    "representativity": 0.05823140999830322,
+    "nd_rsd_pct": 1.1628765905207006
+   },
+   {
+    "id": "leak_0.964-2.92MeV",
+    "bench": "oktavian",
+    "case": "be128",
+    "CE": 1.0225584091682773,
+    "representativity": 0.2279450379355201,
+    "nd_rsd_pct": 1.3617761695007509
+   },
+   {
+    "id": "leak_0.1-0.964MeV",
+    "bench": "oktavian",
+    "case": "be128",
+    "CE": 0.9482091456823838,
+    "representativity": 0.19669715049749242,
+    "nd_rsd_pct": 1.8214959121194363
+   },
+   {
+    "id": "leak_0.01-0.1MeV",
+    "bench": "oktavian",
+    "case": "be128",
+    "CE": 1.0966129599827046,
+    "representativity": 0.109969401763959,
+    "nd_rsd_pct": 1.9532135737968292
+   },
+   {
+    "id": "leak_10-16.4MeV",
+    "bench": "oktavian",
+    "case": "beli57",
+    "CE": 1.249657601404026,
+    "representativity": 0.02057274913773106,
+    "nd_rsd_pct": 3.148110817928635
+   },
+   {
+    "id": "leak_2.99-10MeV",
+    "bench": "oktavian",
+    "case": "beli57",
+    "CE": 0.9418720117250479,
+    "representativity": -0.03491380383384544,
+    "nd_rsd_pct": 1.4640004522877066
+   },
+   {
+    "id": "leak_0.985-2.99MeV",
+    "bench": "oktavian",
+    "case": "beli57",
+    "CE": 0.8580850328527342,
+    "representativity": 0.1478094428888927,
+    "nd_rsd_pct": 1.8211231727184547
+   },
+   {
+    "id": "leak_0.0986-0.985MeV",
+    "bench": "oktavian",
+    "case": "beli57",
+    "CE": 0.9867879443223219,
+    "representativity": 0.1431390402443296,
+    "nd_rsd_pct": 2.062892730850047
+   },
+   {
+    "id": "leak_0.0103-0.0986MeV",
+    "bench": "oktavian",
+    "case": "beli57",
+    "CE": 1.3019899367493322,
+    "representativity": 0.1534896742329328,
+    "nd_rsd_pct": 3.497289008310831
+   },
+   {
+    "id": "leak_10-16.4MeV",
+    "bench": "oktavian",
+    "case": "beli128",
+    "CE": 1.1228217824829374,
+    "representativity": 0.01820887078506733,
+    "nd_rsd_pct": 2.6140730681643496
+   },
+   {
+    "id": "leak_2.99-10MeV",
+    "bench": "oktavian",
+    "case": "beli128",
+    "CE": 0.7520005412252784,
+    "representativity": -0.02472460173779542,
+    "nd_rsd_pct": 1.5209997681633693
+   },
+   {
+    "id": "leak_0.987-2.99MeV",
+    "bench": "oktavian",
+    "case": "beli128",
+    "CE": 0.7877562626687493,
+    "representativity": 0.13547095934275633,
+    "nd_rsd_pct": 1.9272614069688998
+   },
+   {
+    "id": "leak_0.0997-0.987MeV",
+    "bench": "oktavian",
+    "case": "beli128",
+    "CE": 0.9520729907445862,
+    "representativity": 0.1321587062590505,
+    "nd_rsd_pct": 2.3006863430979556
+   },
+   {
+    "id": "leak_0.0105-0.0997MeV",
+    "bench": "oktavian",
+    "case": "beli128",
+    "CE": 1.0827034459567164,
+    "representativity": 0.12452191426852835,
+    "nd_rsd_pct": 3.3797764705671076
+   },
+   {
+    "id": "leak_10.1-20.7MeV",
+    "bench": "oktavian",
+    "case": "lif60",
+    "CE": 1.0642189024501423,
+    "representativity": 0.34379119457094803,
+    "nd_rsd_pct": 6.876093773214725
+   },
+   {
+    "id": "leak_3.03-10.1MeV",
+    "bench": "oktavian",
+    "case": "lif60",
+    "CE": 0.8624551259903794,
+    "representativity": 0.19615146389301852,
+    "nd_rsd_pct": 3.861423340705156
+   },
+   {
+    "id": "leak_0.988-3.03MeV",
+    "bench": "oktavian",
+    "case": "lif60",
+    "CE": 0.8433465714990273,
+    "representativity": -0.13765680808653333,
+    "nd_rsd_pct": 2.9370458490436255
+   },
+   {
+    "id": "leak_0.101-0.988MeV",
+    "bench": "oktavian",
+    "case": "lif60",
+    "CE": 0.7618245502685421,
+    "representativity": -0.10328750963956702,
+    "nd_rsd_pct": 4.210447479160792
+   },
+   {
+    "id": "leak_10.1-20.7MeV",
+    "bench": "oktavian",
+    "case": "w40",
+    "CE": 0.9123159678543298,
+    "representativity": -0.2707271509478085,
+    "nd_rsd_pct": 0.5101494318992521
+   },
+   {
+    "id": "leak_3.03-10.1MeV",
+    "bench": "oktavian",
+    "case": "w40",
+    "CE": 0.8458143776171011,
+    "representativity": 0.1166392138461536,
+    "nd_rsd_pct": 1.4583061290641721
+   },
+   {
+    "id": "leak_0.988-3.03MeV",
+    "bench": "oktavian",
+    "case": "w40",
+    "CE": 0.8549948848698605,
+    "representativity": 0.022302684388021448,
+    "nd_rsd_pct": 1.0558547906751412
+   },
+   {
+    "id": "leak_0.101-0.988MeV",
+    "bench": "oktavian",
+    "case": "w40",
+    "CE": 0.8979944235955697,
+    "representativity": 0.28103081953184317,
+    "nd_rsd_pct": 1.4819194772911908
+   }
+  ]
+ }
+}

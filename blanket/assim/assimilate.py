@@ -27,10 +27,13 @@ Guards (S = 30 is small):
 Run: python3 blanket/assim/assimilate.py [--bench oktavian fns] [--model-unc 0.03]
 """
 import argparse, json, os, sys
+for _v in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):  # small matrices; threads only thrash
+    os.environ.setdefault(_v, "1")
 import numpy as np
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 B = os.path.dirname(HERE)
+EFF = 0.05  # relative detector-efficiency systematic added where a spectrum quotes none
 
 
 def load_arc(set_name="all"):
@@ -55,7 +58,7 @@ def load_bench(names):
         by_id = {}
         for case, c in R["cases"].items():
             for r in c["responses"]:
-                by_id[r["id"]] = dict(r, case=case, bench=name)
+                by_id[r["id"]] = by_id[f"{case}:{r['id']}"] = dict(r, case=case, bench=name)
         smp = R.get("samples", {}).get("all")
         if not smp:
             print(f"  ({name}: no perturbed-library samples)"); continue
@@ -95,6 +98,13 @@ def exp_cov(resp):
                 g = [r["E_rel_unc"] for r in resp if r.get("E_corr_group") == ri["E_corr_group"] and r["bench"] == ri["bench"]]
                 s = min(g)
                 C[i, j] = C[j, i] = s * s
+    # spectra whose quoted error is statistics only (no detector-efficiency systematic): add EFF,
+    # fully correlated within the case
+    lb = [k for k, r in enumerate(resp) if "lower bound" in r.get("E_unc_note", "")]
+    for i in lb:
+        for j in lb:
+            if (resp[i]["bench"], resp[i]["case"]) == (resp[j]["bench"], resp[j]["case"]):
+                C[i, j] += EFF ** 2
     return C
 
 
@@ -186,11 +196,14 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench", nargs="*", default=["oktavian", "fns"])
     ap.add_argument("--model-unc", type=float, default=0.03)
+    ap.add_argument("--exclude-case", nargs="*", default=["oktavian:be97"],
+                    help="bench:case pairs left out (be97 is internally inconsistent, see bench/oktavian/NOTES.md)")
     ap.add_argument("--json")
     a = ap.parse_args()
+    excl = set(a.exclude_case)
     res = {}
     for names in [[n] for n in a.bench] + ([a.bench] if len(a.bench) > 1 else []):
-        r = run(names, a.model_unc)
+        r = run(names, a.model_unc, only=lambda r: f"{r['bench']}:{r['case']}" not in excl)
         if r:
             res["+".join(names)] = r
     if a.json:
