@@ -1,7 +1,7 @@
 // Blanket Simulator page. Engine: StoneLab apps/blanket (bundled as blanket-engine.js);
 // data: packs/ (OpenMC-derived cross sections) and designs.json (library + OpenMC
 // references), both staged by build.py.
-import { BlanketEngine, evaluateChannel, ARC_DESIGN, ARC_DEFAULTS, CONFORMAL_DEFAULTS, REGIONS, regionRaster, conformalSlice, FLIBE_SOLUBILITY } from "./blanket-engine.js";
+import { BlanketEngine, evaluateChannel, ARC_DESIGN, ARC_DEFAULTS, CONFORMAL_DEFAULTS, REGIONS, regionRaster, conformalSlice, FLIBE_SOLUBILITY, requiredTbr, doublingTime, burnRateKgPerS } from "./blanket-engine.js";
 
 const $ = (id) => document.getElementById(id);
 const FAST = 100_000, RESOLVED = 8_000_000;
@@ -65,6 +65,12 @@ const TIPS = {
   bulkFlow: "Salt flow through the tank. Sets the outlet temperature and how fast tritium is carried out.",
   inletK: "Salt temperature entering the vessel. FLiBe freezes at 732 K.",
   qPlasma: "Heat flux from the plasma onto the first wall (radiation and particles).",
+  "f.tbePct": "Tritium burn efficiency: share of injected tritium that fuses before it is pumped out (fuelling efficiency × burn fraction). The biggest lever on the TBR a plant needs. ARC estimates 1-3%.",
+  "f.afPct": "Share of the time the plant runs and breeds.",
+  "f.doublingYr": "Time to breed a second plant's start-up tritium on top of this one's. Shorter needs more TBR.",
+  "f.processingH": "Time for pumped exhaust to be cleaned and isotope-separated back into fuel.",
+  "f.dirPct": "Direct internal recycling: share of the pumped exhaust sent straight back as fuel, skipping isotope separation.",
+  "f.reserveH": "Hours the plant can keep fuelling from storage if a quarter of the fuel cycle fails.",
   B0T: "Toroidal field at the major radius (ARC: 9.2 T). Only liquid metals feel it here: it drags on their flow (MHD pressure drop).",
 };
 const PARAMS = [
@@ -93,6 +99,12 @@ const PARAMS = [
   P("Cooling", "inletK", "Inlet temperature", "K", 5, 300, 950),
   P("Cooling", "B0T", "Toroidal field", "T", 0.1, 1, 15),
   P("Cooling", "qPlasma", "Plasma heat on wall", "MW/m²", 0.05, 0, 2),
+  P("Fuel cycle", "f.tbePct", "Burn efficiency", "%", 0.5, 0.5, 20),
+  P("Fuel cycle", "f.afPct", "Availability", "%", 5, 30, 100),
+  P("Fuel cycle", "f.doublingYr", "Doubling time target", "y", 0.5, 0.5, 20),
+  P("Fuel cycle", "f.processingH", "Processing time", "h", 0.5, 0.5, 24),
+  P("Fuel cycle", "f.dirPct", "Direct recycling", "%", 5, 0, 95),
+  P("Fuel cycle", "f.reserveH", "Reserve", "h", 6, 0, 72),
 ];
 // stellarators: a conformal build around a Fourier first wall (surfaces.json)
 const SPARAMS = [
@@ -109,19 +121,29 @@ const SPARAMS = [
   P("Machine", "majorRadiusM", "Major radius", "m", 0.1, 3, 15),
   P("Machine", "fusionPowerMW", "Fusion power", "MW", 25, 50, 4000),
   P("Machine", "l.shield_cm", "Shield", "cm", 1, 10, 100),
+  P("Fuel cycle", "f.tbePct", "Burn efficiency", "%", 0.5, 0.5, 20),
+  P("Fuel cycle", "f.afPct", "Availability", "%", 5, 30, 100),
+  P("Fuel cycle", "f.doublingYr", "Doubling time target", "y", 0.5, 0.5, 20),
+  P("Fuel cycle", "f.processingH", "Processing time", "h", 0.5, 0.5, 24),
+  P("Fuel cycle", "f.dirPct", "Direct recycling", "%", 5, 0, 95),
+  P("Fuel cycle", "f.reserveH", "Reserve", "h", 6, 0, 72),
 ];
 const paramsOf = (d) => isStell(d) ? SPARAMS : PARAMS;
 const ALLPARAMS = [...PARAMS, ...SPARAMS.filter((p) => !PARAMS.some((q) => q.key === p.key))];
 let SURF = {};
 const PORT_DEFAULTS = { n: 0, width_cm: 150, height_cm: 150 };
+// Meschini et al. 2023 ARC baseline (table 3)
+const FUEL_DEFAULTS = { tbePct: 2, afPct: 70, doublingYr: 2, processingH: 4, dirPct: 30, reserveH: 24 };
 const get = (d, key) => key.startsWith("g.") ? (d.geometry[key.slice(2)] ?? ARC_DEFAULTS[key.slice(2)])
   : key.startsWith("l.") ? (d.layers?.[key.slice(2)] ?? CONFORMAL_DEFAULTS[key.slice(2)])
   : key.startsWith("p.") ? (d.ports?.[key.slice(2)] ?? PORT_DEFAULTS[key.slice(2)])
+  : key.startsWith("f.") ? (d.fuel?.[key.slice(2)] ?? FUEL_DEFAULTS[key.slice(2)])
   : key === "breeder" ? breederOf(d) : d[key];
 const set = (d, key, v) => {
   if (key.startsWith("g.")) d.geometry[key.slice(2)] = v;
   else if (key.startsWith("l.")) (d.layers ??= {})[key.slice(2)] = v;
   else if (key.startsWith("p.")) d.ports = { ...PORT_DEFAULTS, ...(d.ports ?? {}), [key.slice(2)]: v };
+  else if (key.startsWith("f.")) d.fuel = { ...(d.fuel ?? {}), [key.slice(2)]: v };
   else d[key] = v;
 };
 const fullDesign = (partial) => ({ ...structuredClone(ARC_DESIGN), B0T: 9.2, ...structuredClone(partial ?? {}), geometry: { ...(partial?.geometry ?? {}) }, layers: { ...(partial?.layers ?? {}) } });
@@ -137,7 +159,7 @@ const results = new Map(); // design json -> {fast, resolved}
 // the tank flow per tier: Fast uses potential flow (0.15 s), Resolved the k-epsilon RANS
 // (seconds per new tank shape); the results map stays keyed by the design itself
 const withTier = (d, tier) => ({ ...d, tankFlow: tier === "resolved" ? "rans" : "potential" });
-const keyOf = (d) => JSON.stringify(d, Object.keys(d).sort()) + JSON.stringify(d.geometry, Object.keys(d.geometry).sort()) + JSON.stringify(d.layers ?? {}, Object.keys(d.layers ?? {}).sort()) + JSON.stringify(d.ports?.n ? d.ports : {}, ["n", "width_cm", "height_cm"]);
+const keyOf = (d) => JSON.stringify(d, Object.keys(d).filter((k) => k !== "fuel").sort()) + JSON.stringify(d.geometry, Object.keys(d.geometry).sort()) + JSON.stringify(d.layers ?? {}, Object.keys(d.layers ?? {}).sort()) + JSON.stringify(d.ports?.n ? d.ports : {}, ["n", "width_cm", "height_cm"]);
 try { saved = JSON.parse(localStorage.getItem("blanket.designs") ?? "[]"); } catch { saved = []; }
 // Saved designs: the team store (./api, Cloudflare KV behind Access) when the server has one,
 // this browser's storage otherwise. `team` flips on when GET ./api/store answers.
@@ -302,7 +324,7 @@ function renderParams() {
       }
       row.innerHTML = `<span${tipA(TIPS[p.key])}>${p.label}${p.unit ? ` <span class="u">${p.unit}</span>` : ""}</span>`;
       row.append(input);
-      if (p.step || p.key === "li6Pct" || p.key === "fwMaterial" || p.key === "breeder") {
+      if ((p.step && !p.key.startsWith("f.")) || p.key === "li6Pct" || p.key === "fwMaterial" || p.key === "breeder") {
         const sw = document.createElement("button");
         sw.type = "button"; sw.className = "swb"; sw.innerHTML = SWEEP_ICON;
         sw.ariaLabel = `Sweep ${p.label.toLowerCase()} across its range`;
@@ -371,6 +393,48 @@ function current() {
   return { r, m: r?.resolved ?? r?.live ?? r?.fast, tier: r?.resolved ? "resolved" : r?.live ? "resolved" : r?.fast ? "fast" : null };
 }
 
+// ---- fuel cycle: the TBR this plant needs (residence-time model, Meschini et al. 2023) and the
+// doubling time this design's TBR reaches. The tank's own tritium solution sets the breeding-zone
+// residence time and its wall permeation is a breeding-zone loss; otherwise the paper's 1.25 h.
+const fcCache = new Map();
+function fuelCycle(m, d) {
+  const F = { ...FUEL_DEFAULTS, ...(d.fuel ?? {}) }, t = m.tritium;
+  const p = {
+    burnKgPerS: burnRateKgPerS(d.fusionPowerMW), tbe: F.tbePct / 100, af: F.afPct / 100, doublingYr: F.doublingYr,
+    processingH: F.processingH, fDir: F.dirPct / 100, reserveH: F.reserveH,
+    bzH: t?.meanStayS > 0 ? t.meanStayS / 3600 : 1.25, bzLoss: t?.bredPerS > 0 ? t.permeationPerS / t.bredPerS : 0,
+  };
+  const k = JSON.stringify([p, Math.round(m.tbr * 1000)]);
+  if (!fcCache.has(k)) {
+    let r = null;
+    try {
+      const req = requiredTbr(p), dt = doublingTime(m.tbr, p);
+      r = { p, req: req.tbrRequired, startupKg: req.startupKg, reserveKg: req.reserveKg, years: dt.years, ownStartupKg: dt.startupKg, bzFromTank: t?.meanStayS > 0 };
+    } catch (e) { console.warn("fuel cycle", e); }
+    if (fcCache.size > 200) fcCache.clear();
+    fcCache.set(k, r);
+  }
+  return fcCache.get(k);
+}
+const fcLine = (fc) => `${f(fc.p.tbe * 100, 1)}% burn efficiency, ${f(fc.p.af * 100, 0)}% availability, ${f(fc.p.processingH, 1)} h processing, ${f(fc.p.fDir * 100, 0)}% direct recycling, ${f(fc.p.reserveH, 0)} h reserve; breeding zone ${fc.bzFromTank ? `${f(fc.p.bzH * 60, 0)} min from the tank solution` : "1.25 h (Meschini)"}${fc.p.bzLoss > 0 ? `, ${sig(fc.p.bzLoss * 100, 2)}% of the bred tritium lost through the tank wall` : ""}.`;
+function tbrKpi(kpi, m, d, what) {
+  const fc = fuelCycle(m, d), e = m.tbrErr < 0.001 ? 4 : 3;
+  if (!fc || !Number.isFinite(fc.req))
+    return kpi("Tritium breeding ratio", f(m.tbr, e), m.tbr >= 1.1 ? "good" : m.tbr >= 1 ? "warn" : "bad", `± ${f(m.tbrErr, e)} · fuel cycle infeasible`,
+      `${what} No TBR up to 3 doubles the start-up inventory with these fuel-cycle settings.`);
+  const margin = m.tbr - fc.req;
+  return kpi("Tritium breeding ratio", f(m.tbr, e), margin >= 0.02 ? "good" : margin >= 0 ? "warn" : "bad", `± ${f(m.tbrErr, e)} · needs ${f(fc.req, 3)}`,
+    `${what} ± is the Monte Carlo standard error; nuclear data add about ±0.7% (validation page).\n\nNeeded: ${f(fc.req, 3)} to double the start-up tritium in ${f(fc.p.doublingYr, 1)} y, from the fuel-cycle residence-time model (Meschini et al. 2023): ${fcLine(fc)}`);
+}
+function doublingKpi(kpi, m, d) {
+  const fc = fuelCycle(m, d);
+  if (!fc) return "";
+  const y = fc.years, ok = Number.isFinite(y);
+  return kpi("Tritium doubling", !ok ? "never" : y < 0.5 ? `${f(y * 365.25, 0)} d` : `${f(y, y < 10 ? 1 : 0)} y`, !ok ? "bad" : y <= fc.p.doublingYr ? "good" : y <= 3 * fc.p.doublingYr ? "warn" : "bad",
+    `start-up ${f(fc.ownStartupKg, 2)} kg`,
+    `Years for this design's TBR to breed a second plant's start-up tritium, and the tritium it needs to start (${f(fc.reserveKg, 2)} kg of it is the reserve). Residence-time fuel-cycle model (Meschini et al. 2023): ${fcLine(fc)}`);
+}
+
 function show() {
   if (!cur) return;
   const { r, m, tier } = current();
@@ -385,8 +449,8 @@ function show() {
     const t2 = m.thermal2d, P2 = t2?.peaks;
     const flow = m.tritium?.flowModel === "rans" ? "Resolved: recirculating (k-epsilon) tank flow." : "Fast: potential tank flow, no recirculation. Resolved runs the recirculating flow.";
     K.innerHTML = [
-      kpi("Tritium breeding ratio", f(m.tbr, m.tbrErr < 0.001 ? 4 : 3), cls(m.tbr, 1.1, 1.0), `± ${f(m.tbrErr, m.tbrErr < 0.001 ? 4 : 3)} · target 1.1`,
-        "Tritium atoms bred per fusion neutron. A plant needs at least 1.1 to stay self-sufficient with margin. ± is the Monte Carlo standard error."),
+      tbrKpi(kpi, m, cur.design, "Tritium atoms bred per fusion neutron."),
+      doublingKpi(kpi, m, cur.design),
       t2
         ? kpi("Peak inner vessel", `${f(P2.inconelInner.K, 0)} K`, cls(P2.inconelInner.K, 973, 1073, false), "limit ~973 K",
           `Hottest point on the inner Inconel 718 wall, from the 2-D (R, Z) heat-conduction field. Inconel 718 loses strength above about 973 K.\nAt R ${f(P2.inconelInner.R, 2)} m, Z ${f(P2.inconelInner.Z, 2)} m · tungsten face ${f(P2.w.K, 0)} K · 1-D estimate ${f(m.thermal.vvMax, 0)} K.\nOuter vessel ${f(P2.inconelOuter.K, 0)} K, set by an assumed film coefficient to the tank.`,
@@ -454,8 +518,8 @@ function mhdKpi(kpi, cls) {
 function showStell(m, kpi, cls) {
   const he = m.damage?.layers?.vv_in?.heAppmPerFpy;
   $("kpis").innerHTML = [
-    kpi("Tritium breeding ratio", f(m.tbr, m.tbrErr < 0.001 ? 4 : 3), cls(m.tbr, 1.1, 1.0), `± ${f(m.tbrErr, m.tbrErr < 0.001 ? 4 : 3)} · target 1.1`,
-      "Tritium atoms bred per fusion neutron, in the full 3-D stellarator geometry. ± is the Monte Carlo standard error."),
+    tbrKpi(kpi, m, cur.design, "Tritium atoms bred per fusion neutron, in the full 3-D stellarator geometry."),
+    doublingKpi(kpi, m, cur.design),
     kpi("Neutron wall load", f(m.wallLoadMWm2, 2), cls(m.wallLoadMWm2, 2, 3.5, false), `MW/m² · ${f(m.wallAreaM2, 0)} m² wall`,
       "Average 14 MeV neutron power per unit first-wall area. The local peak is higher where the plasma comes closest to the wall."),
     tfOk(m)

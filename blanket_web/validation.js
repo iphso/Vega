@@ -311,12 +311,19 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
     row("Nuclear-data uncertainty on TBR", `ENDF/B-VIII.0 covariances, ${a.n} correlated samples of 9 nuclides in OpenMC`, `± ${a.tbr[0].toFixed(2)}% <span class="d">(± ${(a.tbr[0] / 100 * a.nominal).toFixed(3)})</span>`, "", `68%: ${a.tbr[1].toFixed(2)}–${a.tbr[2].toFixed(2)}%`);
     row("", `largest terms: ${part}; heating ± ${a.heat.toFixed(2)}%`, "", "", "");
   }
+  const FC = X.fuelcycle;
+  if (FC?.length) {
+    const dt = Math.max(...FC.map((c) => Math.abs(c.tbr - c.tbr_paper))), hi = FC.filter((c) => c.isu_paper < 0.5);
+    row("Fuel cycle: TBR a plant needs", `residence-time model vs Meschini et al. 2023 (ARC class), ${FC.length} scenarios`, `${f(Math.min(...FC.map((c) => c.tbr)), 3)}–${f(Math.max(...FC.map((c) => c.tbr)), 3)}`, `${f(Math.min(...FC.map((c) => c.tbr_paper)), 3)}–${f(Math.max(...FC.map((c) => c.tbr_paper)), 3)}`, `≤ ${f(dt, 3)}`);
+    row("", `start-up tritium, burn efficiency 10% (${hi.length} scenarios) · at 2% see below`, `${f(Math.min(...hi.map((c) => c.isu)), 2)}–${f(Math.max(...hi.map((c) => c.isu)), 2)} kg`, `${f(Math.min(...hi.map((c) => c.isu_paper)), 2)}–${f(Math.max(...hi.map((c) => c.isu_paper)), 2)} kg`, "");
+  }
   if (M) row("Liquid-metal duct flow in a field", "pressure gradient vs Shercliff / Hunt series, Ha 10–10⁵", "", "", "≤ 0.2%");
   $("generic-table").innerHTML = `<tr><th>What</th><th>Checked against</th><th class="n">Ours</th><th class="n">Reference</th><th class="n">Δ</th></tr>` + rows.join("");
 }
 
 $("gaplist").innerHTML = [
   "<b>Nuclear-data uncertainty is a lower bound.</b> Sampled: Li-6, Li-7, Be-9, F-19, Ni-58 and W; the other Inconel nuclides, the shield and the coil were not, nor any angular or secondary-energy distributions (where older studies found the Be (n,2n) term dominant). Per-nuclide values agree with Aimetta et al. (PHYSOR 2022) within about 20%.",
+  "<b>Fuel cycle</b> is a residence-time model: each component is a well-mixed box, plant availability is averaged over pulses (checked against true pulsing: storage within 8 g). The breeding-zone residence comes from our tank solution (minutes) rather than Meschini's 1.25 h; it barely moves the required TBR. At 2% burn efficiency our start-up tritium is 1.45 kg against the paper's 1.14 kg: ours holds ~0.3 kg in the inner loop (pumped flow × processing time), which the paper's table seems to leave out while its own text says recycling changes start-up tritium strongly. Two values the paper does not state are assumed (membrane 1 h, extraction efficiency 90%); both move the required TBR by under 0.005.",
   "<b>Other breeders</b> run in ARC's geometry with coolant properties from recalled correlations; tritium transport and wall permeation are FLiBe-only, and the pebble bed has no purge-gas model. The MHD pressure drop treats the vessel channel as a square duct (no ribs, bends, inserts or manifolds).",
   "<b>Stellarators</b> use the ARC cross sections (collapsed in a tokamak spectrum) and a uniform conformal build; no temperature, tritium or peak-damage factors yet, and the magnet fluence is the coil face's average, not its hot spot. The 3-D geometry path itself matches OpenMC on the axisymmetric case.",
   "<b>Browser vs OpenMC on the LIBRA stacks: +0.5% in both experiments</b> (1.7σ). An earlier +1.5% was the OpenMC reference's own noise: both experiments shared a seed and nearly the same geometry, so their errors were correlated; 20 million reference histories brought it to +0.5%. Halving the raster pitch to 0.025 cm changed nothing.",

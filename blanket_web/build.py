@@ -150,6 +150,9 @@ def jl(path):
 ext = {"breeders": [], "conformal": jl(R / "conformal_check.json"), "ports": jl(R / "ports_check.json"),
        "sens": jl(R / "sens_check.json"), "breeders_browser": jl(R / "breeder_check.json"),
        "mhd": jl(Path.home() / "Projects/StoneLab-blanket/packages/physics/src/mhd/validation.json")}
+fc = jl(V / "blanket/fuelcycle/table6.json")
+if fc:
+    ext["fuelcycle"] = [{"case": k, "tbr": v["TBR_r"], "tbr_paper": v["paper_TBR_r"], "isu": v["I_startup_kg"], "isu_paper": v["paper_I_startup_kg"]} for k, v in fc.items()]
 uq = jl(V / "blanket/uq/results.json")
 if uq:
     ext["uq"] = {k: {"tbr": [v["TBR"]["nd_rsd_pct"], *v["TBR"]["nd_rsd_pct_68"]], "resolved": v["TBR"]["resolved"],
