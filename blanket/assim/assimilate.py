@@ -78,6 +78,27 @@ def load_bench(names):
     return resp, (np.array(A).T if A else None), (np.array(Bs).T if Bs else None)
 
 
+def drop(r):
+    """Responses left out of the fit (reasons in bench/*/NOTES.md)."""
+    i, c, b = r["id"], r["case"], r["bench"]
+    return (i.endswith("_int")                                   # FNS integrals: sums of points already in
+            or (b == "fns" and i.startswith("t7_ne213"))         # NE213 T7 has the JENDL 7Li folded in
+            or (b == "fns" and c == "li2o" and i.startswith("t6_lg") and (r.get("position_cm") or 99) < 50)  # Li-glass over-subtraction in front
+            # Ni-58(n,p) inside the Be: C/E climbs 1.0 -> 1.2 with depth, a Be transport signature the
+            # samples cannot represent (Be-9 secondary distributions are not sampled). Kept at the face only;
+            # with all six the fit reads it as Ni-58 data and shifts ARC TBR +0.27% (p 0.002).
+            or (b == "fns" and c == "be" and "ni58_np" in i and (r.get("position_cm") or 0) > 20.5))
+
+
+def extra_model(r):
+    """Extra relative model error: FNS Be thermal responses run 20-30% high in every library since 1991,
+    most likely unmodelled absorbing impurities (boron) in the Be, not Be-9 data."""
+    if r["bench"] == "fns" and r["case"] == "be" and r["id"].split("_")[0] in ("t6", "fc", "foil") \
+            and any(k in r["id"] for k in ("t6_lg", "u235", "au197")):
+        return 0.15
+    return 0.0
+
+
 def exp_cov(resp):
     """Experimental relative covariance: published correlation matrices where given, else a fully
     correlated share per E_corr_group (the group's systematic is taken as the smallest
@@ -159,7 +180,7 @@ def run(names, model_unc, n_perm=2000, set_name="all", only=None, quiet=False):
     LB = np.column_stack([np.log(bB / b0), np.log(tB / t0)])
     Sig, lam = shrink(nd_cov(LA, LB), LA, LB)
     d = np.array([np.log(r["E"] / r["C"]) for r in resp])
-    V = exp_cov(resp) + np.diag([r.get("C_mc_rel_unc", 0) ** 2 + (r.get("geom_rel_unc") or 0) ** 2 + model_unc ** 2 for r in resp])
+    V = exp_cov(resp) + np.diag([r.get("C_mc_rel_unc", 0) ** 2 + (r.get("geom_rel_unc") or 0) ** 2 + model_unc ** 2 + extra_model(r) ** 2 for r in resp])
     u = update(Sig, d, V)
     rep = Sig[-1, :-1] / np.sqrt(Sig[-1, -1] * np.clip(np.diag(Sig)[:-1], 1e-30, None))
     # permutation null: break the ARC <-> benchmark pairing
@@ -173,9 +194,13 @@ def run(names, model_unc, n_perm=2000, set_name="all", only=None, quiet=False):
         red.append(1 - np.sqrt(up["var_post"] / up["var_prior"]))
     red = np.array(red)
     real = 1 - np.sqrt(u["var_post"] / u["var_prior"])
+    sd_t = float(np.sqrt(max(np.mean((LA[:, -1] - LA[:, -1].mean()) * (LB[:, -1] - LB[:, -1].mean())) * S / (S - 1), 0)))
     out = dict(benchmarks=names, n_responses=len(resp), samples=S, shrinkage=lam, model_unc=model_unc,
-               arc_tbr_prior=t0, arc_nd_rsd_prior_pct=100 * np.sqrt(u["var_prior"]),
-               arc_nd_rsd_post_pct=100 * np.sqrt(max(u["var_post"], 0)), arc_tbr_post=t0 * np.exp(u["shift"]),
+               # the joint PSD projection (S << n) inflates the ARC diagonal by an amount that depends on
+               # the benchmark set; quote the band on ARC's own seed-crossed prior, narrowed by the fit's fraction
+               arc_tbr_prior=t0, arc_nd_rsd_prior_pct=100 * sd_t,
+               arc_nd_rsd_post_pct=100 * sd_t * (1 - real), arc_tbr_post=t0 * np.exp(u["shift"]),
+               joint_prior_pct=100 * np.sqrt(u["var_prior"]),
                shift_pct=100 * u["shift"], chi2=u["chi2"], dof=u["dof"],
                band_reduction=real, null_reduction_mean=float(red.mean()), null_reduction_p95=float(np.quantile(red, 0.95)),
                p_value=float((red >= real).mean()),
@@ -203,7 +228,7 @@ if __name__ == "__main__":
     excl = set(a.exclude_case)
     res = {}
     for names in [[n] for n in a.bench] + ([a.bench] if len(a.bench) > 1 else []):
-        r = run(names, a.model_unc, only=lambda r: f"{r['bench']}:{r['case']}" not in excl)
+        r = run(names, a.model_unc, only=lambda r: f"{r['bench']}:{r['case']}" not in excl and not drop(r))
         if r:
             res["+".join(names)] = r
     if a.json:

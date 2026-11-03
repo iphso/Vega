@@ -176,12 +176,15 @@ for bn in ("oktavian", "fns"):
         rs = [r for r in c["responses"] if r.get("C") and r.get("E")]
         cases.append({"case": cid, "kinds": sorted({r["id"].split("@")[0].split("_")[0] for r in rs}),
                       "tbr": next(([r["E"], r["E_rel_unc"], r["C"], r.get("geom_rel_unc")] for r in rs if r["id"] == "tbr"), None),
-                      "ce": [r["C"] / r["E"] for r in rs if r["id"] != "tbr" and not r["id"].startswith("leak")], "leak_ce": [r["C"] / r["E"] for r in rs if r["id"].startswith("leak")]})
+                      "tpr": [[r["id"][:2], r["C"] / r["E"]] for r in rs if r["id"] in ("T6_lsc_int", "T7_lsc_int")],
+                      "ce": [r["C"] / r["E"] for r in rs if r["id"] != "tbr" and not r["id"].startswith("leak") and not r["id"].endswith("_int")], "leak_ce": [r["C"] / r["E"] for r in rs if r["id"].startswith("leak")]})
     smp = br.get("samples", {}).get("all", {})
-    nd = [x for i, x in zip(smp.get("response_ids", []), smp.get("nd_rel_sd") or []) if ":al@" not in i]  # Al(n,a): unperturbed control
-    tnd = [x for i, x in zip(smp.get("response_ids", []), smp.get("nd_rel_sd") or []) if i.endswith(":tbr")]
+    ndl = smp.get("nd_rel_sd") or [smp.get("stats", {}).get(i, {}).get("nd_rel_sd") for i in smp.get("response_ids", [])]
+    nd = [x for i, x in zip(smp.get("response_ids", []), ndl) if x is not None and ":al@" not in i]  # Al(n,a): unperturbed control
+    tnd = [x for i, x in zip(smp.get("response_ids", []), ndl) if x is not None and i.endswith(":tbr")]
     ext["bench"].append({"name": bn, "cases": cases, "nd": [min(nd), max(nd)] if nd else None, "nd_tbr": [min(tnd), max(tnd)] if tnd else None,
                          "assim": (jl(V / f"blanket/assim/{bn}.json") or {}).get(bn)})
+ext["bench_combined"] = (jl(V / "blanket/assim/combined.json") or {}).get("oktavian+fns")
 uq = jl(V / "blanket/uq/results.json")
 if uq:
     ext["uq"] = {k: {"tbr": [v["TBR"]["nd_rsd_pct"], *v["TBR"]["nd_rsd_pct_68"]], "resolved": v["TBR"]["resolved"],
