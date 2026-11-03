@@ -24,6 +24,8 @@ out = Path(ap.parse_args().out)
 packs = []
 for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
     tag = d.name[len(GS):]
+    if tag.endswith("_ng"):
+        continue  # coupled n-gamma twin of a pack (blanket/photon/export_photon.py): staged in its place below
     fw, li6, breeder = "W", 90.0, None
     if m := re.match(r"_fw_material-(\w+)$", tag):
         fw = m.group(1)
@@ -37,6 +39,9 @@ for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
         continue
     dst = out / "packs" / (tag.lstrip("_") or "base")
     dst.mkdir(exist_ok=True)
+    ng = d.with_name(d.name + "_ng")
+    if (ng / "manifest.json").exists() and not os.environ.get("BLANKET_NO_NG"):
+        d = ng  # same neutron data + photon extension (old readers ignore it)
     shutil.copy(d / "manifest.json", dst / "manifest.json")
     raw = (d / "data.bin").read_bytes()
     gz = gzip.compress(raw, 9, mtime=0)
@@ -46,7 +51,7 @@ for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
     if side.exists():
         shutil.copy(side, dst / "damage.json")
     packs.append({"dir": dst.name, "fw": fw, "li6": li6, "bytes": len(gz), "damage": side.exists(), **({"breeder": breeder} if breeder else {})})
-    print(f"pack {dst.name}: fw={fw} li6={li6} {len(gz)/1e6:.2f} MB gz")
+    print(f"pack {dst.name}: fw={fw} li6={li6} {len(gz)/1e6:.2f} MB gz{' (n-gamma)' if d.name.endswith('_ng') else ''}")
 json.dump({"groups": GS, "packs": packs}, open(out / "packs" / "packs.json", "w"), indent=1)
 # activation / decay heat responses (blanket/activation, baseline materials and spectra)
 act = V / "blanket/activation/runs/VITAMIN-J-175_ww/activation_sidecar.json"
@@ -150,6 +155,9 @@ def jl(path):
 ext = {"breeders": [], "conformal": jl(R / "conformal_check.json"), "ports": jl(R / "ports_check.json"),
        "sens": jl(R / "sens_check.json"), "breeders_browser": jl(R / "breeder_check.json"),
        "mhd": jl(Path.home() / "Projects/StoneLab-blanket/packages/physics/src/mhd/validation.json")}
+ph = jl(Path.home() / "runs/blanket/photon/photon_check.json")
+if ph:
+    ext["photon"] = [{"name": c["name"], "rows": {k: {"openmc": r["openmc"][0], "factor": r.get("factor_err"), "coupled": r.get("coupled_err")} for k, r in c["rows"].items()}} for c in ph["cases"]]
 fc = jl(V / "blanket/fuelcycle/table6.json")
 if fc:
     ext["fuelcycle"] = [{"case": k, "tbr": v["TBR_r"], "tbr_paper": v["paper_TBR_r"], "isu": v["I_startup_kg"], "isu_paper": v["paper_I_startup_kg"]} for k, v in fc.items()]

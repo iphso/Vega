@@ -311,6 +311,11 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
     row("Nuclear-data uncertainty on TBR", `ENDF/B-VIII.0 covariances, ${a.n} correlated samples of 9 nuclides in OpenMC`, `± ${a.tbr[0].toFixed(2)}% <span class="d">(± ${(a.tbr[0] / 100 * a.nominal).toFixed(3)})</span>`, "", `68%: ${a.tbr[1].toFixed(2)}–${a.tbr[2].toFixed(2)}%`);
     row("", `largest terms: ${part}; heating ± ${a.heat.toFixed(2)}%`, "", "", "");
   }
+  for (const c of X.photon ?? []) {
+    const L = Object.entries(c.rows).filter(([k]) => k !== "coil" && Number.isFinite(c.rows[k].coupled));
+    const worst = (key) => L.reduce((m, [, r]) => Math.max(m, Math.abs(r[key])), 0);
+    row(`Coupled neutron-gamma heating, ${c.name.replace("ARC baseline", "ARC baseline").replace(/_/g, " ")}`, "every layer vs OpenMC CE coupled n-γ (coil aside)", `≤ ${(worst("coupled") * 100).toFixed(1)}%`, `fitted photon factor ≤ ${(worst("factor") * 100).toFixed(1)}%`, "");
+  }
   const FC = X.fuelcycle;
   if (FC?.length) {
     const dt = Math.max(...FC.map((c) => Math.abs(c.tbr - c.tbr_paper))), hi = FC.filter((c) => c.isu_paper < 0.5);
@@ -323,6 +328,7 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
 
 $("gaplist").innerHTML = [
   "<b>Nuclear-data uncertainty is a lower bound.</b> Sampled: Li-6, Li-7, Be-9, F-19, Ni-58 and W; the other Inconel nuclides, the shield and the coil were not, nor any angular or secondary-energy distributions (where older studies found the Be (n,2n) term dominant). Per-nuclide values agree with Aimetta et al. (PHYSOR 2022) within about 20%.",
+  "<b>Gamma transport</b> is coupled multigroup (VITAMIN-J-42 photon groups, production and scattering tallied in OpenMC per cell) for designs whose cross-section set has photon data (the ARC baseline so far); the others fall back to per-layer photon factors fitted on the baseline, which are off by up to 14% when the vessel build changes. Coil heating is not yet trustworthy: the coil's multigroup neutron spectrum disagrees with OpenMC (thermal flux too high, 0.1–1 MeV too low) and is being investigated.",
   "<b>Fuel cycle</b> is a residence-time model: each component is a well-mixed box, plant availability is averaged over pulses (checked against true pulsing: storage within 8 g). The breeding-zone residence comes from our tank solution (minutes) rather than Meschini's 1.25 h; it barely moves the required TBR. At 2% burn efficiency our start-up tritium is 1.45 kg against the paper's 1.14 kg: ours holds ~0.3 kg in the inner loop (pumped flow × processing time), which the paper's table seems to leave out while its own text says recycling changes start-up tritium strongly. Two values the paper does not state are assumed (membrane 1 h, extraction efficiency 90%); both move the required TBR by under 0.005.",
   "<b>Other breeders</b> run in ARC's geometry with coolant properties from recalled correlations; tritium transport and wall permeation are FLiBe-only, and the pebble bed has no purge-gas model. The MHD pressure drop treats the vessel channel as a square duct (no ribs, bends, inserts or manifolds).",
   "<b>Stellarators</b> use the ARC cross sections (collapsed in a tokamak spectrum) and a uniform conformal build; no temperature, tritium or peak-damage factors yet, and the magnet fluence is the coil face's average, not its hot spot. The 3-D geometry path itself matches OpenMC on the axisymmetric case.",
