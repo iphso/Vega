@@ -161,6 +161,27 @@ if ph:
 fc = jl(V / "blanket/fuelcycle/table6.json")
 if fc:
     ext["fuelcycle"] = [{"case": k, "tbr": v["TBR_r"], "tbr_paper": v["paper_TBR_r"], "isu": v["I_startup_kg"], "isu_paper": v["paper_I_startup_kg"]} for k, v in fc.items()]
+# integral benchmarks (blanket/bench/*): C/E per case, ND spread from the joint samples, and the
+# assimilation onto the ARC TBR (blanket/assim)
+ext["bench"] = []
+BENCH_EXCLUDE = {"oktavian:be97"}  # internally inconsistent (bench/oktavian/NOTES.md); assim.py drops it too
+for bn in ("oktavian", "fns"):
+    br = jl(V / f"blanket/bench/{bn}/results.json")
+    if not br:
+        continue
+    cases = []
+    for cid, c in br["cases"].items():
+        if f"{bn}:{cid}" in BENCH_EXCLUDE:
+            continue
+        rs = [r for r in c["responses"] if r.get("C") and r.get("E")]
+        cases.append({"case": cid, "kinds": sorted({r["id"].split("@")[0].split("_")[0] for r in rs}),
+                      "tbr": next(([r["E"], r["E_rel_unc"], r["C"], r.get("geom_rel_unc")] for r in rs if r["id"] == "tbr"), None),
+                      "ce": [r["C"] / r["E"] for r in rs if r["id"] != "tbr" and not r["id"].startswith("leak")], "leak_ce": [r["C"] / r["E"] for r in rs if r["id"].startswith("leak")]})
+    smp = br.get("samples", {}).get("all", {})
+    nd = [x for i, x in zip(smp.get("response_ids", []), smp.get("nd_rel_sd") or []) if ":al@" not in i]  # Al(n,a): unperturbed control
+    tnd = [x for i, x in zip(smp.get("response_ids", []), smp.get("nd_rel_sd") or []) if i.endswith(":tbr")]
+    ext["bench"].append({"name": bn, "cases": cases, "nd": [min(nd), max(nd)] if nd else None, "nd_tbr": [min(tnd), max(tnd)] if tnd else None,
+                         "assim": (jl(V / f"blanket/assim/{bn}.json") or {}).get(bn)})
 uq = jl(V / "blanket/uq/results.json")
 if uq:
     ext["uq"] = {k: {"tbr": [v["TBR"]["nd_rsd_pct"], *v["TBR"]["nd_rsd_pct_68"]], "resolved": v["TBR"]["resolved"],

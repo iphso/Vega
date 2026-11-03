@@ -311,6 +311,23 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
     row("Nuclear-data uncertainty on TBR", `ENDF/B-VIII.0 covariances, ${a.n} correlated samples of 9 nuclides in OpenMC`, `± ${a.tbr[0].toFixed(2)}% <span class="d">(± ${(a.tbr[0] / 100 * a.nominal).toFixed(3)})</span>`, "", `68%: ${a.tbr[1].toFixed(2)}–${a.tbr[2].toFixed(2)}%`);
     row("", `largest terms: ${part}; heating ± ${a.heat.toFixed(2)}%`, "", "", "");
   }
+  for (const b of X.bench ?? []) {
+    if (!b.assim) continue; // campaign not finished
+    const nm = { oktavian: "OKTAVIAN spheres (Osaka)", fns: "FNS assemblies (JAEA)" }[b.name] ?? b.name;
+    const rng = (a, n = 2) => `${f(Math.min(...a), n)}–${f(Math.max(...a), n)}`;
+    const mid = (a) => { const s = [...a].sort((x, y) => x - y), q = (p) => s[Math.floor(p * (s.length - 1))]; return `${f(q(0.1), 2)}–${f(q(0.9), 2)}`; };
+    let first = true;
+    const r = (...a) => { row(first ? nm : "", ...a); first = false; };
+    const T = b.cases.filter((c) => c.tbr);
+    if (T.length) r(`tritium breeding, ${T.length} assemblies at 14 MeV (OpenMC vs measured)`, rng(T.map((c) => c.tbr[2])), rng(T.map((c) => c.tbr[0])), `C/E ${rng(T.map((c) => c.tbr[2] / c.tbr[0]))}`);
+    const L = b.cases.flatMap((c) => c.leak_ce);
+    if (L.length) r(`leakage spectra, ${b.cases.filter((c) => c.leak_ce.length).length} assemblies × energy bands`, "", "", `C/E ${rng(L)}`);
+    const R = b.cases.flatMap((c) => c.ce);
+    if (R.length > 6) r(`reaction rates inside, ${R.length} points (middle 80%)`, "", "", `C/E ${mid(R)}`);
+    if (b.nd) r(`nuclear-data spread${b.nd_tbr ? `: TBR ± ${rng(b.nd_tbr.map((x) => x * 100), 1)}%, other responses up to` : " up to"}`, "", "", `${(b.nd[1] * 100).toFixed(1)}%`);
+    const A = b.assim;
+    r(`assimilated onto ARC TBR (least squares, ${A.n_responses} responses)`, `${f(A.arc_tbr_post, 3)} <span class="d">± ${A.arc_nd_rsd_post_pct.toFixed(2)}%</span>`, `${f(A.arc_tbr_prior, 3)} <span class="d">± ${A.arc_nd_rsd_prior_pct.toFixed(2)}%</span>`, `p = ${A.p_value.toFixed(2)}${A.p_value > 0.05 ? " (no information)" : ""}`);
+  }
   for (const c of X.photon ?? []) {
     const L = Object.entries(c.rows).filter(([k]) => k !== "coil" && Number.isFinite(c.rows[k].coupled));
     const worst = (key) => L.reduce((m, [, r]) => Math.max(m, Math.abs(r[key])), 0);
@@ -329,6 +346,7 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
 $("gaplist").innerHTML = [
   "<b>Nuclear-data uncertainty is a lower bound.</b> Sampled: Li-6, Li-7, Be-9, F-19, Ni-58 and W; the other Inconel nuclides, the shield and the coil were not, nor any angular or secondary-energy distributions (where older studies found the Be (n,2n) term dominant). Per-nuclide values agree with Aimetta et al. (PHYSOR 2022) within about 20%.",
   "<b>Gamma transport</b> is coupled multigroup (VITAMIN-J-42 photon groups, production and scattering tallied in OpenMC per cell) for designs whose cross-section set has photon data (the ARC baseline so far); the others fall back to per-layer photon factors fitted on the baseline, which are off by up to 14% when the vessel build changes. Coil heating is not yet trustworthy: the coil's multigroup neutron spectrum disagrees with OpenMC (thermal flux too high, 0.1–1 MeV too low) and is being investigated.",
+  "<b>Integral benchmarks</b> check the reference (OpenMC, ENDF/B-VIII.0) against experiments; the browser is checked against that reference above. OKTAVIAN's breeding spheres come out 9–14% below measurement (Be–Li 6% above): with the steel vessel removed and full-density lithium, as the 1990s JENDL-3 analysis assumed, we land within 0–3% of its calculated values (Pb–Li 8%), so the gap is mostly unmodelled hall return, beam duct and lithium density (inferred ±4%), not nuclear data. The Be 76.5 mm shell is left out: it leaks more than the thicker shell, which cannot be right. Assimilating these experiments does not move or narrow the ARC TBR band beyond chance (permutation test): the spheres mostly probe Li-7 and Be, ARC breeds on Li-6.",
   "<b>Fuel cycle</b> is a residence-time model: each component is a well-mixed box, plant availability is averaged over pulses (checked against true pulsing: storage within 8 g). The breeding-zone residence comes from our tank solution (minutes) rather than Meschini's 1.25 h; it barely moves the required TBR. At 2% burn efficiency our start-up tritium is 1.45 kg against the paper's 1.14 kg: ours holds ~0.3 kg in the inner loop (pumped flow × processing time), which the paper's table seems to leave out while its own text says recycling changes start-up tritium strongly. Two values the paper does not state are assumed (membrane 1 h, extraction efficiency 90%); both move the required TBR by under 0.005.",
   "<b>Other breeders</b> run in ARC's geometry with coolant properties from recalled correlations; tritium transport and wall permeation are FLiBe-only, and the pebble bed has no purge-gas model. The MHD pressure drop treats the vessel channel as a square duct (no ribs, bends, inserts or manifolds).",
   "<b>Stellarators</b> use the ARC cross sections (collapsed in a tokamak spectrum) and a uniform conformal build; no temperature, tritium or peak-damage factors yet, and the magnet fluence is the coil face's average, not its hot spot. The 3-D geometry path itself matches OpenMC on the axisymmetric case.",
