@@ -21,7 +21,17 @@ the outgoing group (only ~17% of (g, g') pairs ever transfer):
                              the inner VV into the tile, multiplier and bulk
 Group 0 is the highest energy.
 
-Run: docker compose run --rm openmc blanket/export_neutpack.py [GROUPS] [FORMAT] [TAG]
+Run: docker compose run --rm openmc blanket/export_neutpack.py [GROUPS] [FORMAT] [TAG] [--wout=absorption] [--resolve=R] [--suffix=S]
+     --wout=absorption  weight out of a collision w = (1 - sigma_a / sigma_t) x nu_bar from the
+                        track-length absorption (nu_bar = sum nu-scatter / sum scatter), instead of
+                        the analog nu-scatter sum / sigma_t (default "scatter", as before). The
+                        analog sum is noise where the design run saw few collisions: the ARC
+                        coil had w > 1 in 50 groups below the (n,2n) thresholds, w = 2 in one, and
+                        the thermal absorption implied by w is a small difference of two noisy numbers
+     --resolve=R        deep cells (those fill_mgxs.py covers) also take the fill's constants in
+                        groups whose design-run flux has rel. s.d. > R (coeffs.npz ce_flux_sd,
+                        mgxs_gen.py writes it), not only in empty ones
+     --suffix=S         appended to the output pack directory name
      docker compose run --rm openmc blanket/export_neutpack.py --libra <repo>
        (runs/libra/<repo> from libra_simple.py -> neutpack/libra_<repo>, plus its raster
         and source in libra.json; no photon factors: TBR only)
@@ -31,6 +41,11 @@ import numpy as np
 import openmc
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+FLAGS = dict((a[2:].split("=") + [""])[:2] for a in sys.argv[1:] if a.startswith("--") and "=" in a)
+sys.argv = [a for a in sys.argv if not (a.startswith("--") and "=" in a)]
+WOUT = FLAGS.get("wout", "scatter")
+RESOLVE = float(FLAGS["resolve"]) if "resolve" in FLAGS else None
+SUFFIX = FLAGS.get("suffix", "")
 LIBRA = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--libra" else None
 if LIBRA:
     GS, FMT, TAG = "VITAMIN-J-175", "hist64", ""
@@ -41,7 +56,7 @@ else:
     FMT = sys.argv[2] if len(sys.argv) > 2 else "hist64"
     TAG = sys.argv[3] if len(sys.argv) > 3 else ""   # e.g. "_fw_material-Be", as mgxs_gen names its run dir
     src = os.path.join(HERE, "runs", "mgxs", f"{GS}_{FMT}{TAG}")
-    out = os.path.join(HERE, "neutpack", f"{GS}_{FMT}{TAG}")
+    out = os.path.join(HERE, "neutpack", f"{GS}_{FMT}{TAG}{SUFFIX}")
 os.makedirs(out, exist_ok=True)
 
 lib = openmc.MGXSLibrary.from_hdf5(os.path.join(src, "mgxs.h5"))
@@ -84,13 +99,22 @@ for i, name in enumerate(cells):
     ns = np.asarray(xs.scatter_matrix[0]).reshape(G, G, -1).copy()
     sig_trit, kerm = co["sig_tritium"][i].copy(), co["kerma"][i].copy()
     fnames = [str(c) for c in fill[1]["cells"]] if fill else []
+    sa = np.asarray(xs.absorption[0]).reshape(G).copy()
+    mm = np.asarray(xs.multiplicity_matrix[0]).reshape(G, G).copy() if xs.multiplicity_matrix is not None else np.ones((G, G))
     if name in fnames:
-        empty = np.nonzero(co["ce_flux"][i] <= 0)[0]
+        bad = co["ce_flux"][i] <= 0
+        if RESOLVE is not None and "ce_flux_sd" in co.files:
+            f, fs = co["ce_flux"][i], co["ce_flux_sd"][i]
+            bad |= fs > RESOLVE * np.where(f > 0, f, 0)
+        empty = np.nonzero(bad)[0]
         if len(empty):
             fx, fj = fill[0].get_by_name(f"cell_{name}"), fnames.index(name)
             fst = np.asarray(fx.total[0]).reshape(G)
             fns = np.asarray(fx.scatter_matrix[0]).reshape(G, G, -1)
             st[empty] = fst[empty]; ns[empty] = fns[empty]
+            sa[empty] = np.asarray(fx.absorption[0]).reshape(G)[empty]
+            if fx.multiplicity_matrix is not None:
+                mm[empty] = np.asarray(fx.multiplicity_matrix[0]).reshape(G, G)[empty]
             sig_trit[empty] = fill[1]["sig_tritium"][fj][empty]; kerm[empty] = fill[1]["kerma"][fj][empty]
             manifest["filled"][name] = len(empty)
     if FMT.startswith("hist"):
@@ -109,6 +133,14 @@ for i, name in enumerate(cells):
     cdf[:, :, -1] = 1.0
     p0 = np.clip(p0, 0.0, None)
     nu_out = p0.sum(axis=1)
+    if WOUT == "absorption":
+        # scale each row to (sigma_t - sigma_a) x nu_bar; rows with no sampled transfer stay empty
+        plain = np.where(mm > 0, p0 / np.where(mm > 0, mm, 1.0), 0.0).sum(axis=1)
+        nubar = np.where(plain > 0, nu_out / np.where(plain > 0, plain, 1.0), 1.0)
+        target = np.clip(st - sa, 0.0, None) * nubar
+        scale = np.where(nu_out > 0, target / np.where(nu_out > 0, nu_out, 1.0), 0.0)
+        p0 = p0 * scale[:, None]
+        nu_out = p0.sum(axis=1)
     row_ptr, tr_g, tr_cdf, mu_rows = [0], [], [], []
     for g in range(G):
         nzg = np.nonzero(p0[g] > 0)[0]
@@ -138,11 +170,12 @@ if LIBRA:
 
 # photon redistribution factors
 gate = json.load(open(os.path.join(src, "gate1.json")))
-ph_path = os.path.join(HERE, "runs", f"arc_photon{TAG}", "result.json")
+ph_path = os.path.join(HERE, "runs", f"arc_photon{TAG[:-3] if TAG.endswith('_ww') else TAG}", "result.json")
 if not os.path.exists(ph_path):
     ph_path = os.path.join(HERE, "runs", "arc_baseline", "result.json")
 ph = json.load(open(ph_path))["heating_MW"]
 manifest["photon_source"] = os.path.relpath(ph_path, HERE)
+manifest["export_flags"] = {"wout": WOUT, "resolve": RESOLVE}
 for name in cells:
     local = gate["ce"]["heating_MW"].get(name, 0.0)
     coupled = ph.get(name, {}).get("mean", 0.0)
