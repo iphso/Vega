@@ -51,7 +51,7 @@ $("tiles").innerHTML = [
   ["Browser vs OpenMC", `≤ ${(Math.max(...packErr) * 100).toFixed(2)}%`, `TBR across ${B.packs.length} ARC cross-section sets`],
   ["FLiBe-1L, measured", `${f(flibe.measured["run-1"].value * 1e3, 2)} · ${f(flibe.measured["run-2"].value * 1e3, 2)}`, `×10⁻³ TBR · browser chain ${f(flibeBrowserFull * 1e3, 2)}`],
   ["Speed", `${f(B.libra["FLiBe-1L-run-1"].seconds, 2)} s`, "20 million histories, one experiment"],
-  ["ARC magnet life", `${f(3e18 / mean(B.tf.per_run_fluence_per_fpy), 1)} y`, "published: 9 full-power years"],
+  ["ARC magnet life", `${f(3e18 / mean(B.tf.per_run_fluence_per_fpy), 1)} y`, V.extended?.coil ? `OpenMC ${f(V.extended.coil.openmc_life, 1)} y · published 9 y` : "published: 9 full-power years"],
 ].map(([k, v, s]) => `<div class="tile"><span class="k">${k}</span><span class="v">${v}</span><span class="s">${s}</span></div>`).join("");
 function mean(a) { return a.reduce((x, y) => x + y, 0) / a.length; }
 
@@ -222,13 +222,20 @@ $("pack-table").innerHTML = `<tr><th>Cross-section set</th><th class="n">Browser
   text(s, (L + W) / 2, H - 4, "full-power years to 3×10¹⁸ n/cm² (E > 0.1 MeV)", "axis-title", "middle");
   el("line", { x1: x(9), x2: x(9), y1: 14, y2: H - 34, stroke: C.paper, "stroke-width": 2, "stroke-dasharray": "4 3" }, s);
   marker(s, "paper", x(9), 14, 4); text(s, x(9) + 8, 18, "published 9 y", "axis");
+  const CO = V.extended?.coil;
+  if (CO) {
+    const o = CO.openmc_life, e = o * CO.openmc_rel_sd;
+    el("rect", { x: x(o - e), y: 88, width: Math.max(2, x(o + e) - x(o - e)), height: 14, fill: C.openmc, opacity: 0.35 }, s);
+    const n = marker(s, "openmc", x(o), 95, 5); hover(n, `<b>OpenMC, continuous energy</b><br>${f(o, 2)} ± ${f(e, 2)} y, weight windows to the coil face`);
+    text(s, x(o) - 9, 99, `OpenMC ${f(o, 2)} y`, "axis", "end");
+  }
   yrs.forEach((v, i) => { const n = marker(s, "browser", x(v), yb + ((i % 3) - 1) * 9, 4); hover(n, `<b>run ${i + 1}</b><br>${f(v, 2)} y from 8M histories`); });
   el("line", { x1: x(mY), x2: x(mY), y1: 44, y2: H - 34, stroke: C.browser, "stroke-width": 2 }, s);
   text(s, x(mY) - 6, 40, `mean ${f(mY, 1)} y`, "axis", "end");
   $("tf").append(s);
   const tu = B.tf.track_unsplit, ts = B.tf.track_split;
   const p = document.createElement("p"); p.style.fontSize = "12.5px";
-  p.innerHTML = `A deep-penetration tally: geometric splitting inboard of the tank (2× per 10 cm). Checked against a run with no splitting: ${(tu[0] * 1e5).toFixed(2)} ± ${(tu[1] * 1e5).toFixed(2)} vs ${(ts[0] * 1e5).toFixed(2)} ± ${(ts[1] * 1e5).toFixed(2)} ×10⁻⁵ (200M vs 40M histories). Our coil and shield are the paper's radial build, not its full geometry.`;
+  p.innerHTML = `A deep-penetration tally: geometric splitting inboard of the tank (2× per 10 cm). Checked against a run with no splitting: ${(tu[0] * 1e5).toFixed(2)} ± ${(tu[1] * 1e5).toFixed(2)} vs ${(ts[0] * 1e5).toFixed(2)} ± ${(ts[1] * 1e5).toFixed(2)} ×10⁻⁵ (200M vs 40M histories). Our coil and shield are the paper's radial build, not its full geometry. The OpenMC reference uses weight windows built in three passes toward the coil face; it agrees with an unbiased run in every energy band that run resolves.`;
   $("tf").append(p);
 }
 

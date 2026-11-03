@@ -26,6 +26,8 @@ for d in sorted((V / "blanket/neutpack").glob(f"{GS}*")):
     tag = d.name[len(GS):]
     if tag.endswith("_ng"):
         continue  # coupled n-gamma twin of a pack (blanket/photon/export_photon.py): staged in its place below
+    if "_ww" in tag or "coilx" in tag:
+        continue  # pipeline variants (blanket/coil); the adopted ones are swapped in under the plain names
     fw, li6, breeder = "W", 90.0, None
     if m := re.match(r"_fw_material-(\w+)$", tag):
         fw = m.group(1)
@@ -184,6 +186,10 @@ for bn in ("oktavian", "fns"):
     tnd = [x for i, x in zip(smp.get("response_ids", []), ndl) if x is not None and i.endswith(":tbr")]
     ext["bench"].append({"name": bn, "cases": cases, "nd": [min(nd), max(nd)] if nd else None, "nd_tbr": [min(tnd), max(tnd)] if tnd else None,
                          "assim": (jl(V / f"blanket/assim/{bn}.json") or {}).get(bn)})
+# TF magnet fast fluence: weight-windowed OpenMC CE reference (blanket/coil, 3-pass MAGIC windows)
+cc = jl(Path.home() / "runs/blanket/coil/compare_final.json")
+if cc:
+    ext["coil"] = {"openmc_life": cc["openmc_magnet_life_fpy"], "openmc_rel_sd": cc["openmc_face_fast_rel_sd"]}
 ext["bench_combined"] = (jl(V / "blanket/assim/combined.json") or {}).get("oktavian+fns")
 uq = jl(V / "blanket/uq/results.json")
 if uq:
@@ -192,8 +198,8 @@ if uq:
                  for k, v in uq.items() if isinstance(v, dict) and isinstance(v.get("TBR"), dict)}
 for d in sorted((R / "mgxs").glob(f"{GS}_breeder-*")):
     g = jl(d / "gate1.json")
-    if g:
-        ext["breeders"].append({"breeder": d.name.split("breeder-")[1], "openmc_ce": g["ce"]["TBR"], "openmc_mg": g["mg"]["TBR"]})
+    if g and not d.name.endswith("_ww"):
+        ext["breeders"].append({"breeder": d.name.split("breeder-")[1], "openmc_ce": g["ce"]["TBR"], "openmc_mg": (g.get("mg") or {}).get("TBR")})
 val["extended"] = ext
 json.dump(val, open(out / "validation.json", "w"), indent=1)
 
