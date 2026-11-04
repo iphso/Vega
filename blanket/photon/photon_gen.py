@@ -26,7 +26,11 @@ ratios to the tallied flux of the same run, group by group:
   > REL_MAX: the deep tank wall / shield / coil, and photon groups few photons reach) take that
   group's constants from a fill run: each material alone in a 50 cm sphere around point
   sources flat in lethargy, neutrons 1e-5 eV..20 MeV and photons 1 keV..20 MeV (as
-  fill_mgxs.py does for the neutron constants).
+  fill_mgxs.py does for the neutron constants). A gas (HCPB's helium channel, < FILL_RHO g/cm3)
+  is filled at FILL_RHO and its constants scaled back by the density ratio (every constant is a
+  rate per unit flux, linear in density): at 1e-4 g/cm3 a 50 cm sphere collides too rarely for the
+  collision-scored totals, and so does the design run (a group with flux but zero sigma_t there
+  is treated as unsampled).
 
 Photon groups: VITAMIN-J-42 (1 keV .. 50 MeV), the photon half of the VITAMIN-J / FENDL
 fusion shielding libraries (the same family as the neutron VITAMIN-J-175), ~0.1-0.15 lethargy
@@ -171,8 +175,15 @@ NEDGES = [1e-5 * 10 ** k for k in range(12)] + [2e7]
 PEDGES = [1e3 * 10 ** k for k in range(5)] + [float(PE[-1])]
 flat = lambda E: openmc.stats.Mixture([float(np.log10(b / a)) for a, b in zip(E[:-1], E[1:])],
                                       [openmc.stats.Uniform(a, b) for a, b in zip(E[:-1], E[1:])])
+FILL_RHO = 0.5
+fmats, fscale = [], []
+for mat, _ in mats.values():
+    rho = mat.get_mass_density()
+    if rho < FILL_RHO:
+        mat = mat.clone(); mat.set_density("g/cm3", FILL_RHO)
+    fmats.append(mat); fscale.append(min(1.0, rho / FILL_RHO))
 fcells, srcs = [], []
-for k, (mname, (mat, _)) in enumerate(mats.items()):
+for k, (mname, mat) in enumerate(zip(mats, fmats)):
     x0 = 400.0 * k
     c = openmc.Cell(name=f"fill_{mname}", fill=mat, region=-openmc.Sphere(x0=x0, r=50.0))
     fcells.append(c)
@@ -187,10 +198,11 @@ geom = openmc.Geometry(fcells + [openmc.Cell(name="void", region=reg)])
 st = openmc.Settings(run_mode="fixed source", photon_transport=True, source=srcs,
                      particles=int(os.environ.get("FILL_PARTICLES", "50000")), batches=20)
 st.output = {"tallies": False}
-fm = openmc.Model(geom, openmc.Materials([m for m, _ in mats.values()]), st, openmc.Tallies(photon_tallies(fcells)))
+fm = openmc.Model(geom, openmc.Materials(fmats), st, openmc.Tallies(photon_tallies(fcells)))
 with openmc.StatePoint(fm.run(cwd=os.path.join(d, "fill"), threads=THREADS)) as sp:
     fil = read(sp, len(fcells))
 fr = ratios(fil)
+fr = {k: v * np.asarray(fscale).reshape((-1,) + (1,) * (v.ndim - 1)) for k, v in fr.items()}
 
 # ---- 3. merge: design constants where the design sampled the group, fill elsewhere -------
 fidx = {n: list(mats).index(cells[n].fill.name) for n in names}
@@ -198,7 +210,7 @@ nfilled, pfilled = {}, {}
 for i, n in enumerate(names):
     j = fidx[n]
     bad_n = des["nflux_rel"][i] > REL_MAX
-    bad_p = des["gflux_rel"][i] > REL_MAX
+    bad_p = (des["gflux_rel"][i] > REL_MAX) | (cr["p_sigma_t"][i] <= 0)
     for k in ("kerma_n", "kerma_local"):
         cr[k][i, bad_n] = fr[k][j, bad_n]
     cr["prod"][i, bad_n] = fr["prod"][j, bad_n]

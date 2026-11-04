@@ -159,7 +159,7 @@ ext = {"breeders": [], "conformal": jl(R / "conformal_check.json"), "ports": jl(
        "mhd": jl(Path.home() / "Projects/StoneLab-blanket/packages/physics/src/mhd/validation.json")}
 ph = jl(Path.home() / "runs/blanket/photon/photon_check.json")
 if ph:
-    ext["photon"] = [{"name": c["name"], "rows": {k: {"openmc": r["openmc"][0], "factor": r.get("factor_err"), "coupled": r.get("coupled_err")} for k, r in c["rows"].items()}} for c in ph["cases"]]
+    ext["photon"] = [{"name": c["name"], "rows": {k: {"openmc": r["openmc"][0], "factor": r.get("factor_err"), "coupled": r.get("coupled_err"), "z": r.get("coupled_z")} for k, r in c["rows"].items()}} for c in ph["cases"]]
 fc = jl(V / "blanket/fuelcycle/table6.json")
 if fc:
     ext["fuelcycle"] = [{"case": k, "tbr": v["TBR_r"], "tbr_paper": v["paper_TBR_r"], "isu": v["I_startup_kg"], "isu_paper": v["paper_I_startup_kg"]} for k, v in fc.items()]
